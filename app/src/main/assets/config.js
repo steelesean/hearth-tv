@@ -15,6 +15,7 @@
 //
 // channels: "url" opens the live stream where we know how; otherwise the app opens on its
 //           home page.
+// searchUrl: optional; where a suggestion from the assistant opens, with {q} as the title.
 // kids:     "url" plays the programme straight away (tested on the stick, October 2026).
 //           iPlayer programme IDs: The Gruffalo b00pk64x, Room on the Broom p0102qfj,
 //           Zog b0bwdw8y, Stick Man b06t09rk. If one leaves iPlayer, the tile will open
@@ -36,7 +37,8 @@ window.HEARTH_CONFIG = {
     { "key": "appletv", "label": "Apple TV", "name": "Apple TV", "swatch": "#8E9290",
       "packages": ["com.apple.atve.amazon.appletv"], "match": ["apple tv"] },
     { "key": "youtube", "label": "YouTube", "name": "YouTube", "swatch": "#E3392E",
-      "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"] }
+      "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"],
+      "searchUrl": "https://www.youtube.com/results?search_query={q}" }
   ],
   "extraApps": [
     { "key": "itvx", "name": "ITVX", "packages": ["air.ITVMobilePlayer"], "match": ["itvx", "itv"] },

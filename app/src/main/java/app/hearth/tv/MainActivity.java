@@ -21,6 +21,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private AppLauncher launcher;
     private Pairing pairing;
+    private Assistant assistant;
     private volatile boolean ready;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -29,6 +30,7 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         launcher = new AppLauncher(this);
         pairing = new Pairing(this);
+        assistant = new Assistant(this);
         RemoteService.start(this);
 
         web = new WebView(this);
@@ -135,6 +137,42 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public String openLink(String key, String url) {
             return launcher.openLink(key, url);
+        }
+
+        /** Config keys of the apps that are actually on the stick, as a JSON array. */
+        @JavascriptInterface public String installed() {
+            org.json.JSONArray out = new org.json.JSONArray();
+            org.json.JSONObject config = AppLauncher.loadConfig(MainActivity.this);
+            for (String list : new String[] {"apps", "extraApps"}) {
+                org.json.JSONArray arr = config.optJSONArray(list);
+                for (int i = 0; arr != null && i < arr.length(); i++) {
+                    String key = arr.optJSONObject(i).optString("key");
+                    if (launcher.isInstalled(key)) out.put(key);
+                }
+            }
+            return out.toString();
+        }
+
+        @JavascriptInterface public boolean assistantReady() {
+            return assistant.isReady();
+        }
+
+        /** Asks the assistant in the background; the answer arrives at hearthAnswer(id, json). */
+        @JavascriptInterface public void ask(final String id, final String payload) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject answer;
+                    try {
+                        answer = assistant.ask(new JSONObject(payload));
+                    } catch (Exception e) {
+                        answer = new JSONObject();
+                    }
+                    final String js = "window.hearthAnswer && hearthAnswer(" + JSONObject.quote(id) + "," + answer + ")";
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { web.evaluateJavascript(js, null); }
+                    });
+                }
+            }, "hearth-ask").start();
         }
 
         @JavascriptInterface public void showKeyboard() {

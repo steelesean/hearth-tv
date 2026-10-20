@@ -43,6 +43,7 @@ final class RemoteServer {
     private final Context context;
     private final Pairing pairing;
     private final AppLauncher launcher;
+    private final Assistant assistant;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private ServerSocket socket;
     private int port = -1;
@@ -51,6 +52,7 @@ final class RemoteServer {
         this.context = context.getApplicationContext();
         this.pairing = pairing;
         this.launcher = launcher;
+        this.assistant = new Assistant(context);
     }
 
     int port() { return port; }
@@ -151,6 +153,23 @@ final class RemoteServer {
                         .put("value", req.optString("value"));
                 boolean delivered = Remote.deliver(context, cmd);
                 sendJson(out, 200, new JSONObject().put("ok", true).put("delivered", delivered));
+            } else if ("GET".equals(method) && "/api/settings".equals(path)) {
+                if (!pairing.isPaired(param(query, "token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                sendJson(out, 200, assistant.settings());
+            } else if ("POST".equals(method) && "/api/settings".equals(path)) {
+                JSONObject req = new JSONObject(new String(body, UTF8));
+                if (!pairing.isPaired(req.optString("token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                assistant.save(req.has("assistantUrl") ? req.optString("assistantUrl") : null,
+                        req.optString("assistantKey", ""),
+                        req.has("taste") ? req.optString("taste") : null);
+                sendJson(out, 200, new JSONObject().put("ok", true).put("ready", assistant.isReady()));
+                Remote.deliver(context, new JSONObject().put("type", "reload"));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
                 // Lists what's installed so we can tune config.js. Paired phones only.
                 if (!pairing.isPaired(param(query, "token"))) {

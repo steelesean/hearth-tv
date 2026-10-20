@@ -1,0 +1,99 @@
+package app.hearth.tv;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.Charset;
+
+/**
+ * The optional Claude assistant. Its address, access key and the household's taste notes are
+ * entered on the phone remote and kept on the stick, never in the app itself (which is public).
+ */
+final class Assistant {
+    private static final Charset UTF8 = Charset.forName("UTF-8");
+    private final SharedPreferences prefs;
+
+    Assistant(Context context) {
+        prefs = context.getSharedPreferences("assistant", Context.MODE_PRIVATE);
+    }
+
+    boolean isReady() {
+        return !url().isEmpty() && !prefs.getString("key", "").isEmpty();
+    }
+
+    String url() { return prefs.getString("url", ""); }
+
+    String taste() { return prefs.getString("taste", ""); }
+
+    /** For the phone's settings screen. Never sends the key back, only whether there is one. */
+    JSONObject settings() throws Exception {
+        return new JSONObject()
+                .put("assistantUrl", url())
+                .put("hasKey", !prefs.getString("key", "").isEmpty())
+                .put("taste", taste());
+    }
+
+    /** An empty key leaves the saved one alone, so the phone doesn't need to show it. */
+    void save(String url, String key, String taste) {
+        SharedPreferences.Editor e = prefs.edit();
+        if (url != null) e.putString("url", tidyUrl(url));
+        if (key != null && !key.trim().isEmpty()) e.putString("key", key.trim());
+        if (taste != null) e.putString("taste", taste.length() > 2000 ? taste.substring(0, 2000) : taste);
+        e.apply();
+    }
+
+    /** Sends one request to the assistant. Blocking: call from a background thread. */
+    JSONObject ask(JSONObject payload) {
+        HttpURLConnection conn = null;
+        try {
+            payload.put("taste", taste());
+            conn = (HttpURLConnection) new URL(url() + "/api/ask").openConnection();
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(25000);
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("x-hearth-key", prefs.getString("key", ""));
+            try (OutputStream out = conn.getOutputStream()) {
+                out.write(payload.toString().getBytes(UTF8));
+            }
+            int status = conn.getResponseCode();
+            InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            String body = in == null ? "" : read(in);
+            JSONObject json = body.isEmpty() ? new JSONObject() : new JSONObject(body);
+            if (status >= 400 && !json.has("error")) json.put("error", "The assistant didn't answer (" + status + ").");
+            return json;
+        } catch (Exception e) {
+            return error("Can’t reach the assistant. Check the TV is online.");
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    private static JSONObject error(String message) {
+        try { return new JSONObject().put("error", message); } catch (Exception e) { return new JSONObject(); }
+    }
+
+    private static String tidyUrl(String url) {
+        String u = url.trim();
+        while (u.endsWith("/")) u = u.substring(0, u.length() - 1);
+        if (!u.isEmpty() && !u.startsWith("http")) u = "https://" + u;
+        return u;
+    }
+
+    private static String read(InputStream in) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = in.read(chunk)) > 0) buf.write(chunk, 0, n);
+        in.close();
+        return buf.toString("UTF-8");
+    }
+}

@@ -69,6 +69,11 @@ final class AppLauncher {
         return openApp(key);
     }
 
+    /** Whether the app with this config key is on the stick. */
+    boolean isInstalled(String key) {
+        return resolve(key) != null;
+    }
+
     /** Every app on the stick that can be opened, as "Label|package" lines. Useful when tuning config.js. */
     List<String> installedApps() {
         List<String> out = new ArrayList<>();
