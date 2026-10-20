@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=1920">
 <title>Hearth</title>
 <link rel="stylesheet" href="shared.css">
 <style>
@@ -252,8 +252,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
   });
 
   // ---------- Fit and clock ----------
-  function fit() { stage.style.transform = 'scale(' + Math.min(innerWidth / 1920, innerHeight / 1080) + ')'; }
-  addEventListener('resize', fit); fit();
+  // On the TV the WebView itself lays the page out at 1920 wide (see MainActivity), so this
+  // is normally 1. In a desktop browser it shrinks the canvas to fit the window.
+  function fit() {
+    var w = document.documentElement.clientWidth || innerWidth, h = document.documentElement.clientHeight || innerHeight;
+    var k = (w && h) ? Math.min(w / 1920, h / 1080) : 1;
+    stage.style.webkitTransform = stage.style.transform = 'scale(' + k + ')';
+  }
+  addEventListener('resize', fit); addEventListener('load', fit); fit(); setTimeout(fit, 500);
 
   var kidsMode = false, bedtime = false;
   function tick() {

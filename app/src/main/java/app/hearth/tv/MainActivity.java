@@ -39,6 +39,12 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        // Lay the page out at 1920 wide and zoom it to fit the screen, whatever the TV's size.
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setSupportZoom(false);
+        s.setTextZoom(100);
+        web.setInitialScale(0);
         web.addJavascriptInterface(new Bridge(), "HearthNative");
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
