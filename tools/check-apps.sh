@@ -52,25 +52,25 @@ if [ "$STATE" != "device" ]; then
 fi
 echo "Connected."
 
-sh() { "$ADB" -s "$TARGET" shell "$@" | tr -d '\r'; }
+tv() { "$ADB" -s "$TARGET" shell "$@" | tr -d '\r'; }
 
 # 3. Look at each streaming app and note the links it says it can open.
 {
   echo "Hearth app check, $(date)"
-  echo "Device: $(sh getprop ro.product.model)  Android $(sh getprop ro.build.version.release)  Fire OS $(sh getprop ro.build.version.name)"
+  echo "Device: $(tv getprop ro.product.model)  Android $(tv getprop ro.build.version.release)  Fire OS $(tv getprop ro.build.version.name)"
   echo
-  PKGS=$(sh pm list packages | sed 's/^package://' \
+  PKGS=$(tv pm list packages | sed 's/^package://' \
     | grep -iE 'bbc|iplayer|channel4|netflix|disney|youtube|avod|firebat|primevideo|appletv|atve|itv|my5|channel5|demand5' | sort)
   for p in $PKGS; do
     echo "=================================================="
-    echo "$p   version $(sh dumpsys package "$p" | grep -m1 versionName | sed 's/.*versionName=//')"
+    echo "$p   version $(tv dumpsys package "$p" | grep -m1 versionName | sed 's/.*versionName=//')"
     echo "--- links and actions it accepts"
-    sh dumpsys package "$p" \
+    tv dumpsys package "$p" \
       | awk '/Activity Resolver Table:/{f=1} /Receiver Resolver Table:|Service Resolver Table:|Provider Resolver Table:|Preferred Activities|Domain verification|^Key Set Manager|^Packages:/{f=0} f' \
       | grep -E 'Action: |Scheme: |Authority: |Path: |PathPrefix: |PathPattern: |Type: ' \
       | sed 's/^ *//' | sort -u
     echo "--- screens it can open"
-    sh dumpsys package "$p" \
+    tv dumpsys package "$p" \
       | awk '/Activity Resolver Table:/{f=1} /Receiver Resolver Table:/{f=0} f' \
       | grep -oE "$p/[A-Za-z0-9_.$]+" | sort -u
   done
