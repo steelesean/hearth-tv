@@ -140,7 +140,11 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
           <input id="aKey" type="password" autocomplete="off" placeholder="Paste the key">
           <label for="aTaste">What you like watching</label>
           <textarea id="aTaste" placeholder="We loved Slow Horses, The Bear and Paddington 2. We don’t like horror."></textarea>
+          <label for="aProfile">What Hearth has learned</label>
+          <textarea id="aProfile" placeholder="Nothing yet. This fills in as you tell the TV what you thought of its suggestions."></textarea>
+          <p class="hint">Hearth updates this itself. Edit it if it’s got something wrong.</p>
           <button class="btn" id="saveSettings" type="button">Save</button>
+          <button class="btn ghost" id="forgetLearning" type="button">Forget what it’s learned</button>
         </div>
       </details>
     </div>
@@ -238,17 +242,25 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       if (j.assistantUrl !== undefined) $('aUrl').value = j.assistantUrl;
       $('aKey').placeholder = j.hasKey ? 'Saved. Paste a new one to replace it' : 'Paste the key';
       if (j.taste !== undefined) $('aTaste').value = j.taste;
+      if (j.profile !== undefined) $('aProfile').value = j.profile;
     }).catch(function () {});
   }
   $('settings').addEventListener('toggle', function () { if ($('settings').open) loadSettings(); });
   $('saveSettings').addEventListener('click', function () {
-    post('/api/settings', { token: token, assistantUrl: $('aUrl').value, assistantKey: $('aKey').value, taste: $('aTaste').value })
+    post('/api/settings', { token: token, assistantUrl: $('aUrl').value, assistantKey: $('aKey').value, taste: $('aTaste').value, profile: $('aProfile').value })
       .then(function (j) {
         if (j._status === 401) { show('pair'); return; }
         $('aKey').value = '';
         toast(j.ready ? 'Saved. The assistant is ready.' : 'Saved. Add the address and key to switch the assistant on.');
         loadSettings();
       }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  });
+
+  $('forgetLearning').addEventListener('click', function () {
+    post('/api/settings', { token: token, profile: '', forget: true }).then(function (j) {
+      if (j._status === 401) { show('pair'); return; }
+      $('aProfile').value = ''; toast('Done. Hearth has forgotten what it learned.');
+    }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
   });
 
   // Start: check the saved pairing still works

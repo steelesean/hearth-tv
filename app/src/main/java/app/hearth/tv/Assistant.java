@@ -32,29 +32,47 @@ final class Assistant {
 
     String taste() { return prefs.getString("taste", ""); }
 
+    /** What Hearth has learned from feedback, written by the assistant and editable on the phone. */
+    String profile() { return prefs.getString("profile", ""); }
+
     /** For the phone's settings screen. Never sends the key back, only whether there is one. */
     JSONObject settings() throws Exception {
         return new JSONObject()
                 .put("assistantUrl", url())
                 .put("hasKey", !prefs.getString("key", "").isEmpty())
-                .put("taste", taste());
+                .put("taste", taste())
+                .put("profile", profile());
     }
 
     /** An empty key leaves the saved one alone, so the phone doesn't need to show it. */
-    void save(String url, String key, String taste) {
+    void save(String url, String key, String taste, String profile) {
         SharedPreferences.Editor e = prefs.edit();
         if (url != null) e.putString("url", tidyUrl(url));
         if (key != null && !key.trim().isEmpty()) e.putString("key", key.trim());
         if (taste != null) e.putString("taste", taste.length() > 2000 ? taste.substring(0, 2000) : taste);
+        if (profile != null) e.putString("profile", profile.length() > 2000 ? profile.substring(0, 2000) : profile);
         e.apply();
     }
 
     /** Sends one request to the assistant. Blocking: call from a background thread. */
     JSONObject ask(JSONObject payload) {
+        return call("/api/ask", payload);
+    }
+
+    /** Asks the assistant to update the learned profile, and keeps the new one. Blocking. */
+    JSONObject learn(JSONObject payload) {
+        JSONObject answer = call("/api/learn", payload);
+        String profile = answer.optString("profile", "");
+        if (!answer.has("error") && !profile.isEmpty()) save(null, null, null, profile);
+        return answer;
+    }
+
+    private JSONObject call(String path, JSONObject payload) {
         HttpURLConnection conn = null;
         try {
             payload.put("taste", taste());
-            conn = (HttpURLConnection) new URL(url() + "/api/ask").openConnection();
+            payload.put("profile", profile());
+            conn = (HttpURLConnection) new URL(url() + path).openConnection();
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(25000);
             conn.setRequestMethod("POST");

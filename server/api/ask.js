@@ -53,7 +53,7 @@ Choose exactly one action:
 - open_app: open one of the installed apps (use its key).
 - open_channel: start a live channel (use its key).
 - open_kid: play one of the children's programmes (use its key).
-- suggest: when they ask what to watch, or for something they'd like. Give up to 3 films or series that are likely streaming in the UK now on one of their installed apps, matched to their taste notes and history. Prefer variety. Never suggest something they have obviously already watched.
+- suggest: when they ask what to watch, or for something they'd like. Give up to 3 films or series that are likely streaming in the UK now on one of their installed apps, matched to their taste notes, learned profile, feedback and history. Their own taste notes win over the learned profile. Prefer variety. Never suggest anything they've marked as seen or not for them, or have obviously already watched.
 - none: when nothing fits, and say briefly what you can do instead.
 
 Only use keys that appear in the catalogue, and only installed apps. If you're unsure a title is on a service, pick another title. Keep the reply warm and brief, no exclamation marks.`;
@@ -73,6 +73,8 @@ export default async function handler(req, res) {
     catalogue: body.catalogue || {},
     recentlyOpened: Array.isArray(body.history) ? body.history.slice(0, 20) : [],
     tasteNotes: String(body.taste || "").slice(0, 2000),
+    learnedProfile: String(body.profile || "").slice(0, 2000),
+    feedbackOnPastSuggestions: Array.isArray(body.feedback) ? body.feedback.slice(0, 40) : [],
   };
 
   const params = {

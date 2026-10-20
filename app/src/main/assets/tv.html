@@ -118,6 +118,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .pick .pick-title { font: 500 44px/1.05 var(--font-display); letter-spacing: -0.01em; }
 .pick .pick-meta { font-size: 22px; color: var(--ink-soft); margin-top: 12px; }
 .pick .pick-why { font-size: 26px; line-height: 1.35; margin-top: auto; }
+.pick-col { display: flex; flex-direction: column; }
+.pick-col .verdicts { display: flex; margin-top: 18px; }
+.pick-col .verdicts > * + * { margin-left: 14px; }
+.verdict { font: 500 22px var(--font-ui); color: var(--ink); background: transparent; border: 2px solid var(--line); border-radius: 999px; height: 54px; padding: 0 22px; white-space: nowrap; }
+.pick-col.done .pick:not(.is-focus) { opacity: .45; }
+.pick-col .noted { font-size: 22px; color: var(--ink-soft); height: 54px; display: flex; align-items: center; margin-top: 18px; }
+.how-card { width: 1300px; }
+.how-card h2 { margin-bottom: 10px; }
+.how-actions { display: flex; margin-top: 36px; }
+.how-actions > * + * { margin-left: 20px; }
 .live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
 .channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: #fff; font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
 
@@ -196,6 +206,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
     </div>
   </div>
 
+  <div class="overlay" id="howPanel" hidden>
+    <div class="card live-card how-card">
+      <h2 id="howTitle">How was it?</h2>
+      <p class="lede" id="howLede">Your answer helps Hearth suggest better things.</p>
+      <div class="how-actions" id="howActions"></div>
+    </div>
+  </div>
+
   <div class="overlay" id="livePanel" hidden>
     <div class="card live-card">
       <h2>Live TV</h2>
@@ -220,6 +238,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     showKeyboard: function () {},
     installed: function () { return JSON.stringify(C.apps.map(function (a) { return a.key; })); },
     assistantReady: function () { return true; },
+    learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
     ask: function (id, payload) {
       setTimeout(function () {
         window.hearthAnswer(id, { reply: 'Three you might like tonight.', action: { type: 'suggest', key: '' }, suggestions: [
@@ -307,6 +326,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (!$('pairModal').hidden) return $('pairModal');
     if (!$('livePanel').hidden) return $('livePanel');
     if (!$('picksPanel').hidden) return $('picksPanel');
+    if (!$('howPanel').hidden) return $('howPanel');
     return stage;
   }
   function items() {
@@ -381,7 +401,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
   }
   function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
-  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; setFocus(ask); }
+  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
 
   // ---------- What we've opened (kept on the stick, sent to the assistant) ----------
   function history() { try { return JSON.parse(localStorage.getItem('hearth.history') || '[]'); } catch (e) { return []; } }
@@ -430,7 +450,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
         channels: C.channels.map(function (c) { return { key: c.key, name: c.name }; }),
         kids: C.kids.map(function (k) { return { key: k.key, title: k.title }; })
       },
-      history: history().slice(0, 15).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; })
+      history: history().slice(0, 15).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; }),
+      feedback: feedbackForAssistant()
     }));
   }
   window.hearthAnswer = function (id, a) {
@@ -457,11 +478,25 @@ body { color: var(--ink); font-family: var(--font-ui); }
       b.querySelector('.pick-why').textContent = p.reason;
       b.addEventListener('click', function () {
         closeOverlays();
-        var item = { kind: 'pick', key: p.app, title: p.title, app: p.app };
+        var item = { kind: 'pick', key: p.app, title: p.title, app: p.app, pickKind: p.kind };
         remember(item);
         openPick(item);
       });
-      box.appendChild(b);
+      var col = el('div', 'pick-col'), row = el('div', 'verdicts');
+      col.appendChild(b);
+      [['seen', 'Seen it'], ['no', 'Not for us']].forEach(function (v) {
+        var vb = el('button', 'verdict focusable'); vb.type = 'button'; vb.textContent = v[1];
+        vb.addEventListener('click', function () {
+          giveFeedback(p.title, p.kind, p.app, v[0]);
+          col.classList.add('done');
+          var noted = el('div', 'noted'); noted.textContent = 'Got it, I’ll remember that';
+          col.replaceChild(noted, row);
+          setFocus(b);
+        });
+        row.appendChild(vb);
+      });
+      col.appendChild(row);
+      box.appendChild(col);
     });
     $('picksPanel').hidden = false; setFocus(items()[0]);
   }
@@ -476,6 +511,61 @@ body { color: var(--ink); font-family: var(--font-ui); }
       setTimeout(function () { if (N.openApp(p.app) === 'missing') missing(app); }, 1500);
     }
   }
+
+  // ---------- Learning: feedback on suggestions shapes a taste profile over time ----------
+  function feedback() { try { return JSON.parse(localStorage.getItem('hearth.feedback') || '[]'); } catch (e) { return []; } }
+  var VERDICTS = { loved: 'loved it', fine: 'it was fine', no: 'not for us', seen: 'already seen', skipped: 'didn’t watch it' };
+  function giveFeedback(title, kind, app, verdict) {
+    var f = feedback().filter(function (x) { return x.title !== title; });
+    f.unshift({ title: title, kind: kind || '', app: app || '', verdict: verdict, at: new Date().toISOString() });
+    try {
+      localStorage.setItem('hearth.feedback', JSON.stringify(f.slice(0, 100)));
+      var n = Number(localStorage.getItem('hearth.sinceLearn') || 0) + 1;
+      localStorage.setItem('hearth.sinceLearn', String(n));
+      if (n >= 3) learnNow();
+    } catch (e) {}
+  }
+  function feedbackForAssistant() {
+    return feedback().slice(0, 40).map(function (x) { return { title: x.title, kind: x.kind, verdict: VERDICTS[x.verdict] || x.verdict }; });
+  }
+  // After a few answers, ask Claude to fold them into the profile (kept on the stick).
+  function learnNow() {
+    if (!(N.assistantReady && N.assistantReady() && N.learn)) return;
+    N.learn(JSON.stringify({
+      feedback: feedbackForAssistant(),
+      history: history().slice(0, 20).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; })
+    }));
+  }
+  window.hearthLearned = function (a) {
+    if (a && a.profile && !a.error) { try { localStorage.setItem('hearth.sinceLearn', '0'); } catch (e) {} }
+  };
+
+  // Back from watching a suggestion? Ask once how it was.
+  window.hearthResumed = function () {
+    if (asking || !$('pairModal').hidden) return;
+    var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
+    var rated = feedback().map(function (x) { return x.title; });
+    var mins = function (x) { return (Date.now() - new Date(x.at)) / 60000; };
+    var p = history().filter(function (x) {
+      return x.kind === 'pick' && mins(x) > 40 && mins(x) < 3 * 24 * 60 && asked.indexOf(x.title) < 0 && rated.indexOf(x.title) < 0;
+    })[0];
+    if (!p) return;
+    asked.unshift(p.title);
+    try { localStorage.setItem('hearth.asked', JSON.stringify(asked.slice(0, 50))); } catch (e) {}
+    $('howTitle').textContent = 'How was ' + p.title + '?';
+    var box = $('howActions'); box.innerHTML = '';
+    [['loved', 'Loved it'], ['fine', 'It was fine'], ['no', 'Not for us'], ['skipped', 'Didn’t watch it']].forEach(function (v) {
+      var b = el('button', 'pill focusable'); b.type = 'button'; b.textContent = v[1];
+      b.addEventListener('click', function () {
+        giveFeedback(p.title, p.pickKind, p.app, v[0]);
+        closeOverlays();
+        if (v[0] !== 'skipped') say('Thanks, noted', 'Suggestions will take that into account.');
+      });
+      box.appendChild(b);
+    });
+    $('livePanel').hidden = true; $('picksPanel').hidden = true;
+    $('howPanel').hidden = false; setFocus(box.firstChild);
+  };
 
   function setMode(on, isBedtime) {
     kidsMode = on; bedtime = on && !!isBedtime;
@@ -541,7 +631,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   };
   function back() {
     if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
-    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden) { closeOverlays(); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden) { closeOverlays(); return; }
     if (kidsMode) { setMode(false); return; }
     setFocus(ask);
   }
@@ -555,6 +645,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
     if (cmd.type === 'mode') return setMode(!kidsMode);
     if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
     if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
   };
 

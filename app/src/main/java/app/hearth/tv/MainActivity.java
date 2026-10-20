@@ -64,6 +64,8 @@ public class MainActivity extends Activity {
         super.onResume();
         hideSystemBars();
         Remote.setVisible(true);
+        // Coming back from another app: the page may want to ask how it was.
+        if (ready) web.evaluateJavascript("window.hearthResumed && hearthResumed()", null);
     }
 
     @Override protected void onPause() {
@@ -173,6 +175,24 @@ public class MainActivity extends Activity {
                     });
                 }
             }, "hearth-ask").start();
+        }
+
+        /** Updates the learned profile in the background; reports back at hearthLearned(json). */
+        @JavascriptInterface public void learn(final String payload) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject answer;
+                    try {
+                        answer = assistant.learn(new JSONObject(payload));
+                    } catch (Exception e) {
+                        answer = new JSONObject();
+                    }
+                    final String js = "window.hearthLearned && hearthLearned(" + answer + ")";
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { web.evaluateJavascript(js, null); }
+                    });
+                }
+            }, "hearth-learn").start();
         }
 
         @JavascriptInterface public void showKeyboard() {

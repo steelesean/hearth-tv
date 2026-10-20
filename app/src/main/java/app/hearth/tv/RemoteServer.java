@@ -167,7 +167,9 @@ final class RemoteServer {
                 }
                 assistant.save(req.has("assistantUrl") ? req.optString("assistantUrl") : null,
                         req.optString("assistantKey", ""),
-                        req.has("taste") ? req.optString("taste") : null);
+                        req.has("taste") ? req.optString("taste") : null,
+                        req.has("profile") ? req.optString("profile") : null);
+                if (req.optBoolean("forget")) Remote.deliver(context, new JSONObject().put("type", "forget"));
                 sendJson(out, 200, new JSONObject().put("ok", true).put("ready", assistant.isReady()));
                 Remote.deliver(context, new JSONObject().put("type", "reload"));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
