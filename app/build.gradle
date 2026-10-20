@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The release key lives outside the repository. GitHub Actions writes it to disk from a
+// secret; without it (e.g. a local build) the app is signed with the debug key instead.
+def releaseKeystore = System.getenv("HEARTH_KEYSTORE")
+
+android {
+    namespace 'app.hearth.tv'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.hearth.tv'
+        // Fire TV Stick 4K (2018) runs Fire OS 6, which is Android 7.1 (API 25).
+        minSdk 22
+        //noinspection ExpiredTargetSdkVersion – this is side-loaded, never published to a store
+        targetSdk 30
+        versionCode Integer.parseInt(System.getenv("HEARTH_VERSION_CODE") ?: "1")
+        versionName System.getenv("HEARTH_VERSION_NAME") ?: "0.1-dev"
+    }
+
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv("HEARTH_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("HEARTH_KEY_ALIAS") ?: "hearth"
+                keyPassword System.getenv("HEARTH_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig releaseKeystore ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

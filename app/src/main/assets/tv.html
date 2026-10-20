@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Layout: one 1920×1080 canvas scaled to the screen. Greeting and command bar up top,
+   apps row, children's row. Ten-foot UI: big targets, one obvious focus.
+   Kept deliberately light for older Fire TV sticks: no blur, no :has(). */
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); }
+body { color: var(--ink); font-family: var(--font-ui); }
+.stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: top left;
+  background: radial-gradient(1200px 600px at 50% 18%, #F5F4F0 0%, rgba(245,244,240,0) 70%), var(--ground);
+  padding: 64px 96px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.top-left, .top-right { display: flex; align-items: center; }
+.top-left > * + *, .top-right > * + * { margin-left: 16px; }
+.time { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.meta { font-size: 24px; color: var(--ink-soft); }
+.pill {
+  font: 500 24px var(--font-ui); color: var(--ink); background: transparent;
+  border: 2px solid var(--line); border-radius: 999px; height: 60px; padding: 0 28px;
+  display: inline-flex; align-items: center; white-space: nowrap;
+}
+.pill > * + * { margin-left: 12px; }
+.pill .dot { width: 14px; height: 14px; border-radius: 50%; background: #E4A853; }
+.pill .dot.ok { background: var(--ok); }
+.pill svg { width: 26px; height: 26px; }
+
+.hero { display: flex; flex-direction: column; align-items: center; margin-top: 24px; }
+.greeting { font-family: var(--font-display); font-weight: 400; font-size: 104px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+.sub { font-size: 28px; color: var(--ink-soft); margin: 18px 0 0; }
+
+.command {
+  margin-top: 36px; width: 1180px; height: 120px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 60px;
+  display: flex; align-items: center; padding: 0 44px;
+  box-shadow: 0 10px 30px rgba(31,35,33,0.06); transition: border-color .2s, box-shadow .2s;
+}
+.command.on { border-color: var(--focus); box-shadow: 0 0 0 10px var(--focus-glow), 0 10px 30px rgba(31,35,33,0.08); }
+.command svg { flex: none; width: 34px; height: 34px; color: var(--focus); margin-right: 20px; }
+#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 38px var(--font-ui); color: var(--ink); }
+#ask::placeholder { color: #9A9E99; }
+
+.chips { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 12px; max-width: 1400px; }
+.chip {
+  font: 500 26px var(--font-ui); color: var(--ink); background: transparent;
+  border: 2px solid var(--line); border-radius: 999px; height: 64px; padding: 0 30px; margin: 8px;
+}
+
+.rows { margin-top: auto; }
+.row + .row { margin-top: 32px; }
+.row-label { font-size: 22px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 18px 4px; }
+.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 24px; }
+.app {
+  height: 132px; border-radius: 26px; border: 2px solid var(--line); background: var(--surface);
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
+  padding: 22px 24px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
+}
+.app .swatch { width: 20px; height: 20px; border-radius: 6px; }
+.app .name { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.app.live { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.app.live .swatch { border-radius: 50%; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+
+.kids { display: grid; grid-template-columns: repeat(6, 1fr); grid-gap: 24px; }
+.kid {
+  height: 200px; border-radius: 26px; border: 0; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: 22px 24px; box-sizing: border-box; text-align: left; color: #fff; font-family: var(--font-ui);
+}
+.kid .title { font-family: var(--font-display); font-size: 38px; line-height: 1.05; font-weight: 500; position: relative; }
+.kid .src { font-size: 20px; font-weight: 500; opacity: .85; margin-top: 6px; position: relative; }
+
+/* Focus: the single loudest thing on screen */
+.focusable { outline: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
+.focusable.is-focus {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 6px var(--ground), 0 0 0 12px var(--focus), 0 18px 40px rgba(31,35,33,0.18);
+  border-color: transparent; position: relative; z-index: 2;
+}
+#ask.is-focus { transform: none; box-shadow: none; }
+
+/* Message sheet */
+.sheet {
+  position: absolute; left: 50%; bottom: 72px; width: 1100px; margin-left: -550px; box-sizing: border-box;
+  background: var(--ink); color: var(--surface); border-radius: 32px; padding: 34px 44px;
+  display: flex; align-items: center; opacity: 0; transform: translateY(30px);
+  transition: opacity .25s, transform .25s; z-index: 9; pointer-events: none;
+}
+.sheet.show { opacity: 1; transform: none; }
+.sheet .glyph { flex: none; width: 76px; height: 76px; border-radius: 22px; background: var(--focus); display: flex; align-items: center; justify-content: center; margin-right: 30px; }
+.sheet .glyph svg { width: 34px; height: 34px; color: #fff; }
+.sheet.warn .glyph { background: #8A5A2B; }
+.sheet h2 { margin: 0; font: 500 36px var(--font-display); }
+.sheet p { margin: 6px 0 0; font-size: 24px; color: #B9BDB8; }
+
+/* Overlays: pairing and Live TV */
+.overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: rgba(236, 235, 231, 0.94); display: flex; align-items: center; justify-content: center; }
+.card { background: var(--surface); border-radius: 40px; border: 2px solid var(--line); box-shadow: 0 40px 100px rgba(31,35,33,0.16); padding: 64px; box-sizing: border-box; }
+.pair-card { display: flex; align-items: center; width: 1360px; }
+.qr { flex: none; width: 360px; height: 360px; padding: 24px; box-sizing: border-box; background: #fff; border-radius: 28px; border: 2px solid var(--line); margin-right: 64px; }
+.qr svg, .qr img { width: 100%; height: 100%; display: block; }
+.pair-copy h2, .live-card h2 { font: 400 64px/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0 0 18px; }
+.pair-copy p { font-size: 28px; color: var(--ink-soft); margin: 0 0 18px; line-height: 1.4; }
+.code { font: 500 80px var(--font-ui); letter-spacing: 0.22em; font-variant-numeric: tabular-nums; margin: 0 0 18px; }
+.pair-actions { margin-top: 12px; }
+.pair-note { display: block; font-size: 22px; color: var(--ink-soft); margin-top: 18px; }
+.live-card { width: 1500px; }
+.channels { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 24px; margin-top: 40px; }
+.channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: #fff; font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
+
+/* Kids mode */
+.stage.kids-mode .apps-row, .stage.kids-mode .chips { display: none; }
+.stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
+.stage.kids-mode .kid { height: 250px; }
+.stage.kids-mode #modeBtn .dot { background: var(--focus); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="top">
+    <div class="top-left">
+      <span class="time" id="clock"></span>
+      <span class="meta" id="date"></span>
+    </div>
+    <div class="top-right">
+      <button class="pill focusable" id="phoneBtn" type="button">
+        <svg id="phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6v-2"/></svg>
+        <span class="dot ok" id="phoneDot" hidden></span>
+        <span id="phoneLabel">Connect phone</span>
+      </button>
+      <button class="pill focusable" id="modeBtn" type="button"><span class="dot"></span><span id="modeLabel">Family</span></button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 class="greeting" id="greeting">Hello</h1>
+    <p class="sub" id="sub">What are we watching?</p>
+    <form class="command" id="commandForm" autocomplete="off">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.5 4.8 2.7 7.4 8 8-5.3.6-7.5 3.2-8 8-.5-4.8-2.7-7.4-8-8 5.3-.6 7.5-3.2 8-8z"/></svg>
+      <input id="ask" class="focusable" type="text" placeholder="Try “Channel 4 live” or “put on Cars”" aria-label="Ask for something to watch">
+    </form>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="rows">
+    <div class="row apps-row">
+      <h3 class="row-label">Apps</h3>
+      <div class="apps" id="apps"></div>
+    </div>
+    <div class="row">
+      <h3 class="row-label" id="kidsLabel">For the children</h3>
+      <div class="kids" id="kids"></div>
+    </div>
+  </section>
+
+  <div class="sheet" id="sheet" role="status" aria-live="polite">
+    <div class="glyph"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg></div>
+    <div><h2 id="sheetTitle"></h2><p id="sheetBody"></p></div>
+  </div>
+
+  <div class="overlay" id="pairModal" hidden>
+    <div class="card pair-card">
+      <div class="qr" id="qr"></div>
+      <div class="pair-copy">
+        <h2>Use your phone as the remote</h2>
+        <p>Point your phone's camera at the code, then enter this number when asked.</p>
+        <div class="code" id="pairCode">····</div>
+        <p id="pairAddress">Or go to the address below on any phone on this Wi-Fi.</p>
+        <div class="pair-actions">
+          <button class="pill focusable" id="useRemote" type="button">Use the remote instead</button>
+          <span class="pair-note">You can find this again under “Connect phone”.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="livePanel" hidden>
+    <div class="card live-card">
+      <h2>Live TV</h2>
+      <div class="channels" id="channels"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="qrcode.js"></script>
+<script>
+(function () {
+  var C = window.HEARTH_CONFIG;
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), ask = $('ask');
+
+  // Native bridge. In a desktop browser there's no TV, so pretend everything opens.
+  var N = window.HearthNative || {
+    pairing: function () { return JSON.stringify({ address: '192.168.1.42:8080', code: '4817', paired: false }); },
+    openApp: function () { return 'ok'; },
+    openLink: function () { return 'ok'; },
+    showKeyboard: function () {}
+  };
+
+  // ---------- Build the screen from config ----------
+  function appByKey(k) {
+    var all = C.apps.concat(C.extraApps);
+    for (var i = 0; i < all.length; i++) if (all[i].key === k) return all[i];
+    return { key: k, name: k };
+  }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; }
+
+  C.apps.forEach(function (a) {
+    var b = el('button', 'app focusable' + (a.live ? ' live' : ''),
+      '<span class="swatch" style="background:' + a.swatch + '"></span><span class="name"></span>');
+    b.type = 'button'; b.querySelector('.name').textContent = a.label;
+    b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
+    $('apps').appendChild(b);
+  });
+
+  var kidButtons = [];
+  C.kids.forEach(function (k) {
+    var b = el('button', 'kid focusable ' + k.art, '<span class="art"></span><span class="title"></span><span class="src"></span>');
+    b.type = 'button';
+    b.querySelector('.title').textContent = k.title;
+    b.querySelector('.src').textContent = k.src;
+    b.addEventListener('click', function () { openKid(k.key); });
+    b._kid = k; kidButtons.push(b);
+    $('kids').appendChild(b);
+  });
+
+  C.channels.forEach(function (ch) {
+    var b = el('button', 'channel focusable'); b.type = 'button'; b.textContent = ch.name;
+    b.addEventListener('click', function () { closeOverlays(); openChannel(ch.key); });
+    $('channels').appendChild(b);
+  });
+
+  var chips = [
+    { label: 'Watch BBC One', run: function () { openChannel('bbcone'); } },
+    { label: 'Channel 4 live', run: function () { openChannel('c4'); } },
+    { label: 'Bedtime stories', run: function () { setMode(true, true); } },
+    { label: 'Open YouTube', run: function () { openApp('youtube'); } }
+  ];
+  chips.forEach(function (c) {
+    var b = el('button', 'chip focusable'); b.type = 'button'; b.textContent = c.label;
+    b.addEventListener('click', c.run);
+    $('chips').appendChild(b);
+  });
+
+  // ---------- Fit and clock ----------
+  function fit() { stage.style.transform = 'scale(' + Math.min(innerWidth / 1920, innerHeight / 1080) + ')'; }
+  addEventListener('resize', fit); fit();
+
+  var kidsMode = false, bedtime = false;
+  function tick() {
+    var d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var h = d.getHours();
+    $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
+      : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  }
+  tick(); setInterval(tick, 15000);
+
+  // ---------- Focus (class-based so the remote and phone share it) ----------
+  var cur = null;
+  function visible(e) { return e.offsetParent !== null; }
+  function layer() {
+    if (!$('pairModal').hidden) return $('pairModal');
+    if (!$('livePanel').hidden) return $('livePanel');
+    return stage;
+  }
+  function items() {
+    var root = layer(), list = root.querySelectorAll('.focusable'), out = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!visible(e)) continue;
+      if (root === stage && (e.closest('.overlay'))) continue;
+      out.push(e);
+    }
+    return out;
+  }
+  function setFocus(e) {
+    if (cur) cur.classList.remove('is-focus');
+    cur = e; e.classList.add('is-focus');
+    $('commandForm').classList.toggle('on', e === ask);
+    if (e !== ask) { if (document.activeElement === ask) ask.blur(); e.focus({ preventScroll: true }); }
+  }
+  function move(dir) {
+    var list = items();
+    if (!cur || list.indexOf(cur) < 0) { setFocus(list[0] === $('phoneBtn') && layer() === stage ? ask : list[0]); return; }
+    var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    var best = null, bestScore = Infinity;
+    list.forEach(function (e) {
+      if (e === cur) return;
+      var b = e.getBoundingClientRect(), dx = b.left + b.width / 2 - ax, dy = b.top + b.height / 2 - ay, main, cross;
+      if (dir === 'left')  { if (b.right > a.left + 2) return; main = -dx; cross = Math.abs(dy); }
+      if (dir === 'right') { if (b.left < a.right - 2) return; main = dx;  cross = Math.abs(dy); }
+      if (dir === 'up')    { if (b.bottom > a.top + 2) return; main = -dy; cross = Math.abs(dx); }
+      if (dir === 'down')  { if (b.top < a.bottom - 2) return; main = dy;  cross = Math.abs(dx); }
+      var s = main + cross * 2.2;
+      if (s < bestScore) { bestScore = s; best = e; }
+    });
+    if (best) setFocus(best);
+  }
+  function select() {
+    if (!cur || !visible(cur)) { move('down'); return; }
+    if (cur === ask) { ask.focus(); N.showKeyboard(); return; }
+    cur.click();
+  }
+
+  // ---------- Messages ----------
+  var sheet = $('sheet'), sheetTimer;
+  function say(title, body, warn) {
+    $('sheetTitle').textContent = title; $('sheetBody').textContent = body || '';
+    sheet.classList.toggle('warn', !!warn);
+    sheet.classList.add('show');
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, warn ? 5000 : 3000);
+  }
+
+  // ---------- Actions ----------
+  function missing(app) { say('Can’t find ' + app.name + ' on this TV', 'Install it from the Amazon store, then try again.', true); }
+  function openApp(key) {
+    var app = appByKey(key);
+    say('Opening ' + app.name, '');
+    setTimeout(function () { if (N.openApp(key) === 'missing') missing(app); }, 700);
+  }
+  function openChannel(key) {
+    var ch = C.channels.filter(function (c) { return c.key === key; })[0]; if (!ch) return;
+    var app = appByKey(ch.app);
+    say(ch.name, 'Opening ' + app.name);
+    setTimeout(function () { if (N.openLink(ch.app, ch.url || '') === 'missing') missing(app); }, 700);
+  }
+  function openKid(key) {
+    var k = C.kids.filter(function (x) { return x.key === key; })[0]; if (!k) return;
+    var app = appByKey(k.app);
+    say(k.title, 'Opening ' + app.name);
+    setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
+  }
+  function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
+  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; setFocus(ask); }
+
+  function setMode(on, isBedtime) {
+    kidsMode = on; bedtime = on && !!isBedtime;
+    stage.classList.toggle('kids-mode', on);
+    $('modeLabel').textContent = on ? 'Kids' : 'Family';
+    $('sub').textContent = on ? 'Pick a story' : 'What are we watching?';
+    $('kidsLabel').textContent = bedtime ? 'Calm ones for bedtime' : on ? 'Stories' : 'For the children';
+    kidButtons.forEach(function (b) { b.hidden = bedtime && !b._kid.bedtime; });
+    tick();
+  }
+  $('modeBtn').addEventListener('click', function () { setMode(!kidsMode); });
+
+  // Simple understanding of typed or spoken requests. Claude can take over the vague ones later.
+  function has(s, words) { for (var i = 0; i < words.length; i++) if (s.indexOf(words[i]) >= 0) return true; return false; }
+  function interpret(q) {
+    var s = ' ' + q.toLowerCase().replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    if (!s.trim()) return;
+    var k = C.kids.filter(function (x) { return has(s, x.aliases.map(function (a) { return a + ' '; })); })[0];
+    if (k) return openKid(k.key);
+    var ch = C.channels.filter(function (x) { return has(s, x.aliases.map(function (a) { return ' ' + a + ' '; })); })[0];
+    var wantsApp = /\b(open|app|launch)\b/.test(s);
+    var app = C.apps.concat(C.extraApps).filter(function (a) { return a.match && has(s, a.match); })[0];
+    if (ch && !(wantsApp && app)) return openChannel(ch.key);
+    if (app) return openApp(app.key);
+    if (/\blive\b/.test(s)) return openLive();
+    if (/\b(bedtime|calm|sleep)\b/.test(s)) return setMode(true, true);
+    if (/\b(kids|children|cartoon)\b/.test(s)) return setMode(true);
+    say('Sorry, I didn’t catch that', 'Try “Channel 4 live”, “open Netflix” or “put on The Gruffalo”.', true);
+  }
+  $('commandForm').addEventListener('submit', function (e) { e.preventDefault(); var q = ask.value; ask.value = ''; ask.blur(); interpret(q); });
+
+  // ---------- Pairing ----------
+  var paired = false;
+  function setPaired(on) {
+    paired = on;
+    $('phoneIcon').hidden = on; $('phoneDot').hidden = !on;
+    $('phoneLabel').textContent = on ? 'Phone connected' : 'Connect phone';
+  }
+  function openPairing() {
+    var p = JSON.parse(N.pairing());
+    if (!p.address) { say('Connect the TV to Wi-Fi first', 'Your phone and the TV need to be on the same network.', true); return; }
+    var url = 'http://' + p.address + '/';
+    $('pairCode').textContent = p.code;
+    $('pairAddress').textContent = 'Or go to ' + p.address + ' on any phone on this Wi-Fi.';
+    try { var qr = qrcode(0, 'M'); qr.addData(url); qr.make(); $('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 0, scalable: true }); } catch (e) { $('qr').textContent = url; }
+    $('pairModal').hidden = false; setFocus($('useRemote'));
+  }
+  $('useRemote').addEventListener('click', closeOverlays);
+  $('phoneBtn').addEventListener('click', function () {
+    if (paired) say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); else openPairing();
+  });
+
+  // ---------- Keys: from the Android side (remote) and from the phone ----------
+  window.hearthKey = function (k) {
+    if (k === 'back') return back();
+    if (k === 'ok') return select();
+    if (k === 'home') { closeOverlays(); if (kidsMode) setMode(false); return; }
+    move(k);
+  };
+  function back() {
+    if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden) { closeOverlays(); return; }
+    if (kidsMode) { setMode(false); return; }
+    setFocus(ask);
+  }
+  window.hearthBack = back;
+
+  window.hearthRemote = function (cmd) {
+    if (cmd.type === 'key') return window.hearthKey(cmd.value);
+    if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
+    if (cmd.type === 'app') { closeOverlays(); return cmd.value === 'live' ? openLive() : openApp(cmd.value); }
+    if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
+    if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
+    if (cmd.type === 'mode') return setMode(!kidsMode);
+    if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
+  };
+
+  // Desktop testing: arrow keys and Enter behave like the remote
+  document.addEventListener('keydown', function (e) {
+    if (window.HearthNative) return;   // on the TV, the Android side sends keys
+    var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
+    if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
+    else if (e.key === 'Enter' && document.activeElement !== ask) { e.preventDefault(); select(); }
+  });
+
+  // ---------- Start ----------
+  var p0 = JSON.parse(N.pairing());
+  setPaired(!!p0.paired);
+  var seen = false;
+  try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
+  if (!seen && !p0.paired && p0.address) openPairing(); else setFocus(ask);
+})();
+</script>
+</body>
+</html>

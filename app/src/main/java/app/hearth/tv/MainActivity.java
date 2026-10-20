@@ -1,0 +1,144 @@
+package app.hearth.tv;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import org.json.JSONObject;
+
+/** The home screen: a full-screen web page (assets/tv.html) with a bridge to open other apps. */
+public class MainActivity extends Activity {
+    private WebView web;
+    private AppLauncher launcher;
+    private Pairing pairing;
+    private volatile boolean ready;
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        launcher = new AppLauncher(this);
+        pairing = new Pairing(this);
+        RemoteService.start(this);
+
+        web = new WebView(this);
+        web.setBackgroundColor(Color.parseColor("#ECEBE7"));
+        web.setFocusable(true);
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        web.addJavascriptInterface(new Bridge(), "HearthNative");
+        web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                ready = true;
+                Remote.flush();
+            }
+        });
+        setContentView(web);
+        web.loadUrl("file:///android_asset/tv.html");
+        Remote.attach(this);
+        hideSystemBars();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        hideSystemBars();
+        Remote.setVisible(true);
+    }
+
+    @Override protected void onPause() {
+        Remote.setVisible(false);
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        Remote.detach(this);
+        web.destroy();
+        super.onDestroy();
+    }
+
+    boolean isReady() { return ready; }
+
+    /** Runs a phone command on the page. Safe to call from any thread. */
+    void runCommand(final JSONObject cmd) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                web.evaluateJavascript("window.hearthRemote && hearthRemote(" + cmd + ")", null);
+            }
+        });
+    }
+
+    /** The physical remote: send D-pad, OK and Back to the page instead of letting the WebView move focus. */
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        String key = keyName(event.getKeyCode());
+        if (key == null) return super.dispatchKeyEvent(event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            web.evaluateJavascript("window.hearthKey && hearthKey('" + key + "')", null);
+        }
+        return true;
+    }
+
+    private static String keyName(int code) {
+        switch (code) {
+            case KeyEvent.KEYCODE_DPAD_UP: return "up";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "down";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "left";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "right";
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER: return "ok";
+            case KeyEvent.KEYCODE_BACK: return "back";   // this is home, so Back never leaves the app
+            default: return null;
+        }
+    }
+
+    private void hideSystemBars() {
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+    }
+
+    /** What the page can ask the TV to do. Called on a background thread by the WebView. */
+    private final class Bridge {
+        @JavascriptInterface public String pairing() {
+            try {
+                String address = RemoteService.address();
+                return new JSONObject()
+                        .put("address", address == null ? "" : address)
+                        .put("code", pairing.code())
+                        .put("paired", pairing.hasPhones())
+                        .toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface public String openApp(String key) {
+            return launcher.openApp(key);
+        }
+
+        @JavascriptInterface public String openLink(String key, String url) {
+            return launcher.openLink(key, url);
+        }
+
+        @JavascriptInterface public void showKeyboard() {
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    web.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
+                }
+            });
+        }
+    }
+}
