@@ -4,6 +4,11 @@
 //
 // apps:     "packages" are tried first; if none is installed, any app whose name contains
 //           one of "match" is used instead.
+// Checked on our Fire TV Stick 4K (Fire OS 6.2.8): iPlayer only accepts amzn://uk.co.bbc.iplayer
+// links, Channel 4 only channel4:// links, ITVX accepts itv.com links, Netflix accepts
+// netflix.com/title and /watch, YouTube any youtube.com link, Disney+ disneyplus.com links.
+// Apple TV and My5 are not installed on the stick yet.
+//
 // channels: "url" is an untested guess at a direct link to the live stream. If the app
 //           refuses it, the app simply opens on its home page.
 // kids:     "url" is empty until we've tested which links each app accepts on the stick.
@@ -12,9 +17,9 @@ window.HEARTH_CONFIG = {
   "apps": [
     { "key": "live", "label": "Live TV", "name": "Live TV", "swatch": "#E5574B", "live": true },
     { "key": "iplayer", "label": "iPlayer", "name": "BBC iPlayer", "swatch": "#E8417F",
-      "packages": ["uk.co.bbc.iplayer", "bbc.iplayer.android"], "match": ["iplayer"] },
+      "packages": ["uk.co.bbc.iplayer"], "match": ["iplayer"] },
     { "key": "channel4", "label": "Channel 4", "name": "Channel 4", "swatch": "#3E8E7E",
-      "packages": ["com.channel4.ondemand", "com.channel4.firetv"], "match": ["channel 4"] },
+      "packages": ["com.channel4.ondemand"], "match": ["channel 4"] },
     { "key": "netflix", "label": "Netflix", "name": "Netflix", "swatch": "#D8302F",
       "packages": ["com.netflix.ninja"], "match": ["netflix"] },
     { "key": "disney", "label": "Disney+", "name": "Disney+", "swatch": "#2B4FA8",
@@ -33,7 +38,7 @@ window.HEARTH_CONFIG = {
   "channels": [
     { "key": "bbcone", "name": "BBC One", "app": "iplayer", "url": "https://www.bbc.co.uk/iplayer/live/bbcone", "aliases": ["bbc 1", "bbc one"] },
     { "key": "bbctwo", "name": "BBC Two", "app": "iplayer", "url": "https://www.bbc.co.uk/iplayer/live/bbctwo", "aliases": ["bbc 2", "bbc two"] },
-    { "key": "itv1", "name": "ITV1", "app": "itvx", "url": "", "aliases": ["itv1", "itv 1", "itv"] },
+    { "key": "itv1", "name": "ITV1", "app": "itvx", "url": "https://www.itv.com/watch?channel=itv", "aliases": ["itv1", "itv 1", "itv"] },
     { "key": "c4", "name": "Channel 4", "app": "channel4", "url": "https://www.channel4.com/now/C4", "aliases": ["channel 4", "channel four", "c4"] },
     { "key": "e4", "name": "E4", "app": "channel4", "url": "https://www.channel4.com/now/E4", "aliases": ["e4"] },
     { "key": "c5", "name": "Channel 5", "app": "my5", "url": "", "aliases": ["channel 5", "channel five"] },
