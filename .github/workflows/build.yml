@@ -1,6 +1,6 @@
 # Builds the Fire TV app on every push to main and publishes it as the latest release,
 # so the stick can download it from a fixed address:
-#   https://github.com/<owner>/hearth-tv/releases/latest/download/hearth-tv.apk
+#   https://github.com/steelesean/hearth-tv/releases/latest/download/hearth-tv.apk
 name: Build app
 
 on:

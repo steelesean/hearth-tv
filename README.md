@@ -15,7 +15,7 @@ A calm, clean home screen for our Fire TV Stick 4K, with one-tap shortcuts for t
 2. Install **Downloader** from the Amazon store.
 3. In Settings > My Fire TV > Developer options > Install unknown apps, allow Downloader.
 4. Open Downloader and enter:
-   `https://github.com/<owner>/hearth-tv/releases/latest/download/hearth-tv.apk`
+   `https://github.com/steelesean/hearth-tv/releases/latest/download/hearth-tv.apk`
 5. Choose Install. Hearth then appears in your apps. Move it to the front of the row so it's one click from waking the TV.
 
 To update later, repeat step 4. Every change pushed to `main` builds a new version automatically (see the Actions tab).
