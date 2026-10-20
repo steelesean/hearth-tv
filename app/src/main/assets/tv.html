@@ -113,6 +113,22 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .pair-note { display: block; font-size: 22px; color: var(--ink-soft); margin-top: 18px; }
 .live-card { width: 1500px; }
 .channels { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 24px; margin-top: 40px; }
+.picks { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 28px; margin-top: 40px; }
+.pick { height: 300px; border-radius: 28px; border: 2px solid var(--line); background: #fff; color: var(--ink); text-align: left; padding: 34px; box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.pick .pick-title { font: 500 44px/1.05 var(--font-display); letter-spacing: -0.01em; }
+.pick .pick-meta { font-size: 22px; color: var(--ink-soft); margin-top: 12px; }
+.pick .pick-why { font-size: 26px; line-height: 1.35; margin-top: auto; }
+.pick-col { display: flex; flex-direction: column; }
+.pick-col .verdicts { display: flex; margin-top: 18px; }
+.pick-col .verdicts > * + * { margin-left: 14px; }
+.verdict { font: 500 22px var(--font-ui); color: var(--ink); background: transparent; border: 2px solid var(--line); border-radius: 999px; height: 54px; padding: 0 22px; white-space: nowrap; }
+.pick-col.done .pick:not(.is-focus) { opacity: .45; }
+.pick-col .noted { font-size: 22px; color: var(--ink-soft); height: 54px; display: flex; align-items: center; margin-top: 18px; }
+.how-card { width: 1300px; }
+.how-card h2 { margin-bottom: 10px; }
+.how-actions { display: flex; margin-top: 36px; }
+.how-actions > * + * { margin-left: 20px; }
+.live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
 .channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: #fff; font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
 
 /* Kids mode */
@@ -182,6 +198,22 @@ body { color: var(--ink); font-family: var(--font-ui); }
     </div>
   </div>
 
+  <div class="overlay" id="picksPanel" hidden>
+    <div class="card live-card">
+      <h2 id="picksTitle">A few ideas</h2>
+      <p class="lede" id="picksLede"></p>
+      <div class="picks" id="picks"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="howPanel" hidden>
+    <div class="card live-card how-card">
+      <h2 id="howTitle">How was it?</h2>
+      <p class="lede" id="howLede">Your answer helps Hearth suggest better things.</p>
+      <div class="how-actions" id="howActions"></div>
+    </div>
+  </div>
+
   <div class="overlay" id="livePanel" hidden>
     <div class="card live-card">
       <h2>Live TV</h2>
@@ -203,7 +235,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
     pairing: function () { return JSON.stringify({ address: '192.168.1.42:8080', code: '4817', paired: false }); },
     openApp: function () { return 'ok'; },
     openLink: function () { return 'ok'; },
-    showKeyboard: function () {}
+    showKeyboard: function () {},
+    installed: function () { return JSON.stringify(C.apps.map(function (a) { return a.key; })); },
+    assistantReady: function () { return true; },
+    learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
+    ask: function (id, payload) {
+      setTimeout(function () {
+        window.hearthAnswer(id, { reply: 'Three you might like tonight.', action: { type: 'suggest', key: '' }, suggestions: [
+          { title: 'The Diplomat', kind: 'series', year: '2023', app: 'netflix', reason: 'Sharp political drama, like Slow Horses.' },
+          { title: 'Paddington 2', kind: 'film', year: '2017', app: 'netflix', reason: 'Warm, funny and safe for everyone.' },
+          { title: 'Mr Bates vs The Post Office', kind: 'series', year: '2024', app: 'itvx', reason: 'Gripping true story, four episodes.' }
+        ] });
+      }, 900);
+    }
   };
 
   // ---------- Build the screen from config ----------
@@ -242,10 +286,13 @@ body { color: var(--ink); font-family: var(--font-ui); }
   var chips = [
     { label: 'Watch BBC One', run: function () { openChannel('bbcone'); } },
     { label: 'Channel 4 live', run: function () { openChannel('c4'); } },
-    { label: 'Bedtime stories', run: function () { setMode(true, true); } },
-    { label: 'Open YouTube', run: function () { openApp('youtube'); } }
+    { label: 'Carry on from last night', run: function () { carryOn(); } },
+    { label: 'Suggest a film', run: function () { askAssistant('Suggest a film we’d both like tonight'); }, needsAssistant: true },
+    { label: 'Bedtime stories', run: function () { setMode(true, true); } }
   ];
+  var assistantOn = !!(N.assistantReady && N.assistantReady());
   chips.forEach(function (c) {
+    if (c.needsAssistant && !assistantOn) return;
     var b = el('button', 'chip focusable'); b.type = 'button'; b.textContent = c.label;
     b.addEventListener('click', c.run);
     $('chips').appendChild(b);
@@ -278,6 +325,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function layer() {
     if (!$('pairModal').hidden) return $('pairModal');
     if (!$('livePanel').hidden) return $('livePanel');
+    if (!$('picksPanel').hidden) return $('picksPanel');
+    if (!$('howPanel').hidden) return $('howPanel');
     return stage;
   }
   function items() {
@@ -331,25 +380,192 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   // ---------- Actions ----------
   function missing(app) { say('Can’t find ' + app.name + ' on this TV', 'Install it from the Amazon store, then try again.', true); }
-  function openApp(key) {
+  function openApp(key, quiet) {
     var app = appByKey(key);
-    say('Opening ' + app.name, '');
+    if (!quiet) say('Opening ' + app.name, '');
+    remember({ kind: 'app', key: key, title: app.name, app: key });
     setTimeout(function () { if (N.openApp(key) === 'missing') missing(app); }, 700);
   }
   function openChannel(key) {
     var ch = C.channels.filter(function (c) { return c.key === key; })[0]; if (!ch) return;
     var app = appByKey(ch.app);
     say(ch.name, 'Opening ' + app.name);
+    remember({ kind: 'channel', key: key, title: ch.name + ' live', app: ch.app });
     setTimeout(function () { if (N.openLink(ch.app, ch.url || '') === 'missing') missing(app); }, 700);
   }
   function openKid(key) {
     var k = C.kids.filter(function (x) { return x.key === key; })[0]; if (!k) return;
     var app = appByKey(k.app);
     say(k.title, 'Opening ' + app.name);
+    remember({ kind: 'kid', key: key, title: k.title, app: k.app });
     setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
   }
   function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
-  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; setFocus(ask); }
+  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
+
+  // ---------- What we've opened (kept on the stick, sent to the assistant) ----------
+  function history() { try { return JSON.parse(localStorage.getItem('hearth.history') || '[]'); } catch (e) { return []; } }
+  function remember(item) {
+    item.at = new Date().toISOString();
+    var h = history().filter(function (x) { return !(x.kind === item.kind && x.key === item.key && x.title === item.title); });
+    h.unshift(item);
+    try { localStorage.setItem('hearth.history', JSON.stringify(h.slice(0, 30))); } catch (e) {}
+  }
+  function when(iso) {
+    var d = new Date(iso), now = new Date(), t = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+    return days === 0 ? 'earlier today at ' + t : days === 1 ? 'yesterday at ' + t : d.toLocaleDateString('en-GB', { weekday: 'long' }) + ' at ' + t;
+  }
+  // "Carry on from last night": reopen the last grown-up thing we opened. The app itself
+  // remembers the episode, so its Continue Watching row is one press away.
+  function carryOn() {
+    var last = history().filter(function (x) { return x.kind !== 'kid'; })[0];
+    if (!last) { say('Nothing to carry on with yet', 'Once you’ve watched something through Hearth, I’ll remember it.', true); return; }
+    var title = 'Carrying on: ' + last.title, body = 'Last opened ' + when(last.at);
+    if (last.kind === 'channel') openChannel(last.key);
+    else if (last.kind === 'pick') openPick(last);
+    else openApp(last.key, true);
+    setTimeout(function () { say(title, body); }, 50);
+  }
+
+  // ---------- The assistant (Claude), for anything the rules above don't cover ----------
+  var asking = null;
+  function installedApps() {
+    var keys = []; try { keys = JSON.parse(N.installed()); } catch (e) {}
+    return C.apps.concat(C.extraApps).filter(function (a) { return !a.live && keys.indexOf(a.key) >= 0; })
+      .map(function (a) { return { key: a.key, name: a.name }; });
+  }
+  function askAssistant(q) {
+    var id = String(Date.now());
+    asking = id;
+    $('sheetTitle').textContent = 'Thinking…'; $('sheetBody').textContent = '“' + q + '”';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { if (asking === id) { asking = null; say('That took too long', 'Try again in a moment.', true); } }, 30000);
+    var d = new Date();
+    N.ask(id, JSON.stringify({
+      request: q,
+      now: d.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      catalogue: {
+        apps: installedApps(),
+        channels: C.channels.map(function (c) { return { key: c.key, name: c.name }; }),
+        kids: C.kids.map(function (k) { return { key: k.key, title: k.title }; })
+      },
+      history: history().slice(0, 15).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; }),
+      feedback: feedbackForAssistant()
+    }));
+  }
+  window.hearthAnswer = function (id, a) {
+    if (id !== asking) return;   // an older question, or it already timed out
+    asking = null; clearTimeout(sheetTimer); sheet.classList.remove('show');
+    if (!a || a.error || !a.action) { say('The assistant couldn’t help', (a && a.error) || 'Try asking another way.', true); return; }
+    var t = a.action.type, key = a.action.key;
+    if (t === 'open_app' && key) return openApp(key);
+    if (t === 'open_channel' && key) return openChannel(key);
+    if (t === 'open_kid' && key) return openKid(key);
+    if (t === 'suggest' && a.suggestions && a.suggestions.length) return showPicks(a.reply, a.suggestions);
+    say(a.reply || 'Sorry, I’m not sure', '', true);
+  };
+
+  function showPicks(reply, picks) {
+    $('picksLede').textContent = reply || '';
+    var box = $('picks'); box.innerHTML = '';
+    picks.slice(0, 3).forEach(function (p) {
+      var app = appByKey(p.app);
+      var b = el('button', 'pick focusable', '<span class="pick-title"></span><span class="pick-meta"></span><span class="pick-why"></span>');
+      b.type = 'button';
+      b.querySelector('.pick-title').textContent = p.title;
+      b.querySelector('.pick-meta').textContent = [p.kind === 'series' ? 'Series' : 'Film', p.year, app.name].filter(Boolean).join(' · ');
+      b.querySelector('.pick-why').textContent = p.reason;
+      b.addEventListener('click', function () {
+        closeOverlays();
+        var item = { kind: 'pick', key: p.app, title: p.title, app: p.app, pickKind: p.kind };
+        remember(item);
+        openPick(item);
+      });
+      var col = el('div', 'pick-col'), row = el('div', 'verdicts');
+      col.appendChild(b);
+      [['seen', 'Seen it'], ['no', 'Not for us']].forEach(function (v) {
+        var vb = el('button', 'verdict focusable'); vb.type = 'button'; vb.textContent = v[1];
+        vb.addEventListener('click', function () {
+          giveFeedback(p.title, p.kind, p.app, v[0]);
+          col.classList.add('done');
+          var noted = el('div', 'noted'); noted.textContent = 'Got it, I’ll remember that';
+          col.replaceChild(noted, row);
+          setFocus(b);
+        });
+        row.appendChild(vb);
+      });
+      col.appendChild(row);
+      box.appendChild(col);
+    });
+    $('picksPanel').hidden = false; setFocus(items()[0]);
+  }
+  // Opens a suggestion: straight to search where the app supports it, otherwise the app itself.
+  function openPick(p) {
+    var app = appByKey(p.app);
+    if (app.searchUrl) {
+      say(p.title, 'Searching ' + app.name);
+      setTimeout(function () { if (N.openLink(p.app, app.searchUrl.replace('{q}', encodeURIComponent(p.title))) === 'missing') missing(app); }, 700);
+    } else {
+      say('Opening ' + app.name, 'Search for “' + p.title + '”');
+      setTimeout(function () { if (N.openApp(p.app) === 'missing') missing(app); }, 1500);
+    }
+  }
+
+  // ---------- Learning: feedback on suggestions shapes a taste profile over time ----------
+  function feedback() { try { return JSON.parse(localStorage.getItem('hearth.feedback') || '[]'); } catch (e) { return []; } }
+  var VERDICTS = { loved: 'loved it', fine: 'it was fine', no: 'not for us', seen: 'already seen', skipped: 'didn’t watch it' };
+  function giveFeedback(title, kind, app, verdict) {
+    var f = feedback().filter(function (x) { return x.title !== title; });
+    f.unshift({ title: title, kind: kind || '', app: app || '', verdict: verdict, at: new Date().toISOString() });
+    try {
+      localStorage.setItem('hearth.feedback', JSON.stringify(f.slice(0, 100)));
+      var n = Number(localStorage.getItem('hearth.sinceLearn') || 0) + 1;
+      localStorage.setItem('hearth.sinceLearn', String(n));
+      if (n >= 3) learnNow();
+    } catch (e) {}
+  }
+  function feedbackForAssistant() {
+    return feedback().slice(0, 40).map(function (x) { return { title: x.title, kind: x.kind, verdict: VERDICTS[x.verdict] || x.verdict }; });
+  }
+  // After a few answers, ask Claude to fold them into the profile (kept on the stick).
+  function learnNow() {
+    if (!(N.assistantReady && N.assistantReady() && N.learn)) return;
+    N.learn(JSON.stringify({
+      feedback: feedbackForAssistant(),
+      history: history().slice(0, 20).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; })
+    }));
+  }
+  window.hearthLearned = function (a) {
+    if (a && a.profile && !a.error) { try { localStorage.setItem('hearth.sinceLearn', '0'); } catch (e) {} }
+  };
+
+  // Back from watching a suggestion? Ask once how it was.
+  window.hearthResumed = function () {
+    if (asking || !$('pairModal').hidden) return;
+    var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
+    var rated = feedback().map(function (x) { return x.title; });
+    var mins = function (x) { return (Date.now() - new Date(x.at)) / 60000; };
+    var p = history().filter(function (x) {
+      return x.kind === 'pick' && mins(x) > 40 && mins(x) < 3 * 24 * 60 && asked.indexOf(x.title) < 0 && rated.indexOf(x.title) < 0;
+    })[0];
+    if (!p) return;
+    asked.unshift(p.title);
+    try { localStorage.setItem('hearth.asked', JSON.stringify(asked.slice(0, 50))); } catch (e) {}
+    $('howTitle').textContent = 'How was ' + p.title + '?';
+    var box = $('howActions'); box.innerHTML = '';
+    [['loved', 'Loved it'], ['fine', 'It was fine'], ['no', 'Not for us'], ['skipped', 'Didn’t watch it']].forEach(function (v) {
+      var b = el('button', 'pill focusable'); b.type = 'button'; b.textContent = v[1];
+      b.addEventListener('click', function () {
+        giveFeedback(p.title, p.pickKind, p.app, v[0]);
+        closeOverlays();
+        if (v[0] !== 'skipped') say('Thanks, noted', 'Suggestions will take that into account.');
+      });
+      box.appendChild(b);
+    });
+    $('livePanel').hidden = true; $('picksPanel').hidden = true;
+    $('howPanel').hidden = false; setFocus(box.firstChild);
+  };
 
   function setMode(on, isBedtime) {
     kidsMode = on; bedtime = on && !!isBedtime;
@@ -367,8 +583,11 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function interpret(q) {
     var s = ' ' + q.toLowerCase().replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
     if (!s.trim()) return;
+    if (/\b(carry on|keep watching|continue|last night|where we left|what we were watching)\b/.test(s)) return carryOn();
     var k = C.kids.filter(function (x) { return has(s, x.aliases.map(function (a) { return a + ' '; })); })[0];
     if (k) return openKid(k.key);
+    var ready = N.assistantReady && N.assistantReady();
+    if (ready && /\b(suggest|recommend|ideas?|what should|in the mood)\b/.test(s)) return askAssistant(q.trim());
     var ch = C.channels.filter(function (x) { return has(s, x.aliases.map(function (a) { return ' ' + a + ' '; })); })[0];
     var wantsApp = /\b(open|app|launch)\b/.test(s);
     var app = C.apps.concat(C.extraApps).filter(function (a) { return a.match && has(s, a.match); })[0];
@@ -377,6 +596,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (/\blive\b/.test(s)) return openLive();
     if (/\b(bedtime|calm|sleep)\b/.test(s)) return setMode(true, true);
     if (/\b(kids|children|cartoon)\b/.test(s)) return setMode(true);
+    if (N.assistantReady && N.assistantReady()) return askAssistant(q.trim());
     say('Sorry, I didn’t catch that', 'Try “Channel 4 live”, “open Netflix” or “put on The Gruffalo”.', true);
   }
   $('commandForm').addEventListener('submit', function (e) { e.preventDefault(); var q = ask.value; ask.value = ''; ask.blur(); interpret(q); });
@@ -411,7 +631,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   };
   function back() {
     if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
-    if (!$('pairModal').hidden || !$('livePanel').hidden) { closeOverlays(); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden) { closeOverlays(); return; }
     if (kidsMode) { setMode(false); return; }
     setFocus(ask);
   }
@@ -424,6 +644,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
     if (cmd.type === 'mode') return setMode(!kidsMode);
+    if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
     if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
   };
 

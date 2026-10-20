@@ -64,6 +64,12 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
 .kid { height: 88px; border-radius: 14px; position: relative; overflow: hidden; color: #fff; display: flex; align-items: flex-end; padding: 9px 10px; font: 500 15px/1.05 var(--font-display); }
 .kid .art { transform: scale(.42); transform-origin: top right; }
 .kid span:last-child { position: relative; }
+.settings { border-top: 1.5px solid var(--line); padding-top: 18px; margin-top: 6px; }
+.settings summary { font-weight: 600; font-size: 15px; cursor: pointer; padding: 6px 0; }
+.settings .fields { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.settings input, .settings textarea { font: 400 16px var(--font-ui); color: var(--ink); background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; width: 100%; box-sizing: border-box; outline: 0; }
+.settings textarea { min-height: 110px; resize: vertical; line-height: 1.4; }
+.settings .hint { font-size: 13px; }
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px);
   background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 14px; font-size: 14px;
@@ -123,6 +129,24 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
 
       <div class="label">For the children</div>
       <div class="kids" id="kids"></div>
+
+      <details class="settings" id="settings">
+        <summary>Assistant settings</summary>
+        <div class="fields">
+          <p class="hint">Lets the TV answer things like “suggest a film we’d like”. You only need to set this up once.</p>
+          <label for="aUrl">Assistant address</label>
+          <input id="aUrl" type="url" inputmode="url" autocomplete="off" placeholder="hearth-assistant.vercel.app">
+          <label for="aKey">Assistant key</label>
+          <input id="aKey" type="password" autocomplete="off" placeholder="Paste the key">
+          <label for="aTaste">What you like watching</label>
+          <textarea id="aTaste" placeholder="We loved Slow Horses, The Bear and Paddington 2. We don’t like horror."></textarea>
+          <label for="aProfile">What Hearth has learned</label>
+          <textarea id="aProfile" placeholder="Nothing yet. This fills in as you tell the TV what you thought of its suggestions."></textarea>
+          <p class="hint">Hearth updates this itself. Edit it if it’s got something wrong.</p>
+          <button class="btn" id="saveSettings" type="button">Save</button>
+          <button class="btn ghost" id="forgetLearning" type="button">Forget what it’s learned</button>
+        </div>
+      </details>
     </div>
   </section>
 </main>
@@ -210,6 +234,33 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     b.lastChild.textContent = k.title;
     b.addEventListener('click', function () { send('kid', k.key); });
     $('kids').appendChild(b);
+  });
+
+  // Assistant settings, kept on the TV
+  function loadSettings() {
+    fetch('/api/settings?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.assistantUrl !== undefined) $('aUrl').value = j.assistantUrl;
+      $('aKey').placeholder = j.hasKey ? 'Saved. Paste a new one to replace it' : 'Paste the key';
+      if (j.taste !== undefined) $('aTaste').value = j.taste;
+      if (j.profile !== undefined) $('aProfile').value = j.profile;
+    }).catch(function () {});
+  }
+  $('settings').addEventListener('toggle', function () { if ($('settings').open) loadSettings(); });
+  $('saveSettings').addEventListener('click', function () {
+    post('/api/settings', { token: token, assistantUrl: $('aUrl').value, assistantKey: $('aKey').value, taste: $('aTaste').value, profile: $('aProfile').value })
+      .then(function (j) {
+        if (j._status === 401) { show('pair'); return; }
+        $('aKey').value = '';
+        toast(j.ready ? 'Saved. The assistant is ready.' : 'Saved. Add the address and key to switch the assistant on.');
+        loadSettings();
+      }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  });
+
+  $('forgetLearning').addEventListener('click', function () {
+    post('/api/settings', { token: token, profile: '', forget: true }).then(function (j) {
+      if (j._status === 401) { show('pair'); return; }
+      $('aProfile').value = ''; toast('Done. Hearth has forgotten what it learned.');
+    }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
   });
 
   // Start: check the saved pairing still works

@@ -3,9 +3,9 @@
 #   https://github.com/steelesean/hearth-tv/releases/latest/download/hearth-tv.apk
 name: Build app
 
+# Other branches are built too, to check they compile, but only main is published.
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -51,6 +51,7 @@ jobs:
           path: hearth-tv.apk
 
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
