@@ -50,7 +50,8 @@ final class AppLauncher {
             // A full Android intent, e.g. iPlayer's own links, which name the exact screen to open.
             try {
                 Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // Open the app fresh: iPlayer ignores the link if it's resumed mid-browse.
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 if (start(intent)) return "ok";
             } catch (URISyntaxException e) {
                 Log.w(TAG, "Bad link for " + key + ": " + url, e);
