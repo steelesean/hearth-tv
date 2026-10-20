@@ -1,0 +1,9 @@
+{
+  "name": "hearth-assistant",
+  "private": true,
+  "type": "module",
+  "description": "Turns requests from the Hearth TV home screen into actions, using Claude.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0"
+  }
+}
