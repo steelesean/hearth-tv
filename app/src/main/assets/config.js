@@ -4,14 +4,18 @@
 //
 // apps:     "packages" are tried first; if none is installed, any app whose name contains
 //           one of "match" is used instead.
-// Checked on our Fire TV Stick 4K (Fire OS 6.2.8): iPlayer only accepts amzn://uk.co.bbc.iplayer
-// links, Channel 4 only channel4:// links, ITVX accepts itv.com links, Netflix accepts
-// netflix.com/title and /watch, YouTube any youtube.com link, Disney+ disneyplus.com links.
-// Apple TV and My5 are not installed on the stick yet.
 //
-// channels: "url" is an untested guess at a direct link to the live stream. If the app
-//           refuses it, the app simply opens on its home page.
-// kids:     "url" is empty until we've tested which links each app accepts on the stick.
+// What our Fire TV Stick 4K (Fire OS 6.2.8) accepts:
+//   iPlayer   intent:// links that name its main screen, captured from Fire TV's own
+//             launcher (see the channels below). Plain bbc.co.uk links are ignored.
+//   Channel 4 only its own channel4:// links, format not yet known.
+//   ITVX      itv.com links. Netflix: netflix.com/title and /watch. YouTube: any youtube.com
+//             link. Disney+: disneyplus.com links (which kinds still to test).
+//   Apple TV and My5 aren't installed yet.
+//
+// channels: "url" opens the live stream where we know how; otherwise the app opens on its
+//           home page.
+// kids:     "url" is empty until we've tested each programme link on the stick.
 window.HEARTH_CONFIG = {
   "tvName": "Living room TV",
   "apps": [
@@ -36,13 +40,13 @@ window.HEARTH_CONFIG = {
     { "key": "my5", "name": "My5", "packages": [], "match": ["my5", "channel 5"] }
   ],
   "channels": [
-    { "key": "bbcone", "name": "BBC One", "app": "iplayer", "url": "https://www.bbc.co.uk/iplayer/live/bbcone", "aliases": ["bbc 1", "bbc one"] },
-    { "key": "bbctwo", "name": "BBC Two", "app": "iplayer", "url": "https://www.bbc.co.uk/iplayer/live/bbctwo", "aliases": ["bbc 2", "bbc two"] },
+    { "key": "bbcone", "name": "BBC One", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:bbc_one/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["bbc 1", "bbc one"] },
+    { "key": "bbctwo", "name": "BBC Two", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:bbc_two/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["bbc 2", "bbc two"] },
     { "key": "itv1", "name": "ITV1", "app": "itvx", "url": "https://www.itv.com/watch?channel=itv", "aliases": ["itv1", "itv 1", "itv"] },
     { "key": "c4", "name": "Channel 4", "app": "channel4", "url": "https://www.channel4.com/now/C4", "aliases": ["channel 4", "channel four", "c4"] },
     { "key": "e4", "name": "E4", "app": "channel4", "url": "https://www.channel4.com/now/E4", "aliases": ["e4"] },
     { "key": "c5", "name": "Channel 5", "app": "my5", "url": "", "aliases": ["channel 5", "channel five"] },
-    { "key": "cbeebies", "name": "CBeebies", "app": "iplayer", "url": "https://www.bbc.co.uk/iplayer/live/cbeebies", "aliases": ["cbeebies"] }
+    { "key": "cbeebies", "name": "CBeebies", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:cbeebies/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["cbeebies"] }
   ],
   "kids": [
     { "key": "gruffalo", "title": "The Gruffalo", "app": "iplayer", "src": "iPlayer", "art": "k-gruffalo", "url": "", "aliases": ["gruffalo"], "bedtime": false },

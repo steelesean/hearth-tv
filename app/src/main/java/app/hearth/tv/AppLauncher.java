@@ -13,6 +13,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -45,6 +46,17 @@ final class AppLauncher {
     String openLink(String key, String url) {
         String pkg = resolve(key);
         if (pkg == null) return "missing";
+        if (url != null && url.startsWith("intent:")) {
+            // A full Android intent, e.g. iPlayer's own links, which name the exact screen to open.
+            try {
+                Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (start(intent)) return "ok";
+            } catch (URISyntaxException e) {
+                Log.w(TAG, "Bad link for " + key + ": " + url, e);
+            }
+            return openApp(key);
+        }
         if (url != null && !url.isEmpty()) {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             view.setPackage(pkg);
