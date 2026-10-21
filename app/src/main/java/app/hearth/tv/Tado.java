@@ -43,8 +43,10 @@ final class Tado {
         Room(String name, boolean on, double inside, double target, double power) {
             this.name = name; this.on = on; this.inside = inside; this.target = target; this.power = power;
         }
-        /** "Left on": switched on and set to a warm temperature, whether or not it's warm yet. */
-        boolean leftOn(double minTarget) { return on && !Double.isNaN(target) && target >= minTarget; }
+        /** "Left on": heating right now, or switched on and set to a warm temperature. */
+        boolean leftOn(double minTarget) {
+            return on && (power > 0 || (!Double.isNaN(target) && target >= minTarget));
+        }
     }
 
     /** Rooms counted as left on are set to at least this. Overnight setbacks sit lower. */
