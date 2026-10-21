@@ -79,7 +79,7 @@ final class HeatingReminder {
                         title = String.format(Locale.UK, "No rooms left on (set to %.0f° or more)", tado.minTarget());
                         StringBuilder sb = new StringBuilder();
                         for (Tado.Room r : all) sb.append(sb.length() == 0 ? "" : "\n").append(Tado.describe(r));
-                        body = all.isEmpty() ? "Tado didn’t list any heating rooms for this home." : sb.toString();
+                        body = all.isEmpty() ? "Tado didn’t list any rooms. " + tado.lastReport : sb.toString();
                     } else {
                         title = rooms.size() == 1 ? "1 room still on" : rooms.size() + " rooms still on";
                         StringBuilder sb = new StringBuilder();
@@ -90,7 +90,7 @@ final class HeatingReminder {
                     Log.w(TAG, "Tado check failed", e);
                     if (!test) return;
                     title = "Couldn’t reach Tado";
-                    body = "Check the stick is online, or reconnect Tado from your phone.";
+                    body = "Check the stick is online, or reconnect Tado from your phone. (" + e.getMessage() + ")";
                 }
                 final String t = title, b = body;
                 main.post(new Runnable() { @Override public void run() { show(t, b); } });
