@@ -354,7 +354,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var d = new Date();
     $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     var w = weatherNow();
-    stage.classList.toggle('evening', d.getHours() >= 20 || d.getHours() < 7);
+    stage.classList.toggle('evening', N.evening ? N.evening() : (d.getHours() >= 20 || d.getHours() < 7));
     $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
     renderNow(w);
     if (!$('saver').hidden) paintSaver(d, w);
@@ -426,6 +426,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (!title) return;
     var log = showsLog(); log.unshift({ title: title, kind: kind || '', app: app || '', at: new Date().toISOString() });
     try { localStorage.setItem('hearth.shows', JSON.stringify(log.slice(0, 200))); } catch (e) {}
+    mirror();
   }
   function follows() { try { return JSON.parse(N.follows ? N.follows() : '[]'); } catch (e) { return []; } }
   function isFollowed(title) { return follows().some(function (f) { return f.title.toLowerCase() === title.toLowerCase(); }); }
@@ -488,7 +489,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
     try { localStorage.setItem('hearth.upnext', JSON.stringify({ at: Date.now(), key: upnextKey, shows: map })); } catch (e) {}
     renderWatching(); renderNow(weatherNow());
   };
-  function lastGrownUp() { return history().filter(function (x) { return x.kind !== 'kid'; })[0]; }
+  // The last grown-up thing we opened, or the last app you were in if that's more recent
+  // (you may have moved on from inside an app).
+  function lastGrownUp() {
+    var h = history().filter(function (x) { return x.kind !== 'kid'; })[0], a = null;
+    try { a = N.lastApp && N.lastApp() ? JSON.parse(N.lastApp()) : null; } catch (e) {}
+    if (a && a.key && (!h || a.at > new Date(h.at).getTime() + 60000) && (!h || h.app !== a.key)) {
+      return { kind: 'app', key: a.key, title: appByKey(a.key).name, app: a.key, at: new Date(a.at).toISOString() };
+    }
+    return h;
+  }
   function renderWatching() {
     var box = $('upnext'); box.innerHTML = '';
     var last = lastGrownUp(), shows = watchingShows(), saved = { carry: null, shows: [] };
@@ -613,6 +623,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
   function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
 
+  // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
+  var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
+  function mirror() {
+    if (!N.savePage) return;
+    var out = {};
+    try { PAGE_KEYS.forEach(function (k) { var v = localStorage.getItem(k); if (v !== null) out[k] = v; }); } catch (e) {}
+    N.savePage(JSON.stringify(out));
+  }
+  setInterval(mirror, 5 * 60 * 1000);
+
   // ---------- What we've opened (kept on the stick, sent to the assistant) ----------
   function history() { try { return JSON.parse(localStorage.getItem('hearth.history') || '[]'); } catch (e) { return []; } }
   function remember(item) {
@@ -620,6 +640,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var h = history().filter(function (x) { return !(x.kind === item.kind && x.key === item.key && x.title === item.title); });
     h.unshift(item);
     try { localStorage.setItem('hearth.history', JSON.stringify(h.slice(0, 30))); } catch (e) {}
+    mirror();
   }
   function when(iso) {
     var d = new Date(iso), now = new Date(), t = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -629,7 +650,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   // "Carry on from last night": reopen the last grown-up thing we opened. The app itself
   // remembers the episode, so its Continue Watching row is one press away.
   function carryOn() {
-    var last = history().filter(function (x) { return x.kind !== 'kid'; })[0];
+    var last = lastGrownUp();
     if (!last) { say('Nothing to carry on with yet', 'Once you’ve watched something through Hearth, I’ll remember it.', true); return; }
     var title = 'Carrying on: ' + last.title, body = 'Last opened ' + when(last.at);
     if (last.kind === 'channel') openChannel(last.key);
@@ -750,6 +771,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       localStorage.setItem('hearth.sinceLearn', String(n));
       if (n >= 3) learnNow();
     } catch (e) {}
+    mirror();
   }
   function feedbackForAssistant() {
     return feedback().slice(0, 40).map(function (x) { return { title: x.title, kind: x.kind, verdict: VERDICTS[x.verdict] || x.verdict }; });
@@ -882,6 +904,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
     if (cmd.type === 'mode') return setMode(!kidsMode);
     if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'restorePage') {
+      try { var data = JSON.parse(cmd.value || '{}'); PAGE_KEYS.forEach(function (k) { if (data[k] !== undefined) localStorage.setItem(k, data[k]); }); } catch (e) {}
+      return location.reload();
+    }
     if (cmd.type === 'heating') return say(cmd.title, cmd.body);
     if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
     if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
@@ -897,7 +923,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   });
 
   // ---------- Start ----------
-  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick();
+  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick(); mirror();
   var p0 = JSON.parse(N.pairing());
   setPaired(!!p0.paired);
   var seen = false;

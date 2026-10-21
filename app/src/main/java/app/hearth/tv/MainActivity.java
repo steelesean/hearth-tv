@@ -246,6 +246,23 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public String follows() { return assistant.follows(); }
 
+        /** Whether the evening palette should show, honouring the phone's Automatic/Dark/Light. */
+        @JavascriptInterface public boolean evening() { return Weather.eveningNow(MainActivity.this); }
+
+        /** The page's own data, mirrored so a backup can include it. */
+        @JavascriptInterface public void savePage(String json) { Backup.savePage(MainActivity.this, json); }
+
+        /** The last app you were in (from usage access), as {key, at}, or "" if unknown. */
+        @JavascriptInterface public String lastApp() {
+            android.content.SharedPreferences p = getSharedPreferences("home", MODE_PRIVATE);
+            String pkg = p.getString("lastPkg", "");
+            if (pkg.isEmpty()) return "";
+            String key = launcher.keyForPackage(pkg);
+            if (key == null) return "";
+            try { return new JSONObject().put("key", key).put("at", p.getLong("lastPkgAt", 0)).toString(); }
+            catch (Exception e) { return ""; }
+        }
+
         @JavascriptInterface public void setFollows(String json) { assistant.setFollows(json); }
 
         @JavascriptInterface public void saveWatching(String json) { assistant.setWatching(json); }

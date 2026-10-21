@@ -231,8 +231,7 @@ final class HeatingReminder {
         box.setPadding(dp(20), dp(16), dp(22), dp(18));
         box.setMinimumWidth(dp(240));
         // From 8pm to 7am, the evening palette, so the card doesn't flash white over a dark scene.
-        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        boolean evening = hour >= 20 || hour < 7;
+        boolean evening = Weather.eveningNow(context);
         String surface = evening ? "#2E312C" : "#F7F6F3";
         String ink = evening ? "#E7E5DF" : "#1F2321";
         String soft = evening ? "#A2A69E" : "#6B706C";

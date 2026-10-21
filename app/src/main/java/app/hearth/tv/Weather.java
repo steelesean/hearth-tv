@@ -21,6 +21,22 @@ final class Weather {
 
     String town() { return prefs.getString("town", ""); }
 
+    /** "auto" (8pm to 7am), "dark" or "light". */
+    String evening() { return prefs.getString("evening", "auto"); }
+
+    void setEvening(String mode) {
+        if ("auto".equals(mode) || "dark".equals(mode) || "light".equals(mode)) prefs.edit().putString("evening", mode).apply();
+    }
+
+    /** Whether the evening palette should be showing right now. */
+    static boolean eveningNow(Context context) {
+        String mode = context.getSharedPreferences("home", Context.MODE_PRIVATE).getString("evening", "auto");
+        if ("dark".equals(mode)) return true;
+        if ("light".equals(mode)) return false;
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        return hour >= 20 || hour < 7;
+    }
+
     boolean morningOn() { return prefs.getBoolean("morning", true); }
 
     String morningTime() { return prefs.getString("morningTime", "07:30"); }

@@ -74,6 +74,21 @@ final class AppLauncher {
         return resolve(key) != null;
     }
 
+    /** The config key ("netflix") for an installed package, or null if it isn't one of ours. */
+    String keyForPackage(String pkg) {
+        String[] lists = {"apps", "extraApps"};
+        for (String list : lists) {
+            JSONArray arr = config.optJSONArray(list);
+            for (int i = 0; arr != null && i < arr.length(); i++) {
+                JSONObject app = arr.optJSONObject(i);
+                if (app == null || app.optBoolean("live")) continue;
+                String key = app.optString("key");
+                if (pkg.equals(resolve(key))) return key;
+            }
+        }
+        return null;
+    }
+
     /** Every app on the stick that can be opened, as "Label|package" lines. Useful when tuning config.js. */
     List<String> installedApps() {
         List<String> out = new ArrayList<>();
