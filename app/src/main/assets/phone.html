@@ -203,8 +203,12 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
         <div class="fields">
           <p class="hint">These appear in Watching on the TV, with when the next episode is out. Hearth also adds shows you ask for on two or more days.</p>
           <div id="followList" class="follow-list"></div>
-          <label for="followAdd">Add a series</label>
-          <div class="follow-add"><input id="followAdd" type="text" autocomplete="off" placeholder="Slow Horses"><button class="btn" id="followAddBtn" type="button">Add</button></div>
+          <label for="followAdd">Series name</label>
+          <input id="followAdd" type="text" autocomplete="off" placeholder="The Gentlemen">
+          <label for="followLink">Link from the app (optional)</label>
+          <input id="followLink" type="url" inputmode="url" autocomplete="off" placeholder="Paste from Share in Netflix, Prime or Disney+">
+          <p class="hint">So the TV can open the show itself, not just the app: in the Netflix, Prime Video or Disney+ app on this phone, open the series, tap Share, then Copy link, and paste it here. iPlayer shows don’t need a link.</p>
+          <button class="btn" id="followAddBtn" type="button">Add</button>
         </div>
       </details>
       <div class="group-label">House</div>
@@ -519,7 +523,7 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     if (!followsNow.length) { box.innerHTML = '<p class="hint" style="margin:0">None yet.</p>'; return; }
     followsNow.forEach(function (f, i) {
       var row = document.createElement('div'), name = document.createElement('span'), rm = document.createElement('button');
-      name.textContent = f.title; rm.type = 'button'; rm.textContent = 'Remove';
+      name.textContent = f.title + (f.link || f.id ? '  ·  opens directly' : ''); rm.type = 'button'; rm.textContent = 'Remove';
       rm.addEventListener('click', function () { var next = followsNow.slice(); next.splice(i, 1); followSave(next); });
       row.appendChild(name); row.appendChild(rm); box.appendChild(row);
     });
@@ -533,10 +537,30 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       followShow(j.follows); toast('Saved. The TV will update Watching.');
     }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
   }
+  // Which app a share link belongs to, and the programme ID inside it where there is one.
+  function parseShareLink(url) {
+    var u = (url || '').trim(); if (!u) return null;
+    var m;
+    if ((m = u.match(/netflix\.com\/(?:[a-z-]+\/)?(?:title|watch)\/(\d+)/i))) return { app: 'netflix', id: m[1], link: 'https://www.netflix.com/title/' + m[1] };
+    if ((m = u.match(/bbc\.co\.uk\/iplayer\/episodes?\/([a-z0-9]{8})/i))) return { app: 'iplayer', id: m[1], link: u };
+    if (/disneyplus\.com/i.test(u)) return { app: 'disney', link: u };
+    if (/(primevideo\.com|amazon\.co\.uk|watch\.amazon)/i.test(u)) return { app: 'prime', link: u };
+    if (/channel4\.com/i.test(u)) return { app: 'channel4', link: u };
+    if (/itv\.com/i.test(u)) return { app: 'itvx', link: u };
+    if (/(youtube\.com|youtu\.be)/i.test(u)) return { app: 'youtube', link: u };
+    if (/tv\.apple\.com/i.test(u)) return { app: 'appletv', link: u };
+    return null;
+  }
   $('followAddBtn').addEventListener('click', function () {
-    var t = $('followAdd').value.trim(); if (!t) return;
-    $('followAdd').value = '';
-    followSave([{ title: t, app: '' }].concat(followsNow.filter(function (f) { return f.title.toLowerCase() !== t.toLowerCase(); })));
+    var t = $('followAdd').value.trim(), raw = $('followLink').value.trim();
+    if (!t) { toast('Add the series name too.'); return; }
+    var parsed = parseShareLink(raw);
+    if (raw && !parsed) { toast('That link isn’t from an app Hearth knows. Leave it blank to follow by name.'); return; }
+    $('followAdd').value = ''; $('followLink').value = '';
+    var entry = { title: t, app: parsed ? parsed.app : '' };
+    if (parsed && parsed.link) entry.link = parsed.link;
+    if (parsed && parsed.id) entry.id = parsed.id;
+    followSave([entry].concat(followsNow.filter(function (f) { return f.title.toLowerCase() !== t.toLowerCase(); })));
   });
 
   // Start: check the saved pairing still works

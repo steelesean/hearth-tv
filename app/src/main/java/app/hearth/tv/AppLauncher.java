@@ -61,7 +61,9 @@ final class AppLauncher {
         if (url != null && !url.isEmpty()) {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             view.setPackage(pkg);
-            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+            // Open the app fresh: an app already running in the background (Netflix, say) can
+            // otherwise just come to the front and ignore the link.
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
             if (!context.getPackageManager().queryIntentActivities(view, 0).isEmpty() && start(view)) {
                 return "ok";
             }

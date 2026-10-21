@@ -285,6 +285,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     follows: function () { try { return localStorage.getItem('dev.follows') || '[{"title":"Slow Horses","app":"appletv"}]'; } catch (e) { return '[]'; } },
     setFollows: function (j) { try { localStorage.setItem('dev.follows', j); } catch (e) {} },
     saveWatching: function () {},
+    iplayerLookup: function (t) { setTimeout(function () { window.hearthIplayer(t, { brand: 'm0021y5q', episode: 'm0024abc', title: t }); }, 200); },
     upnext: function () {
       var d = function (n) { var x = new Date(Date.now() + n * 86400000); return x.toISOString().slice(0, 10); };
       setTimeout(function () { window.hearthUpnext({ shows: [
@@ -521,13 +522,52 @@ body { color: var(--ink); font-family: var(--font-ui); }
     $('watchRow').hidden = !box.children.length;
     if (N.saveWatching) N.saveWatching(JSON.stringify(saved));
   }
-  // Opens a specific show: straight to the app's search where we know how, otherwise the app.
+  // ---------- Opening a specific show, not just its app ----------
+  // A followed show may carry the link from the phone app's Share button; iPlayer shows are
+  // looked up by name. Otherwise we fall back to the app's search, or the app itself.
+  function showIds() { try { return JSON.parse(localStorage.getItem('hearth.ids') || '{}'); } catch (e) { return {}; } }
+  function followFor(title) { return follows().filter(function (f) { return f.title.toLowerCase() === title.toLowerCase(); })[0]; }
+  function showTarget(title, appKey) {
+    var f = followFor(title) || {}, app = appByKey(f.app || appKey), ids = showIds()[title.toLowerCase()] || {};
+    if (f.link && app.shareLinks) return { app: app.key, url: f.link };
+    if (app.key === 'iplayer' || ids.brand) {
+      var brand = f.id || ids.brand, ep = ids.episode, ip = appByKey('iplayer');
+      if (ip.showLink && brand) return { app: 'iplayer', url: ip.showLink.replace('{brand}', brand) };
+      if (ip.episodeLink && ep) return { app: 'iplayer', url: ip.episodeLink.replace('{episode}', ep) };
+    }
+    return null;
+  }
   function openShow(title, appKey) {
     rememberShow(title, 'series', appKey);
     remember({ kind: 'pick', key: appKey, title: title, app: appKey, pickKind: 'series' });
-    openPick({ title: title, app: appKey });
+    var t = showTarget(title, appKey);
+    if (t) {
+      var app = appByKey(t.app);
+      say(title, 'Opening in ' + app.name);
+      setTimeout(function () { if (N.openLink(t.app, t.url) === 'missing') missing(app); }, 700);
+    } else {
+      openPick({ title: title, app: appKey });
+    }
     setTimeout(renderWatching, 1000);
   }
+  // Look up iPlayer IDs for our iPlayer shows (and ones we don't know the app for), weekly.
+  function lookUpIplayer() {
+    if (!N.iplayerLookup) return;
+    var ids = showIds();
+    topShows().forEach(function (x) {
+      var k = x.title.toLowerCase(), known = ids[k];
+      var app = (followFor(x.title) || {}).app || x.app;
+      if (app && app !== 'iplayer') return;
+      if (known && Date.now() - (known.at || 0) < 7 * 86400000) return;
+      N.iplayerLookup(x.title);
+    });
+  }
+  window.hearthIplayer = function (title, r) {
+    var ids = showIds();
+    ids[title.toLowerCase()] = r ? { brand: r.brand, episode: r.episode, at: Date.now() } : { none: true, at: Date.now() };
+    try { localStorage.setItem('hearth.ids', JSON.stringify(ids)); } catch (e) {}
+    renderWatching();
+  };
 
   // ---------- Focus (class-based so the remote and phone share it) ----------
   var cur = null;
@@ -624,7 +664,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
 
   // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
-  var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
+  var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing', 'hearth.ids'];
   function mirror() {
     if (!N.savePage) return;
     var out = {};
@@ -654,6 +694,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (!last) { say('Nothing to carry on with yet', 'Once you’ve watched something through Hearth, I’ll remember it.', true); return; }
     var title = 'Carrying on: ' + last.title, body = 'Last opened ' + when(last.at);
     if (last.kind === 'channel') openChannel(last.key);
+    else if (last.kind === 'pick' && showTarget(last.title, last.app)) {
+      var t = showTarget(last.title, last.app);
+      setTimeout(function () { N.openLink(t.app, t.url); }, 700);
+    }
     else if (last.kind === 'pick') openPick(last);
     else openApp(last.key, true);
     setTimeout(function () { say(title, body); renderWatching(); }, 50);
@@ -790,7 +834,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   // Back from watching a suggestion? Ask once how it was.
   window.hearthResumed = function () {
-    renderWatching(); fetchUpnext(false);
+    renderWatching(); fetchUpnext(false); lookUpIplayer();
     if (asking || !$('pairModal').hidden) return;
     var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
     var rated = feedback().map(function (x) { return x.title; });
@@ -889,7 +933,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   window.hearthRemote = function (cmd) {
     if (['refresh', 'updateReady', 'heating', 'key', 'refreshShows'].indexOf(cmd.type) < 0) wake();
     if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); fetchUpnext(false); return; }
-    if (cmd.type === 'refreshShows') { fetchUpnext(true); renderWatching(); return; }
+    if (cmd.type === 'refreshShows') { fetchUpnext(true); lookUpIplayer(); renderWatching(); return; }
     if (cmd.type === 'watch') {
       closeOverlays();
       if (cmd.value === 'carry') return carryOn();
@@ -923,7 +967,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   });
 
   // ---------- Start ----------
-  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick(); mirror();
+  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); lookUpIplayer(); tick(); mirror();
   var p0 = JSON.parse(N.pairing());
   setPaired(!!p0.paired);
   var seen = false;

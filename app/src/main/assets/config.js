@@ -15,6 +15,12 @@
 //
 // channels: "url" opens the live stream where we know how; otherwise the app opens on its
 //           home page.
+// Opening a specific show (Watching tiles, Carry on):
+//   shareLinks: the TV app accepts the same web link as the phone app's Share button, so a
+//               followed show's pasted link is opened as it is (Netflix /title/ links etc.).
+//   showLink:   iPlayer's series page, with {brand} as the series ID. Still to be tested.
+//   episodeLink: iPlayer playback, with {episode} as the latest episode's ID (tested).
+//   iPlayer IDs are looked up by name automatically, so iPlayer shows need no link.
 // searchUrl: optional; where a suggestion from the assistant opens, with {q} as the title.
 // kids:     "url" plays the programme straight away (tested on the stick, October 2026).
 //           iPlayer programme IDs: The Gruffalo b00pk64x, Room on the Broom p0102qfj,
@@ -25,20 +31,21 @@ window.HEARTH_CONFIG = {
   "apps": [
     { "key": "live", "label": "Live TV", "name": "Live TV", "swatch": "#E5574B", "live": true },
     { "key": "iplayer", "label": "iPlayer", "name": "BBC iPlayer", "swatch": "#E8417F",
-      "packages": ["uk.co.bbc.iplayer"], "match": ["iplayer"] },
+      "packages": ["uk.co.bbc.iplayer"], "match": ["iplayer"],
+      "showLink": "", "episodeLink": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/{episode}&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end" },
     { "key": "channel4", "label": "Channel 4", "name": "Channel 4", "swatch": "#3E8E7E",
       "packages": ["com.channel4.ondemand"], "match": ["channel 4"] },
     { "key": "netflix", "label": "Netflix", "name": "Netflix", "swatch": "#D8302F",
-      "packages": ["com.netflix.ninja"], "match": ["netflix"] },
+      "packages": ["com.netflix.ninja"], "match": ["netflix"], "shareLinks": true },
     { "key": "disney", "label": "Disney+", "name": "Disney+", "swatch": "#2B4FA8",
-      "packages": ["com.disney.disneyplus"], "match": ["disney"] },
+      "packages": ["com.disney.disneyplus"], "match": ["disney"], "shareLinks": true },
     { "key": "prime", "label": "Prime Video", "name": "Prime Video", "swatch": "#2AA3D6",
-      "packages": ["com.amazon.firebat", "com.amazon.avod"], "match": ["prime video"] },
+      "packages": ["com.amazon.firebat", "com.amazon.avod"], "match": ["prime video"], "shareLinks": true },
     { "key": "appletv", "label": "Apple TV", "name": "Apple TV", "swatch": "#8E9290",
       "packages": ["com.apple.atve.amazon.appletv"], "match": ["apple tv"] },
     { "key": "youtube", "label": "YouTube", "name": "YouTube", "swatch": "#E3392E",
       "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"],
-      "searchUrl": "https://www.youtube.com/results?search_query={q}" }
+      "searchUrl": "https://www.youtube.com/results?search_query={q}", "shareLinks": true }
   ],
   "extraApps": [
     { "key": "itvx", "name": "ITVX", "packages": ["air.ITVMobilePlayer"], "match": ["itvx", "itv"] },

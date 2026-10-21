@@ -246,6 +246,17 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public String follows() { return assistant.follows(); }
 
+        /** Looks up an iPlayer programme by name; the answer arrives at hearthIplayer(title, json). */
+        @JavascriptInterface public void iplayerLookup(final String title) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject r = IplayerLookup.find(title);
+                    final String js = "window.hearthIplayer && hearthIplayer(" + JSONObject.quote(title) + "," + (r == null ? "null" : r.toString()) + ")";
+                    runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
+                }
+            }, "hearth-iplayer").start();
+        }
+
         /** Whether the evening palette should show, honouring the phone's Automatic/Dark/Light. */
         @JavascriptInterface public boolean evening() { return Weather.eveningNow(MainActivity.this); }
 
