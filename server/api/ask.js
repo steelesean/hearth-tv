@@ -22,8 +22,10 @@ const ANSWER_SCHEMA = {
       properties: {
         type: { type: "string", enum: ["open_app", "open_channel", "open_kid", "suggest", "none"] },
         key: { type: "string", description: "The app, channel or kid key from the catalogue. Empty for suggest and none." },
+        show: { type: "string", description: "For open_app: the specific film or series they asked for, by its usual title. Empty if they just asked for the app." },
+        showKind: { type: "string", enum: ["film", "series", ""], description: "Whether show is a film or a series. Empty if show is empty." },
       },
-      required: ["type", "key"],
+      required: ["type", "key", "show", "showKind"],
       additionalProperties: false,
     },
     suggestions: {
@@ -50,7 +52,7 @@ const ANSWER_SCHEMA = {
 const SYSTEM = `You are the assistant inside Hearth, the TV home screen of a UK family. The TV sends you one spoken or typed request, the catalogue of things it can do, what the household has opened recently, and notes on their taste.
 
 Choose exactly one action:
-- open_app: open one of the installed apps (use its key).
+- open_app: open one of the installed apps (use its key). If they asked for a particular film or series ("put on Slow Horses"), open the app it streams on in the UK and give its title in show.
 - open_channel: start a live channel (use its key).
 - open_kid: play one of the children's programmes (use its key).
 - suggest: when they ask what to watch, or for something they'd like. Give up to 6 films or series, best first, that are likely streaming in the UK now on one of their installed apps, matched to their taste notes, learned profile, feedback and history. Their own taste notes win over the learned profile. Prefer variety. Never suggest anything they've marked as seen or not for them, or have obviously already watched.
@@ -183,7 +185,7 @@ async function checkAvailability(suggestions, installed) {
 }
 
 function noAction(reply) {
-  return { reply, action: { type: "none", key: "" }, suggestions: [] };
+  return { reply, action: { type: "none", key: "", show: "", showKind: "" }, suggestions: [] };
 }
 
 function safeParse(s) {

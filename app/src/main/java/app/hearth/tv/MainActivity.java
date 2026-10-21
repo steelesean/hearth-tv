@@ -244,6 +244,41 @@ public class MainActivity extends Activity {
             }, "hearth-update").start();
         }
 
+        @JavascriptInterface public String follows() { return assistant.follows(); }
+
+        /** Whether the evening palette should show, honouring the phone's Automatic/Dark/Light. */
+        @JavascriptInterface public boolean evening() { return Weather.eveningNow(MainActivity.this); }
+
+        /** The page's own data, mirrored so a backup can include it. */
+        @JavascriptInterface public void savePage(String json) { Backup.savePage(MainActivity.this, json); }
+
+        /** The last app you were in (from usage access), as {key, at}, or "" if unknown. */
+        @JavascriptInterface public String lastApp() {
+            android.content.SharedPreferences p = getSharedPreferences("home", MODE_PRIVATE);
+            String pkg = p.getString("lastPkg", "");
+            if (pkg.isEmpty()) return "";
+            String key = launcher.keyForPackage(pkg);
+            if (key == null) return "";
+            try { return new JSONObject().put("key", key).put("at", p.getLong("lastPkgAt", 0)).toString(); }
+            catch (Exception e) { return ""; }
+        }
+
+        @JavascriptInterface public void setFollows(String json) { assistant.setFollows(json); }
+
+        @JavascriptInterface public void saveWatching(String json) { assistant.setWatching(json); }
+
+        /** Next-episode dates in the background; the answer arrives at hearthUpnext(json). */
+        @JavascriptInterface public void upnext(final String payload) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject answer;
+                    try { answer = assistant.upnext(new JSONObject(payload)); } catch (Exception e) { answer = new JSONObject(); }
+                    final String js = "window.hearthUpnext && hearthUpnext(" + answer + ")";
+                    runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
+                }
+            }, "hearth-upnext").start();
+        }
+
         /** Today's weather as JSON, or "" if no town is set. */
         @JavascriptInterface public String weather() {
             JSONObject w = weatherCache;

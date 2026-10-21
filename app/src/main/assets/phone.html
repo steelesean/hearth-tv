@@ -78,6 +78,22 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
 .vbtn { width: 48px; height: 48px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); font: 600 22px var(--font-ui); flex: none; }
 .vbtn.mute { width: auto; height: 36px; padding: 0 14px; font-size: 14px; margin-left: 10px; vertical-align: middle; }
 .vbtn.mute[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.gear { width: 44px; height: 44px; border-radius: 12px; border: 1.5px solid var(--line); background: transparent; color: var(--ink); display: grid; place-items: center; }
+.gear svg { width: 22px; height: 22px; }
+.done { font-size: 16px; color: var(--focus); }
+.group-label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 10px 0 -10px; }
+.watch { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.wt { min-height: 72px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); text-align: left; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-family: var(--font-ui); }
+.wt strong { font: 500 17px/1.1 var(--font-display); }
+.wt span { font-size: 12.5px; color: var(--ink-soft); }
+.wt.carry { background: var(--ink); color: var(--surface); border-color: var(--ink); grid-column: 1 / -1; }
+.wt.carry span { color: #B9BDB8; }
+.follow-list { display: flex; flex-direction: column; gap: 6px; }
+.follow-list div { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1.5px solid var(--line); border-radius: 12px; padding: 8px 8px 8px 14px; font-size: 15px; }
+.follow-list button { border: 0; background: none; color: var(--ink-soft); font: 600 13px var(--font-ui); padding: 6px 8px; }
+.follow-add { display: flex; gap: 8px; }
+.follow-add input { flex: 1; min-width: 0; }
+.follow-add .btn { height: 48px; padding: 0 18px; }
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px);
   background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 14px; font-size: 14px;
@@ -104,7 +120,7 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="head">
         <div class="tv"><strong id="tvName">Living room TV</strong><span id="status">Connected</span></div>
-        <button class="link" id="forget" type="button">Forget this TV</button>
+        <button class="gear" id="openSettings" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg></button>
       </div>
 
       <form class="ask" id="askForm" autocomplete="off">
@@ -138,31 +154,62 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
         </div>
       </div>
 
-      <div class="label">Apps</div>
-      <div class="apps" id="apps"></div>
+      <div id="watchBox" hidden>
+        <div class="label" style="margin-bottom:10px">Watching</div>
+        <div class="watch" id="watch"></div>
+      </div>
 
-      <div class="label">Live</div>
-      <div class="channels" id="channels"></div>
-
-      <div class="label">For the children</div>
-      <div class="kids" id="kids"></div>
-
-      <details class="settings" id="homeSettings">
-        <summary>Weather and morning card</summary>
+      <details class="settings" id="shortcuts">
+        <summary>Apps, live channels and children’s</summary>
         <div class="fields">
-          <p class="hint">Used for the weather on the TV, the screensaver, frost warnings and the morning card.</p>
-          <label for="homeTown">Town</label>
-          <input id="homeTown" type="text" autocomplete="off" placeholder="Edinburgh">
-          <label><input id="homeMorning" type="checkbox" checked style="width:auto;margin-right:8px">Show a morning card</label>
-          <label for="homeMorningTime">At</label>
-          <input id="homeMorningTime" type="time" value="07:30">
-          <button class="btn" id="homeSave" type="button">Save</button>
-          <button class="btn ghost" id="homeTest" type="button">Show the morning card now</button>
+          <div class="label">Apps</div>
+          <div class="apps" id="apps"></div>
+          <div class="label">Live</div>
+          <div class="channels" id="channels"></div>
+          <div class="label">For the children</div>
+          <div class="kids" id="kids"></div>
         </div>
       </details>
 
+    </div>
+  </section>
+
+  <section id="settingsView" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="head">
+        <h1 style="margin:0">Settings</h1>
+        <button class="link done" id="settingsDone" type="button">Done</button>
+      </div>
+      <div class="group-label">Taste</div>
+      <details class="settings" id="settings">
+        <summary>Assistant and what we like</summary>
+        <div class="fields">
+          <p class="hint">Lets the TV answer things like “suggest a film we’d like”. You only need to set this up once.</p>
+          <label for="aUrl">Assistant address</label>
+          <input id="aUrl" type="url" inputmode="url" autocomplete="off" placeholder="hearth-assistant.vercel.app">
+          <label for="aKey">Assistant key</label>
+          <input id="aKey" type="password" autocomplete="off" placeholder="Paste the key">
+          <label for="aTaste">What you like watching</label>
+          <textarea id="aTaste" placeholder="We loved Slow Horses, The Bear and Paddington 2. We don’t like horror."></textarea>
+          <label for="aProfile">What Hearth has learned</label>
+          <textarea id="aProfile" placeholder="Nothing yet. This fills in as you tell the TV what you thought of its suggestions."></textarea>
+          <p class="hint">Hearth updates this itself. Edit it if it’s got something wrong.</p>
+          <button class="btn" id="saveSettings" type="button">Save</button>
+          <button class="btn ghost" id="forgetLearning" type="button">Forget what it’s learned</button>
+        </div>
+      </details>
+      <details class="settings" id="followSettings">
+        <summary>Shows we’re following</summary>
+        <div class="fields">
+          <p class="hint">These appear in Watching on the TV, with when the next episode is out. Hearth also adds shows you ask for on two or more days.</p>
+          <div id="followList" class="follow-list"></div>
+          <label for="followAdd">Add a series</label>
+          <div class="follow-add"><input id="followAdd" type="text" autocomplete="off" placeholder="Slow Horses"><button class="btn" id="followAddBtn" type="button">Add</button></div>
+        </div>
+      </details>
+      <div class="group-label">House</div>
       <details class="settings" id="heatSettings">
-        <summary>Heating reminder</summary>
+        <summary>Bedtime check (Tado)</summary>
         <div class="fields">
           <p class="hint">Each evening, the TV checks Tado and shows which rooms are still heating, over whatever you’re watching.</p>
           <p id="tadoStatus">Checking…</p>
@@ -180,24 +227,36 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
           <button class="btn ghost" id="tadoDisconnect" type="button" hidden>Disconnect Tado</button>
         </div>
       </details>
-
-      <details class="settings" id="settings">
-        <summary>Assistant settings</summary>
+      <details class="settings" id="homeSettings">
+        <summary>Weather, evening look and morning card</summary>
         <div class="fields">
-          <p class="hint">Lets the TV answer things like “suggest a film we’d like”. You only need to set this up once.</p>
-          <label for="aUrl">Assistant address</label>
-          <input id="aUrl" type="url" inputmode="url" autocomplete="off" placeholder="hearth-assistant.vercel.app">
-          <label for="aKey">Assistant key</label>
-          <input id="aKey" type="password" autocomplete="off" placeholder="Paste the key">
-          <label for="aTaste">What you like watching</label>
-          <textarea id="aTaste" placeholder="We loved Slow Horses, The Bear and Paddington 2. We don’t like horror."></textarea>
-          <label for="aProfile">What Hearth has learned</label>
-          <textarea id="aProfile" placeholder="Nothing yet. This fills in as you tell the TV what you thought of its suggestions."></textarea>
-          <p class="hint">Hearth updates this itself. Edit it if it’s got something wrong.</p>
-          <button class="btn" id="saveSettings" type="button">Save</button>
-          <button class="btn ghost" id="forgetLearning" type="button">Forget what it’s learned</button>
+          <p class="hint">Used for the weather on the TV, the screensaver, frost warnings and the morning card.</p>
+          <label for="homeTown">Town</label>
+          <input id="homeTown" type="text" autocomplete="off" placeholder="Edinburgh">
+          <label for="homeEvening">Evening look</label>
+          <select id="homeEvening" style="font:400 16px var(--font-ui);height:48px;border-radius:14px;border:1.5px solid var(--line);background:#fff;color:var(--ink);padding:0 12px">
+            <option value="auto">Automatic, from 8pm to 7am</option>
+            <option value="dark">Always dark</option>
+            <option value="light">Always light</option>
+          </select>
+          <label><input id="homeMorning" type="checkbox" checked style="width:auto;margin-right:8px">Show a morning card</label>
+          <label for="homeMorningTime">At</label>
+          <input id="homeMorningTime" type="time" value="07:30">
+          <button class="btn" id="homeSave" type="button">Save</button>
+          <button class="btn ghost" id="homeTest" type="button">Show the morning card now</button>
         </div>
       </details>
+      <div class="group-label">Backup</div>
+      <details class="settings" id="backupSettings">
+        <summary>Save or restore settings</summary>
+        <div class="fields">
+          <p class="hint">Saves your assistant settings, taste note, what Hearth has learned, shows you follow and the TV’s history to a file on this phone. If Hearth ever has to be reinstalled, restore it here. The file includes your assistant key, so keep it private. Tado and phone pairing aren’t included; reconnect those by hand.</p>
+          <button class="btn" id="backupSave" type="button">Save a backup</button>
+          <label for="backupFile" class="btn ghost" style="display:grid;place-items:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)">Restore from a backup</label>
+          <input id="backupFile" type="file" accept="application/json,.json" hidden>
+        </div>
+      </details>
+      <button class="link" id="forget" type="button" style="align-self:flex-start;margin-top:12px">Forget this TV</button>
     </div>
   </section>
 </main>
@@ -216,7 +275,10 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     var t = $('toast'); t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
   }
-  function show(view) { $('pairView').hidden = view !== 'pair'; $('remoteView').hidden = view !== 'remote'; }
+  function show(view) {
+    $('pairView').hidden = view !== 'pair'; $('remoteView').hidden = view !== 'remote'; $('settingsView').hidden = view !== 'settings';
+    window.scrollTo(0, 0);
+  }
   function connected(on) { var s = $('status'); s.textContent = on ? 'Connected' : 'Can’t reach the TV'; s.classList.toggle('off', !on); }
 
   function post(path, body) {
@@ -319,13 +381,14 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     if (!st) return;
     $('homeTown').value = st.town || '';
     $('homeMorning').checked = !!st.morning;
+    if (st.evening) $('homeEvening').value = st.evening;
     if (st.morningTime) $('homeMorningTime').value = st.morningTime;
   }
   $('homeSettings').addEventListener('toggle', function () {
     if ($('homeSettings').open) fetch('/api/home?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(homeShow).catch(function () {});
   });
   $('homeSave').addEventListener('click', function () {
-    post('/api/home', { token: token, town: $('homeTown').value, morning: $('homeMorning').checked, morningTime: $('homeMorningTime').value })
+    post('/api/home', { token: token, town: $('homeTown').value, morning: $('homeMorning').checked, morningTime: $('homeMorningTime').value, evening: $('homeEvening').value })
       .then(function (j) {
         if (j._status === 401) { show('pair'); return; }
         if (!j.ok) { toast(j.error || 'Couldn’t find that town. Try a nearby city.'); return; }
@@ -396,12 +459,90 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
   $('volDown').addEventListener('click', function () { volSend({ delta: -3 }); });
   $('volUp').addEventListener('click', function () { volSend({ delta: 3 }); });
   $('volMute').addEventListener('click', function () { volSend({ mute: $('volMute').getAttribute('aria-pressed') !== 'true' }); });
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && token) volLoad(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && token) { volLoad(); watchLoad(); } });
+
+  // Backup and restore
+  $('backupSave').addEventListener('click', function () {
+    fetch('/api/backup?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.hearthBackup) { toast('Couldn’t make a backup. Try again.'); return; }
+      var blob = new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'hearth-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('Backup saved to this phone');
+    }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  });
+  $('backupFile').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data; try { data = JSON.parse(reader.result); } catch (err) { toast('That file isn’t a Hearth backup.'); return; }
+      post('/api/restore', { token: token, backup: data }).then(function (j) {
+        toast(j.ok ? 'Restored. The TV will refresh.' : (j.error || 'Couldn’t restore that backup.'));
+      }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+    };
+    reader.readAsText(f);
+    e.target.value = '';
+  });
+
+  // Settings screen
+  $('openSettings').addEventListener('click', function () { show('settings'); followLoad(); });
+  $('settingsDone').addEventListener('click', function () { show('remote'); watchLoad(); });
+
+  // Watching: the same row as the TV, one tap to carry on or open a show
+  function watchLoad() {
+    fetch('/api/watching?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
+      var box = $('watch'); box.innerHTML = '';
+      if (j.carry) {
+        var c = document.createElement('button'); c.type = 'button'; c.className = 'wt carry';
+        c.innerHTML = '<span>Carry on</span><strong></strong>'; c.querySelector('strong').textContent = j.carry.title;
+        c.addEventListener('click', function () { send('watch', 'carry'); });
+        box.appendChild(c);
+      }
+      (j.shows || []).forEach(function (x) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'wt';
+        b.innerHTML = '<strong></strong><span></span>';
+        b.querySelector('strong').textContent = x.title; b.querySelector('span').textContent = x.line || '';
+        b.addEventListener('click', function () { send('watch', x.title); });
+        box.appendChild(b);
+      });
+      $('watchBox').hidden = !box.children.length;
+    }).catch(function () {});
+  }
+
+  // Shows we're following
+  var followsNow = [];
+  function followShow(list) {
+    followsNow = list || [];
+    var box = $('followList'); box.innerHTML = '';
+    if (!followsNow.length) { box.innerHTML = '<p class="hint" style="margin:0">None yet.</p>'; return; }
+    followsNow.forEach(function (f, i) {
+      var row = document.createElement('div'), name = document.createElement('span'), rm = document.createElement('button');
+      name.textContent = f.title; rm.type = 'button'; rm.textContent = 'Remove';
+      rm.addEventListener('click', function () { var next = followsNow.slice(); next.splice(i, 1); followSave(next); });
+      row.appendChild(name); row.appendChild(rm); box.appendChild(row);
+    });
+  }
+  function followLoad() {
+    fetch('/api/follows?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) { followShow(j.follows); }).catch(function () {});
+  }
+  function followSave(list) {
+    post('/api/follows', { token: token, follows: list }).then(function (j) {
+      if (j._status === 401) { show('pair'); return; }
+      followShow(j.follows); toast('Saved. The TV will update Watching.');
+    }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  }
+  $('followAddBtn').addEventListener('click', function () {
+    var t = $('followAdd').value.trim(); if (!t) return;
+    $('followAdd').value = '';
+    followSave([{ title: t, app: '' }].concat(followsNow.filter(function (f) { return f.title.toLowerCase() !== t.toLowerCase(); })));
+  });
 
   // Start: check the saved pairing still works
   if (!token) { show('pair'); return; }
   fetch('/api/status?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
-    if (j.paired) { show('remote'); connected(true); volLoad(); } else { token = null; show('pair'); }
+    if (j.paired) { show('remote'); connected(true); volLoad(); watchLoad(); } else { token = null; show('pair'); }
   }).catch(function () { show('remote'); connected(false); });
 })();
 </script>

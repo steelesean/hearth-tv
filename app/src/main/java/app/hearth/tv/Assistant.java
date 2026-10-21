@@ -59,6 +59,27 @@ final class Assistant {
         return call("/api/ask", payload);
     }
 
+    /** Next-episode dates for the household's top series (see server/api/upnext.js). Blocking. */
+    JSONObject upnext(JSONObject payload) {
+        return call("/api/upnext", payload);
+    }
+
+    // ---------- Shows the household follows, and what the TV shows as "Watching" ----------
+
+    /** JSON array of {title, app}; edited on the phone or with Follow on a suggestion. */
+    String follows() { return prefs.getString("follows", "[]"); }
+
+    void setFollows(String json) {
+        try { new org.json.JSONArray(json); prefs.edit().putString("follows", json).apply(); } catch (Exception ignored) { }
+    }
+
+    /** The TV's current Watching row, saved so the phone and the morning card can use it. */
+    String watching() { return prefs.getString("watching", "{}"); }
+
+    void setWatching(String json) {
+        try { new JSONObject(json); prefs.edit().putString("watching", json).apply(); } catch (Exception ignored) { }
+    }
+
     /** Asks the assistant to update the learned profile, and keeps the new one. Blocking. */
     JSONObject learn(JSONObject payload) {
         JSONObject answer = call("/api/learn", payload);

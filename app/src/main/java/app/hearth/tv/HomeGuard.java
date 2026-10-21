@@ -114,6 +114,11 @@ final class HomeGuard {
         if (newFront == null || newFront.equals(front)) return;
         front = newFront;
         Log.i("HearthHome", "In front: " + newFront);
+        if (!AMAZON_HOME.equals(newFront) && !newFront.equals(context.getPackageName())) {
+            // Remember the last app you were in, so "Carry on" can go back to it.
+            context.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
+                    .putString("lastPkg", newFront).putLong("lastPkgAt", newFrontAt).apply();
+        }
         // A late report of Amazon's home from before we last switched is old news.
         if (AMAZON_HOME.equals(newFront) && newFrontAt > lastSwitch) onAmazonHome(now);
     }

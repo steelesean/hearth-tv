@@ -57,6 +57,36 @@ final class HeatingReminder {
         }
     };
 
+    /** Lines like "Slow Horses  new on Wednesday" for episodes worth mentioning this morning. */
+    private String episodeLines() {
+        try {
+            JSONObject w = new JSONObject(context.getSharedPreferences("assistant", Context.MODE_PRIVATE).getString("watching", "{}"));
+            org.json.JSONArray shows = w.optJSONArray("shows");
+            if (shows == null) return "";
+            java.util.Calendar today = java.util.Calendar.getInstance();
+            boolean monday = today.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY;
+            SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd", Locale.UK);
+            SimpleDateFormat day = new SimpleDateFormat("EEEE", Locale.UK);
+            long start = iso.parse(iso.format(today.getTime())).getTime();
+            StringBuilder out = new StringBuilder();
+            for (int i = 0; i < shows.length(); i++) {
+                JSONObject sh = shows.getJSONObject(i);
+                String date = sh.optString("date");
+                if (date.isEmpty()) continue;
+                Date d = iso.parse(date);
+                long days = Math.round((d.getTime() - start) / 86400000.0);
+                // Monday: the week ahead. Other days: only today and tomorrow.
+                if (days < 0 || days > (monday ? 6 : 1)) continue;
+                String when = days == 0 ? "new today" : days == 1 ? "new tomorrow" : "new on " + day.format(d);
+                if (sh.optBoolean("usDate")) when = when.replace("new", "in the US");
+                out.append("\n").append(sh.optString("title")).append(": ").append(when);
+            }
+            return out.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     HeatingReminder(Context context, Tado tado, Weather weather) {
         this.context = context.getApplicationContext();
         this.tado = tado;
@@ -73,8 +103,9 @@ final class HeatingReminder {
                         w.optInt("now"), w.optString("desc").toLowerCase(Locale.UK), w.optInt("high"), w.optInt("low")));
                 if (w.optInt("rain") >= 50) body.append(String.format(Locale.UK, "\n%d%% chance of rain today.", w.optInt("rain")));
                 if (w.optInt("low") <= 0) body.append("\nFrosty this morning.");
+                body.append(episodeLines());
                 final String b = body.toString();
-                main.post(new Runnable() { @Override public void run() { show("TODAY", "Good morning", b); } });
+                main.post(new Runnable() { @Override public void run() { show("GOOD MORNING", "Today", b); } });
             }
         }, "hearth-morning").start();
     }
@@ -132,7 +163,7 @@ final class HeatingReminder {
                 }
                 if (frost != null) body = body + "\n" + frost;
                 final String t = title, b = body;
-                main.post(new Runnable() { @Override public void run() { show("HEATING", t, b); } });
+                main.post(new Runnable() { @Override public void run() { show("BEDTIME CHECK", t, b); } });
             }
         }, "hearth-tado").start();
     }
@@ -199,17 +230,23 @@ final class HeatingReminder {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(20), dp(16), dp(22), dp(18));
         box.setMinimumWidth(dp(240));
+        // From 8pm to 7am, the evening palette, so the card doesn't flash white over a dark scene.
+        boolean evening = Weather.eveningNow(context);
+        String surface = evening ? "#2E312C" : "#F7F6F3";
+        String ink = evening ? "#E7E5DF" : "#1F2321";
+        String soft = evening ? "#A2A69E" : "#6B706C";
+        String accent = evening ? "#A9C7B6" : "#2F4A3F";
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F7F6F3"));
+        bg.setColor(Color.parseColor(surface));
         bg.setCornerRadius(dp(16));
-        bg.setStroke(dp(2), Color.parseColor("#2F4A3F"));
+        bg.setStroke(dp(2), Color.parseColor(accent));
         box.setBackground(bg);
 
-        TextView eyebrow = text(eyebrowText, 11, "#6B706C", true);
+        TextView eyebrow = text(eyebrowText, 11, soft, true);
         eyebrow.setLetterSpacing(0.12f);
-        TextView head = text(title, 18, "#1F2321", true);
+        TextView head = text(title, 18, ink, true);
         head.setPadding(0, dp(4), 0, dp(6));
-        TextView rooms = text(body, 15, "#1F2321", false);
+        TextView rooms = text(body, 15, ink, false);
         rooms.setLineSpacing(dp(3), 1f);
         box.addView(eyebrow);
         box.addView(head);
