@@ -70,6 +70,14 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
 .settings input, .settings textarea { font: 400 16px var(--font-ui); color: var(--ink); background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; width: 100%; box-sizing: border-box; outline: 0; }
 .settings textarea { min-height: 110px; resize: vertical; line-height: 1.4; }
 .settings .hint { font-size: 13px; }
+.volume { display: flex; flex-direction: column; gap: 10px; background: var(--ground); border: 1.5px solid var(--line); border-radius: 18px; padding: 14px 16px; }
+.volume-top { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--ink-soft); }
+.volume-top strong { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.volume-row { display: flex; align-items: center; gap: 10px; }
+.volume-row input[type=range] { flex: 1; min-width: 0; accent-color: var(--focus); height: 36px; }
+.vbtn { width: 48px; height: 48px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); font: 600 22px var(--font-ui); flex: none; }
+.vbtn.mute { width: auto; height: 36px; padding: 0 14px; font-size: 14px; margin-left: 10px; vertical-align: middle; }
+.vbtn.mute[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px);
   background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 14px; font-size: 14px;
@@ -119,6 +127,15 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
         <button class="btn ghost" type="button" data-key="back">Back</button>
         <button class="btn ghost" type="button" data-key="home">Home</button>
         <button class="btn ghost" type="button" id="kidsBtn">Kids</button>
+      </div>
+
+      <div class="volume" id="volumeBox" hidden>
+        <div class="volume-top"><span id="volumeRoom">Sonos</span><span><strong id="volumeLevel">–</strong> <button class="vbtn mute" type="button" id="volMute" aria-pressed="false">Mute</button></span></div>
+        <div class="volume-row">
+          <button class="vbtn" type="button" id="volDown" aria-label="Quieter">−</button>
+          <input type="range" id="volSlider" min="0" max="100" step="1" aria-label="Volume">
+          <button class="vbtn" type="button" id="volUp" aria-label="Louder">+</button>
+        </div>
       </div>
 
       <div class="label">Apps</div>
@@ -215,7 +232,7 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       if (!j.ok) { $('pairError').textContent = 'That number doesn’t match the TV. Check the screen and try again.'; return; }
       token = j.token;
       try { localStorage.setItem('hearth.token', token); } catch (e) {}
-      show('remote'); connected(true); toast('Connected to ' + C.tvName);
+      show('remote'); connected(true); toast('Connected to ' + C.tvName); volLoad();
     }).catch(function () { $('pairError').textContent = 'Can’t reach the TV. Check your phone is on the same Wi-Fi.'; });
   }
   $('pairBtn').addEventListener('click', pair);
@@ -356,10 +373,35 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
   $('tadoMin').addEventListener('change', function () { tadoDo('minTarget', { minTarget: Number($('tadoMin').value) }).then(function () { toast('Saved'); }); });
   $('tadoDisconnect').addEventListener('click', function () { tadoDo('disconnect').then(function () { toast('Tado disconnected'); }); });
 
+  // Volume (Sonos, through the TV)
+  var volBusy = false, volTimer;
+  function volShow(j) {
+    if (!j || !j.found) { $('volumeBox').hidden = true; return; }
+    $('volumeBox').hidden = false;
+    $('volumeRoom').textContent = (j.room || 'Sonos') + ' volume';
+    $('volumeLevel').textContent = j.muted ? 'Muted' : String(j.volume);
+    if (!volBusy) $('volSlider').value = j.volume;
+    $('volMute').setAttribute('aria-pressed', j.muted ? 'true' : 'false');
+  }
+  function volSend(body) {
+    body.token = token;
+    return post('/api/volume', body).then(volShow).catch(function () {});
+  }
+  function volLoad() { fetch('/api/volume?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(volShow).catch(function () {}); }
+  $('volSlider').addEventListener('input', function () {
+    volBusy = true; $('volumeLevel').textContent = $('volSlider').value;
+    clearTimeout(volTimer);
+    volTimer = setTimeout(function () { volSend({ set: Number($('volSlider').value) }).then(function () { volBusy = false; }); }, 150);
+  });
+  $('volDown').addEventListener('click', function () { volSend({ delta: -3 }); });
+  $('volUp').addEventListener('click', function () { volSend({ delta: 3 }); });
+  $('volMute').addEventListener('click', function () { volSend({ mute: $('volMute').getAttribute('aria-pressed') !== 'true' }); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && token) volLoad(); });
+
   // Start: check the saved pairing still works
   if (!token) { show('pair'); return; }
   fetch('/api/status?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(function (j) {
-    if (j.paired) { show('remote'); connected(true); } else { token = null; show('pair'); }
+    if (j.paired) { show('remote'); connected(true); volLoad(); } else { token = null; show('pair'); }
   }).catch(function () { show('remote'); connected(false); });
 })();
 </script>

@@ -47,6 +47,7 @@ final class RemoteServer {
     private final Tado tado;
     private final HeatingReminder heating;
     private final Weather weather;
+    private final Sonos sonos;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private ServerSocket socket;
     private int port = -1;
@@ -59,6 +60,7 @@ final class RemoteServer {
         this.tado = tado;
         this.heating = heating;
         this.weather = weather;
+        this.sonos = new Sonos(context);
     }
 
     int port() { return port; }
@@ -205,6 +207,19 @@ final class RemoteServer {
                     tado.setMinTarget(req.optDouble("minTarget", 17));
                 }
                 sendJson(out, 200, res.put("status", tadoStatus()));
+            } else if ("GET".equals(method) && "/api/volume".equals(path)) {
+                if (!pairing.isPaired(param(query, "token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                sendJson(out, 200, volume(new JSONObject()));
+            } else if ("POST".equals(method) && "/api/volume".equals(path)) {
+                JSONObject req = new JSONObject(new String(body, UTF8));
+                if (!pairing.isPaired(req.optString("token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                sendJson(out, 200, volume(req));
             } else if ("GET".equals(method) && "/api/home".equals(path)) {
                 if (!pairing.isPaired(param(query, "token"))) {
                     sendJson(out, 401, new JSONObject().put("ok", false));
@@ -241,6 +256,18 @@ final class RemoteServer {
             Log.w(TAG, "Request failed", e);
         } finally {
             try { client.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    /** Reads or changes the Sonos volume: {set: 0-100} or {delta: -5} or {mute: true}. */
+    private JSONObject volume(JSONObject req) throws Exception {
+        try {
+            if (req.has("set")) return sonos.setVolume(req.optInt("set"));
+            if (req.has("delta")) return sonos.nudge(req.optInt("delta"));
+            if (req.has("mute")) return sonos.setMute(req.optBoolean("mute"));
+            return sonos.status();
+        } catch (Exception e) {
+            return new JSONObject().put("found", false).put("error", "Couldn’t reach the Sonos speaker.");
         }
     }
 
