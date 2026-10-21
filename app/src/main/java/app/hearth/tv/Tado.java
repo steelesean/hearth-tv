@@ -30,6 +30,8 @@ final class Tado {
     private static final String CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46";
     private static final String AUTH = "https://login.tado.com/oauth2/";
     private static final String API = "https://my.tado.com/api/v2/";
+    // Tado X (the newer generation) keeps its rooms in a separate service.
+    private static final String HOPS = "https://hops.tado.com/";
 
     /** One heating room and what Tado says about it. */
     static final class Room {
@@ -71,7 +73,7 @@ final class Tado {
     }
 
     void disconnect() {
-        prefs.edit().remove("refresh").remove("homeId").remove("homeName").remove("device").apply();
+        prefs.edit().remove("refresh").remove("homeId").remove("homeName").remove("generation").remove("device").apply();
         accessToken = null;
     }
 
@@ -124,11 +126,52 @@ final class Tado {
         return out;
     }
 
+    /** What the last check found, for the test card when no rooms come back. */
+    String lastReport = "";
+
     /** Every heating room with its state. Blocking. */
     synchronized List<Room> allRooms() throws Exception {
         String home = prefs.getString("homeId", "");
-        if (home.isEmpty()) home = loadHome();
+        if (home.isEmpty() || !prefs.contains("generation")) home = loadHome();
+        String generation = prefs.getString("generation", "");
+        List<Room> rooms = "LINE_X".equals(generation) ? tadoXRooms(home) : classicRooms(home);
+        // If the generation wasn't clear and the classic list is empty, try the Tado X one too.
+        if (rooms.isEmpty() && !"LINE_X".equals(generation)) {
+            try { rooms = tadoXRooms(home); } catch (Exception e) { lastReport += " Tado X check: " + e.getMessage() + "."; }
+        }
+        return rooms;
+    }
+
+    /** Tado X: one list of rooms with their settings and readings. */
+    private List<Room> tadoXRooms(String home) throws Exception {
+        JSONArray list = getArray(HOPS + "homes/" + home + "/rooms");
+        List<Room> rooms = new ArrayList<>();
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject room = list.optJSONObject(i);
+            if (room == null) continue;
+            JSONObject setting = room.optJSONObject("setting");
+            boolean on = setting != null && "ON".equals(setting.optString("power"));
+            double target = on ? value(setting.optJSONObject("temperature")) : Double.NaN;
+            JSONObject sensors = room.optJSONObject("sensorDataPoints");
+            double inside = value(sensors == null ? null : sensors.optJSONObject("insideTemperature"));
+            JSONObject power = room.optJSONObject("heatingPower");
+            double percent = power == null ? 0 : power.optDouble("percentage", 0);
+            rooms.add(new Room(room.optString("name", room.optString("roomName")), on, inside, target, percent));
+        }
+        lastReport = "Tado X home " + homeName() + ", " + rooms.size() + " rooms.";
+        return rooms;
+    }
+
+    /** Tado before X: heating zones and their states. */
+    private List<Room> classicRooms(String home) throws Exception {
         JSONArray zones = getArray(API + "homes/" + home + "/zones");
+        StringBuilder types = new StringBuilder();
+        for (int i = 0; i < zones.length(); i++) {
+            JSONObject z = zones.optJSONObject(i);
+            if (z != null) types.append(types.length() == 0 ? "" : ", ").append(z.optString("type"));
+        }
+        lastReport = "Home " + homeName() + " (" + prefs.getString("generation", "unknown generation") + "), "
+                + zones.length() + " zones" + (types.length() > 0 ? ": " + types : "") + ".";
         JSONObject states = get(API + "homes/" + home + "/zoneStates").optJSONObject("zoneStates");
         List<Room> rooms = new ArrayList<>();
         for (int i = 0; i < zones.length(); i++) {
@@ -154,8 +197,19 @@ final class Tado {
         JSONArray homes = me.optJSONArray("homes");
         if (homes == null || homes.length() == 0) throw new Exception("No Tado home on this account");
         JSONObject h = homes.getJSONObject(0);
-        prefs.edit().putString("homeId", String.valueOf(h.optLong("id"))).putString("homeName", h.optString("name")).apply();
-        return String.valueOf(h.optLong("id"));
+        String id = String.valueOf(h.optLong("id"));
+        String generation = "";
+        try { generation = get(API + "homes/" + id).optString("generation", ""); } catch (Exception ignored) { }
+        prefs.edit().putString("homeId", id).putString("homeName", h.optString("name"))
+                .putString("generation", generation).apply();
+        return id;
+    }
+
+    /** Tado X gives temperatures as {"value": 21.0}; older Tado as {"celsius": 21.0}. */
+    private static double value(JSONObject t) {
+        if (t == null) return Double.NaN;
+        double v = t.optDouble("value", Double.NaN);
+        return Double.isNaN(v) ? t.optDouble("celsius", Double.NaN) : v;
     }
 
     private static double celsius(JSONObject t) {
