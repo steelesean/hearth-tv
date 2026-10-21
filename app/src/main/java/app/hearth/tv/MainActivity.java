@@ -244,6 +244,24 @@ public class MainActivity extends Activity {
             }, "hearth-update").start();
         }
 
+        @JavascriptInterface public String follows() { return assistant.follows(); }
+
+        @JavascriptInterface public void setFollows(String json) { assistant.setFollows(json); }
+
+        @JavascriptInterface public void saveWatching(String json) { assistant.setWatching(json); }
+
+        /** Next-episode dates in the background; the answer arrives at hearthUpnext(json). */
+        @JavascriptInterface public void upnext(final String payload) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject answer;
+                    try { answer = assistant.upnext(new JSONObject(payload)); } catch (Exception e) { answer = new JSONObject(); }
+                    final String js = "window.hearthUpnext && hearthUpnext(" + answer + ")";
+                    runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
+                }
+            }, "hearth-upnext").start();
+        }
+
         /** Today's weather as JSON, or "" if no town is set. */
         @JavascriptInterface public String weather() {
             JSONObject w = weatherCache;

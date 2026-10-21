@@ -6,15 +6,22 @@
 <title>Hearth</title>
 <link rel="stylesheet" href="shared.css">
 <style>
-/* Layout: one 1920×1080 canvas scaled to the screen. Greeting and command bar up top,
-   apps row, children's row. Ten-foot UI: big targets, one obvious focus.
-   Kept deliberately light for older Fire TV sticks: no blur, no :has(). */
+/* Layout: one 1920×1080 canvas scaled to the screen. Greeting, one "now" line and the command
+   bar up top; then Watching, a compact Apps row and the children's row. Ten-foot UI: big
+   targets, one obvious focus. From 8pm to 7am the evening palette takes over.
+   Kept deliberately light for older Fire TV sticks: no blur, no :has(), no color-mix(). */
+.stage { --sheet-bg: #1F2321; --sheet-ink: #F7F6F3; --glow: #F5F4F0; --ink-2: #3A3F3C; --hint: #9A9E99; --card: #FFFFFF; --dim: rgba(236,235,231,0.94); --carry-soft: #B9BDB8; --carry-accent: #A9C7B6; }
+.stage.evening {
+  --ground: #252723; --surface: #2E312C; --ink: #E7E5DF; --ink-soft: #A2A69E; --line: #43473F;
+  --focus: #A9C7B6; --focus-glow: rgba(169,199,182,0.2); --glow: #2C2F2A; --ink-2: #CFCDC6; --hint: #7E827A;
+  --card: #333630; --dim: rgba(37,39,35,0.94); --sheet-bg: #3B3F38; --sheet-ink: #E7E5DF; --carry-soft: #5F625C; --carry-accent: #2F4A3F;
+}
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); }
 body { color: var(--ink); font-family: var(--font-ui); }
 .stage {
   position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: top left;
-  background: radial-gradient(1200px 600px at 50% 18%, #F5F4F0 0%, rgba(245,244,240,0) 70%), var(--ground);
-  padding: 64px 96px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  background: radial-gradient(1200px 600px at 50% 16%, var(--glow) 0%, transparent 70%), var(--ground);
+  color: var(--ink); padding: 56px 96px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
 }
 
 .top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
@@ -29,53 +36,58 @@ body { color: var(--ink); font-family: var(--font-ui); }
 }
 .pill > * + * { margin-left: 12px; }
 .pill .dot { width: 14px; height: 14px; border-radius: 50%; background: #E4A853; }
+.pill { height: 56px; font-size: 22px; padding: 0 24px; }
 .pill .dot.ok { background: var(--ok); }
 .pill svg { width: 26px; height: 26px; }
 
-.hero { display: flex; flex-direction: column; align-items: center; margin-top: 24px; }
-.greeting { font-family: var(--font-display); font-weight: 400; font-size: 104px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
-.sub { font-size: 28px; color: var(--ink-soft); margin: 18px 0 0; }
+.hero { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.greeting { font-family: var(--font-display); font-weight: 400; font-size: 88px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+.nowline { margin-top: 14px; font: 400 28px var(--font-ui); color: var(--ink-2); display: inline-flex; align-items: center; background: transparent; border: 2px solid transparent; border-radius: 999px; padding: 6px 20px; min-height: 52px; box-sizing: border-box; }
+.nowline .seg + .seg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--hint); margin: 0 16px; vertical-align: middle; }
+.nowline b { color: var(--focus); font-weight: 600; }
+.nowline.focusable.is-focus { transform: none; }
 
 .command {
-  margin-top: 36px; width: 1180px; height: 120px; box-sizing: border-box;
+  margin-top: 26px; width: 1100px; height: 104px; box-sizing: border-box;
   background: var(--surface); border: 2px solid var(--line); border-radius: 60px;
   display: flex; align-items: center; padding: 0 44px;
   box-shadow: 0 10px 30px rgba(31,35,33,0.06); transition: border-color .2s, box-shadow .2s;
 }
 .command.on { border-color: var(--focus); box-shadow: 0 0 0 10px var(--focus-glow), 0 10px 30px rgba(31,35,33,0.08); }
 .command svg { flex: none; width: 34px; height: 34px; color: var(--focus); margin-right: 20px; }
-#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 38px var(--font-ui); color: var(--ink); }
-#ask::placeholder { color: #9A9E99; }
-
-.chips { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 12px; max-width: 1400px; }
-.chip {
-  font: 500 26px var(--font-ui); color: var(--ink); background: transparent;
-  border: 2px solid var(--line); border-radius: 999px; height: 64px; padding: 0 30px; margin: 8px;
-}
+#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 34px var(--font-ui); color: var(--ink); }
+#ask::placeholder { color: var(--hint); }
 
 .rows { margin-top: auto; }
-.row + .row { margin-top: 32px; }
-.row-label { font-size: 22px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 18px 4px; }
-.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 24px; }
+.row + .row { margin-top: 28px; }
+.row-label { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 14px 4px; }
+.upnext { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; grid-gap: 22px; }
+.ep { height: 150px; border-radius: 24px; background: var(--surface); border: 2px solid var(--line); padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; font-family: var(--font-ui); color: var(--ink); }
+.ep .t { font: 500 32px/1.05 var(--font-display); }
+.ep .m { font-size: 20px; color: var(--ink-soft); }
+.ep .d { font-size: 20px; font-weight: 600; color: var(--focus); }
+.ep.carry { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.ep.carry .m { color: var(--carry-soft); }
+.ep.carry .d { color: var(--carry-accent); }
+.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 18px; }
 .app {
-  height: 132px; border-radius: 26px; border: 2px solid var(--line); background: var(--surface);
-  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
-  padding: 22px 24px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
+  height: 84px; border-radius: 20px; border: 2px solid var(--line); background: var(--surface);
+  display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
 }
-.app .swatch { width: 20px; height: 20px; border-radius: 6px; }
-.app .name { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.app .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; margin-right: 14px; }
+.app .name { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
 .app.live { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .app.live .swatch { border-radius: 50%; animation: blink 2s ease-in-out infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 
-.kids { display: grid; grid-template-columns: repeat(6, 1fr); grid-gap: 24px; }
+.kids { display: grid; grid-template-columns: repeat(6, 1fr); grid-gap: 18px; }
 .kid {
-  height: 200px; border-radius: 26px; border: 0; position: relative; overflow: hidden;
+  height: 150px; border-radius: 26px; border: 0; position: relative; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
   padding: 22px 24px; box-sizing: border-box; text-align: left; color: #fff; font-family: var(--font-ui);
 }
-.kid .title { font-family: var(--font-display); font-size: 38px; line-height: 1.05; font-weight: 500; position: relative; }
-.kid .src { font-size: 20px; font-weight: 500; opacity: .85; margin-top: 6px; position: relative; }
+.kid .title { font-family: var(--font-display); font-size: 32px; line-height: 1.05; font-weight: 500; position: relative; }
+.kid .src { font-size: 17px; font-weight: 500; opacity: .85; margin-top: 6px; position: relative; }
 
 /* Focus: the single loudest thing on screen */
 .focusable { outline: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
@@ -89,7 +101,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 /* Message sheet */
 .sheet {
   position: absolute; left: 50%; bottom: 72px; width: 1100px; margin-left: -550px; box-sizing: border-box;
-  background: var(--ink); color: var(--surface); border-radius: 32px; padding: 34px 44px;
+  background: var(--sheet-bg); color: var(--sheet-ink); border-radius: 32px; padding: 34px 44px;
   display: flex; align-items: center; opacity: 0; transform: translateY(30px);
   transition: opacity .25s, transform .25s; z-index: 9; pointer-events: none;
 }
@@ -101,8 +113,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .sheet p { margin: 6px 0 0; font-size: 24px; color: #B9BDB8; }
 
 /* Overlays: pairing and Live TV */
-.overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: rgba(236, 235, 231, 0.94); display: flex; align-items: center; justify-content: center; }
-.card { background: var(--surface); border-radius: 40px; border: 2px solid var(--line); box-shadow: 0 40px 100px rgba(31,35,33,0.16); padding: 64px; box-sizing: border-box; }
+.overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--dim); display: flex; align-items: center; justify-content: center; }
+.card { color: var(--ink); background: var(--surface); border-radius: 40px; border: 2px solid var(--line); box-shadow: 0 40px 100px rgba(31,35,33,0.16); padding: 64px; box-sizing: border-box; }
 .pair-card { display: flex; align-items: center; width: 1360px; }
 .qr { flex: none; width: 360px; height: 360px; padding: 24px; box-sizing: border-box; background: #fff; border-radius: 28px; border: 2px solid var(--line); margin-right: 64px; }
 .qr svg, .qr img { width: 100%; height: 100%; display: block; }
@@ -114,13 +126,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .live-card { width: 1500px; }
 .channels { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 24px; margin-top: 40px; }
 .picks { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 28px; margin-top: 40px; }
-.pick { height: 300px; border-radius: 28px; border: 2px solid var(--line); background: #fff; color: var(--ink); text-align: left; padding: 34px; box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.pick { height: 300px; border-radius: 28px; border: 2px solid var(--line); background: var(--card); color: var(--ink); text-align: left; padding: 34px; box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-ui); }
 .pick .pick-title { font: 500 44px/1.05 var(--font-display); letter-spacing: -0.01em; }
 .pick .pick-meta { font-size: 22px; color: var(--ink-soft); margin-top: 12px; }
 .pick .pick-why { font-size: 26px; line-height: 1.35; margin-top: auto; }
 .pick-col { display: flex; flex-direction: column; }
 .pick-col .verdicts { display: flex; margin-top: 18px; }
 .pick-col .verdicts > * + * { margin-left: 14px; }
+.verdict.follow { border-color: var(--focus); color: var(--focus); }
 .verdict { font: 500 22px var(--font-ui); color: var(--ink); background: transparent; border: 2px solid var(--line); border-radius: 999px; height: 54px; padding: 0 22px; white-space: nowrap; }
 .pick-col.done .pick:not(.is-focus) { opacity: .45; }
 .pick-col .noted { font-size: 22px; color: var(--ink-soft); height: 54px; display: flex; align-items: center; margin-top: 18px; }
@@ -129,20 +142,25 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .how-actions { display: flex; margin-top: 36px; }
 .how-actions > * + * { margin-left: 20px; }
 .live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
-.channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: #fff; font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
+.channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: var(--card); font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
 
 /* Screensaver: big quiet time and weather, drifting slowly so nothing burns in */
 .saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--ground); }
+/* At night the screensaver goes darker still, so it barely lights the room */
+.stage.evening .saver { background: #161715; }
+.stage.evening .saver-time { color: #8E918A; }
+.stage.evening .saver-date { color: #5F625C; }
+.stage.evening .saver-weather { color: #7E8179; }
+.saver-weather b { color: var(--focus); font-weight: 600; }
 .saver-inner { position: absolute; left: 200px; top: 220px; transition: left 3s ease, top 3s ease; }
 .saver-time { font: 400 280px/1 var(--font-display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
 .saver-date { font-size: 40px; color: var(--ink-soft); margin-top: 24px; }
 .saver-weather { font-size: 40px; color: var(--ink); margin-top: 14px; }
 .kid .gone { position: absolute; left: 24px; top: 22px; font-size: 18px; font-weight: 600; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; }
-#updateBtn .dot { background: var(--focus); }
 .picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
 
 /* Kids mode */
-.stage.kids-mode .apps-row, .stage.kids-mode .chips { display: none; }
+.stage.kids-mode .apps-row, .stage.kids-mode .watch-row, .stage.kids-mode .nowline { display: none; }
 .stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
 .stage.kids-mode .kid { height: 250px; }
 .stage.kids-mode #modeBtn .dot { background: var(--focus); }
@@ -157,7 +175,6 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <span class="meta" id="date"></span>
     </div>
     <div class="top-right">
-      <button class="pill focusable" id="updateBtn" type="button" hidden><span class="dot"></span><span>Update ready</span></button>
       <button class="pill focusable" id="phoneBtn" type="button">
         <svg id="phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6v-2"/></svg>
         <span class="dot ok" id="phoneDot" hidden></span>
@@ -169,15 +186,18 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   <section class="hero">
     <h1 class="greeting" id="greeting">Hello</h1>
-    <p class="sub" id="sub">What are we watching?</p>
+    <button class="nowline" id="nowline" type="button"></button>
     <form class="command" id="commandForm" autocomplete="off">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.5 4.8 2.7 7.4 8 8-5.3.6-7.5 3.2-8 8-.5-4.8-2.7-7.4-8-8 5.3-.6 7.5-3.2 8-8z"/></svg>
-      <input id="ask" class="focusable" type="text" placeholder="Try “Channel 4 live” or “put on Cars”" aria-label="Ask for something to watch">
+      <input id="ask" class="focusable" type="text" placeholder="Ask for something, or try “suggest a film”" aria-label="Ask for something to watch">
     </form>
-    <div class="chips" id="chips"></div>
   </section>
 
   <section class="rows">
+    <div class="row watch-row" id="watchRow" hidden>
+      <h3 class="row-label">Watching</h3>
+      <div class="upnext" id="upnext"></div>
+    </div>
     <div class="row apps-row">
       <h3 class="row-label">Apps</h3>
       <div class="apps" id="apps"></div>
@@ -262,6 +282,17 @@ body { color: var(--ink); font-family: var(--font-ui); }
     installUpdate: function () {},
     weather: function () { return JSON.stringify({ town: 'Edinburgh', now: 9, desc: 'Cloudy', high: 12, low: 4, tonightLow: -1, frost: true, rain: 20 }); },
     kidStatus: function () { return JSON.stringify({ gruffalo: false }); },
+    follows: function () { try { return localStorage.getItem('dev.follows') || '[{"title":"Slow Horses","app":"appletv"}]'; } catch (e) { return '[]'; } },
+    setFollows: function (j) { try { localStorage.setItem('dev.follows', j); } catch (e) {} },
+    saveWatching: function () {},
+    upnext: function () {
+      var d = function (n) { var x = new Date(Date.now() + n * 86400000); return x.toISOString().slice(0, 10); };
+      setTimeout(function () { window.hearthUpnext({ shows: [
+        { title: 'Slow Horses', app: 'appletv', found: true, season: 5, next: { date: d(2), season: 5, episode: 4 }, status: 'Returning Series' },
+        { title: 'The Gentlemen', app: 'netflix', found: true, season: 1, next: null, status: 'Returning Series' },
+        { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
+      ] }); }, 300);
+    },
     learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
     ask: function (id, payload) {
       setTimeout(function () {
@@ -308,21 +339,6 @@ body { color: var(--ink); font-family: var(--font-ui); }
     $('channels').appendChild(b);
   });
 
-  var chips = [
-    { label: 'Watch BBC One', run: function () { openChannel('bbcone'); } },
-    { label: 'Channel 4 live', run: function () { openChannel('c4'); } },
-    { label: 'Carry on from last night', run: function () { carryOn(); } },
-    { label: 'Suggest a film', run: function () { askAssistant('Suggest a film we’d both like tonight'); }, needsAssistant: true },
-    { label: 'Bedtime stories', run: function () { setMode(true, true); } }
-  ];
-  var assistantOn = !!(N.assistantReady && N.assistantReady());
-  chips.forEach(function (c) {
-    if (c.needsAssistant && !assistantOn) return;
-    var b = el('button', 'chip focusable'); b.type = 'button'; b.textContent = c.label;
-    b.addEventListener('click', c.run);
-    $('chips').appendChild(b);
-  });
-
   // ---------- Fit and clock ----------
   // On the TV the WebView itself lays the page out at 1920 wide (see MainActivity), so this
   // is normally 1. In a desktop browser it shrinks the canvas to fit the window.
@@ -338,8 +354,9 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var d = new Date();
     $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     var w = weatherNow();
-    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
-      + (w ? ' · ' + w.now + '° ' + w.desc.toLowerCase() : '');
+    stage.classList.toggle('evening', d.getHours() >= 20 || d.getHours() < 7);
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    renderNow(w);
     if (!$('saver').hidden) paintSaver(d, w);
     var h = d.getHours();
     $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
@@ -353,7 +370,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function paintSaver(d, w) {
     $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-    $('saverWeather').textContent = w ? w.now + '° and ' + w.desc.toLowerCase() + ' in ' + w.town + '. High of ' + w.high + '°.' + (w.frost ? ' Frost tonight.' : '') : '';
+    $('saverWeather').innerHTML = nowSegments(w, true).map(function (x) { return x.html; }).join(' · ');
     $('saverInner').style.left = (120 + Math.round(Math.random() * 700)) + 'px';
     $('saverInner').style.top = (100 + Math.round(Math.random() * 380)) + 'px';
   }
@@ -365,17 +382,141 @@ body { color: var(--ink); font-family: var(--font-ui); }
   }, 15000);
 
   // ---------- Updates ----------
+  var updateWaiting = false;
   function checkUpdate() {
     var u = null; try { u = N.update && N.update() ? JSON.parse(N.update()) : null; } catch (e) {}
-    $('updateBtn').hidden = !u;
-    if (u) $('updateBtn').lastChild.textContent = 'Update ready';
+    updateWaiting = !!u;
+    renderNow(weatherNow());
   }
-  $('updateBtn').addEventListener('click', function () {
+  $('nowline').addEventListener('click', function () {
+    if (!updateWaiting) return;
     $('sheetTitle').textContent = 'Downloading the update…'; $('sheetBody').textContent = 'Fire TV will ask you to confirm. Choose Install.';
     sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
     sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, 20000);
     N.installUpdate();
   });
+
+  // ---------- The "now" line: at most two things worth knowing, most useful first ----------
+  function esc(t) { var e = document.createElement('span'); e.textContent = t; return e.innerHTML; }
+  function nowSegments(w, forSaver) {
+    var out = [];
+    if (updateWaiting && !forSaver) out.push({ html: '<b>An update is ready</b>. Press OK here to install' });
+    var soon = watchingShows().filter(function (x) { return x.days !== null && x.days >= 0 && x.days <= 3; })[0];
+    if (soon) out.push({ html: '<b>' + esc(soon.title) + '</b> ' + (soon.usDate ? 'is out in the US ' : 'has a new episode ') + dayWord(soon.days, soon.date) });
+    if (w) out.push({ html: esc(w.now + '° and ' + w.desc.toLowerCase()) + (w.frost && (new Date().getHours() >= 16) ? ', frost tonight' : '') });
+    return out.slice(0, 2);
+  }
+  function renderNow(w) {
+    var segs = nowSegments(w, false), line = $('nowline');
+    line.innerHTML = segs.map(function (x) { return '<span class="seg">' + x.html + '</span>'; }).join('');
+    line.hidden = !segs.length;
+    line.classList.toggle('focusable', updateWaiting);   // only selectable when there's something to do
+  }
+  function dayWord(days, date) {
+    if (days === 0) return 'today';
+    if (days === 1) return 'tomorrow';
+    var d = new Date(date + 'T12:00:00');
+    return days < 7 ? 'on ' + d.toLocaleDateString('en-GB', { weekday: 'long' }) : 'on ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+
+  // ---------- Watching: carry on, then our top series and when the next episode is out ----------
+  // A show counts as ours if we follow it, loved it, or asked Hearth for it on two or more days.
+  function showsLog() { try { return JSON.parse(localStorage.getItem('hearth.shows') || '[]'); } catch (e) { return []; } }
+  function rememberShow(title, kind, app) {
+    if (!title) return;
+    var log = showsLog(); log.unshift({ title: title, kind: kind || '', app: app || '', at: new Date().toISOString() });
+    try { localStorage.setItem('hearth.shows', JSON.stringify(log.slice(0, 200))); } catch (e) {}
+  }
+  function follows() { try { return JSON.parse(N.follows ? N.follows() : '[]'); } catch (e) { return []; } }
+  function isFollowed(title) { return follows().some(function (f) { return f.title.toLowerCase() === title.toLowerCase(); }); }
+  function follow(title, app) {
+    if (isFollowed(title)) return;
+    var f = follows(); f.unshift({ title: title, app: app || '' });
+    N.setFollows(JSON.stringify(f.slice(0, 12)));
+    fetchUpnext(true);
+  }
+  function topShows() {
+    var score = {}, add = function (title, app, n) {
+      var k = title.toLowerCase(); score[k] = score[k] || { title: title, app: app, n: 0, days: {} }; score[k].n += n;
+      if (app && !score[k].app) score[k].app = app; return score[k];
+    };
+    follows().forEach(function (f) { add(f.title, f.app, 3); });
+    var cutoff = Date.now() - 21 * 86400000;
+    showsLog().forEach(function (x) {
+      if (x.kind === 'film' || new Date(x.at) < cutoff) return;
+      var e = add(x.title, x.app, 0), day = x.at.slice(0, 10);
+      if (!e.days[day]) { e.days[day] = 1; e.n += 1; }
+    });
+    feedback().forEach(function (x) {
+      if (x.kind !== 'series') return;
+      if (x.verdict === 'loved') add(x.title, x.app, 2);
+      if (x.verdict === 'no') add(x.title, x.app, -100);
+    });
+    return Object.keys(score).map(function (k) { return score[k]; })
+      .filter(function (x) { return x.n >= 2; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
+  }
+  function upnextCache() { try { return JSON.parse(localStorage.getItem('hearth.upnext') || '{}'); } catch (e) { return {}; } }
+  function watchingShows() {
+    var cache = upnextCache().shows || {}, today = new Date(new Date().toDateString());
+    return topShows().map(function (t) {
+      var u = cache[t.title.toLowerCase()] || {}, days = null;
+      if (u.next && u.next.date) days = Math.round((new Date(u.next.date + 'T00:00:00') - today) / 86400000);
+      return { title: u.title || t.title, app: u.app || t.app, season: u.season, next: u.next, status: u.status, usDate: u.usDate, days: days, date: u.next ? u.next.date : '' };
+    }).sort(function (a, b) { return (a.days === null ? 99 : a.days) - (b.days === null ? 99 : b.days); });
+  }
+  function showLine(x) {
+    if (x.days !== null && x.days >= 0) return (x.usDate ? 'In the US ' : 'New ') + dayWord(x.days, x.date);
+    if (/ended|canceled/i.test(x.status || '')) return 'Finished';
+    if (x.status) return 'All episodes out';
+    return '';
+  }
+  function fetchUpnext(force) {
+    var shows = topShows(); if (!shows.length || !N.upnext || !(N.assistantReady && N.assistantReady())) return;
+    var c = upnextCache(), key = shows.map(function (x) { return x.title.toLowerCase(); }).sort().join('|');
+    if (!force && c.key === key && Date.now() - (c.at || 0) < 6 * 3600 * 1000) return;
+    upnextKey = key;
+    N.upnext(JSON.stringify({ shows: shows.map(function (x) { return { title: x.title, app: x.app }; }),
+      apps: installedApps().map(function (a) { return a.key; }) }));
+  }
+  var upnextKey = '';
+  window.hearthUpnext = function (a) {
+    if (!a || !a.shows) return;
+    var map = {};
+    a.shows.forEach(function (x, i) { if (x.found) map[(topShows()[i] || x).title.toLowerCase()] = x; });
+    try { localStorage.setItem('hearth.upnext', JSON.stringify({ at: Date.now(), key: upnextKey, shows: map })); } catch (e) {}
+    renderWatching(); renderNow(weatherNow());
+  };
+  function lastGrownUp() { return history().filter(function (x) { return x.kind !== 'kid'; })[0]; }
+  function renderWatching() {
+    var box = $('upnext'); box.innerHTML = '';
+    var last = lastGrownUp(), shows = watchingShows(), saved = { carry: null, shows: [] };
+    if (last) {
+      var c = el('button', 'ep carry focusable', '<span class="m">Carry on from ' + (when(last.at).indexOf('yesterday') === 0 ? 'last night' : when(last.at)) + '</span><span class="t"></span><span class="d"></span>');
+      c.type = 'button'; c.querySelector('.t').textContent = last.title; c.querySelector('.d').textContent = appByKey(last.app).name || '';
+      c.addEventListener('click', carryOn); box.appendChild(c);
+      saved.carry = { title: last.title, app: last.app, when: when(last.at) };
+    }
+    shows.forEach(function (x) {
+      var app = appByKey(x.app), b = el('button', 'ep focusable', '<span class="t"></span><span class="m"></span><span class="d"></span>');
+      b.type = 'button';
+      b.querySelector('.t').textContent = x.title;
+      b.querySelector('.m').textContent = [x.season ? 'Series ' + x.season : '', app.name && app.key ? app.name : ''].filter(Boolean).join(' · ');
+      b.querySelector('.d').textContent = showLine(x);
+      b.addEventListener('click', function () { openShow(x.title, x.app); });
+      box.appendChild(b);
+      saved.shows.push({ title: x.title, app: x.app, line: showLine(x), date: x.date, usDate: !!x.usDate });
+    });
+    $('watchRow').hidden = !box.children.length;
+    if (N.saveWatching) N.saveWatching(JSON.stringify(saved));
+  }
+  // Opens a specific show: straight to the app's search where we know how, otherwise the app.
+  function openShow(title, appKey) {
+    rememberShow(title, 'series', appKey);
+    remember({ kind: 'pick', key: appKey, title: title, app: appKey, pickKind: 'series' });
+    openPick({ title: title, app: appKey });
+    setTimeout(renderWatching, 1000);
+  }
 
   // ---------- Focus (class-based so the remote and phone share it) ----------
   var cur = null;
@@ -442,6 +583,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var app = appByKey(key);
     if (!quiet) say('Opening ' + app.name, '');
     remember({ kind: 'app', key: key, title: app.name, app: key });
+    setTimeout(renderWatching, 50);
     setTimeout(function () { if (N.openApp(key) === 'missing') missing(app); }, 700);
   }
   function openChannel(key) {
@@ -492,7 +634,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (last.kind === 'channel') openChannel(last.key);
     else if (last.kind === 'pick') openPick(last);
     else openApp(last.key, true);
-    setTimeout(function () { say(title, body); }, 50);
+    setTimeout(function () { say(title, body); renderWatching(); }, 50);
   }
 
   // ---------- The assistant (Claude), for anything the rules above don't cover ----------
@@ -526,6 +668,12 @@ body { color: var(--ink); font-family: var(--font-ui); }
     asking = null; clearTimeout(sheetTimer); sheet.classList.remove('show');
     if (!a || a.error || !a.action) { say('The assistant couldn’t help', (a && a.error) || 'Try asking another way.', true); return; }
     var t = a.action.type, key = a.action.key;
+    if (t === 'open_app' && key && a.action.show) {
+      rememberShow(a.action.show, a.action.showKind, key);
+      remember({ kind: 'pick', key: key, title: a.action.show, app: key, pickKind: a.action.showKind });
+      openPick({ title: a.action.show, app: key });
+      return setTimeout(renderWatching, 1000);
+    }
     if (t === 'open_app' && key) return openApp(key);
     if (t === 'open_channel' && key) return openChannel(key);
     if (t === 'open_kid' && key) return openKid(key);
@@ -550,13 +698,20 @@ body { color: var(--ink); font-family: var(--font-ui); }
         closeOverlays();
         var item = { kind: 'pick', key: p.app, title: p.title, app: p.app, pickKind: p.kind };
         remember(item);
+        rememberShow(p.title, p.kind, p.app);
         openPick(item);
       });
       var col = el('div', 'pick-col'), row = el('div', 'verdicts');
       col.appendChild(b);
-      [['seen', 'Seen it'], ['no', 'Not for us']].forEach(function (v) {
-        var vb = el('button', 'verdict focusable'); vb.type = 'button'; vb.textContent = v[1];
+      var options = (p.kind === 'series' && !isFollowed(p.title) ? [['follow', 'Follow']] : []).concat([['seen', 'Seen it'], ['no', 'Not for us']]);
+      options.forEach(function (v) {
+        var vb = el('button', 'verdict focusable' + (v[0] === 'follow' ? ' follow' : '')); vb.type = 'button'; vb.textContent = v[1];
         vb.addEventListener('click', function () {
+          if (v[0] === 'follow') {
+            follow(p.title, p.app);
+            var noted0 = el('div', 'noted'); noted0.textContent = 'Following. It’ll appear in Watching';
+            col.replaceChild(noted0, row); setFocus(b); return;
+          }
           giveFeedback(p.title, p.kind, p.app, v[0]);
           col.classList.add('done');
           var noted = el('div', 'noted'); noted.textContent = 'Got it, I’ll remember that';
@@ -612,6 +767,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   // Back from watching a suggestion? Ask once how it was.
   window.hearthResumed = function () {
+    renderWatching(); fetchUpnext(false);
     if (asking || !$('pairModal').hidden) return;
     var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
     var rated = feedback().map(function (x) { return x.title; });
@@ -641,7 +797,6 @@ body { color: var(--ink); font-family: var(--font-ui); }
     kidsMode = on; bedtime = on && !!isBedtime;
     stage.classList.toggle('kids-mode', on);
     $('modeLabel').textContent = on ? 'Kids' : 'Family';
-    $('sub').textContent = on ? 'Pick a story' : 'What are we watching?';
     $('kidsLabel').textContent = bedtime ? 'Calm ones for bedtime' : on ? 'Stories' : 'For the children';
     kidButtons.forEach(function (b) { b.hidden = bedtime && !b._kid.bedtime; });
     tick();
@@ -709,8 +864,15 @@ body { color: var(--ink); font-family: var(--font-ui); }
   window.hearthBack = back;
 
   window.hearthRemote = function (cmd) {
-    if (['refresh', 'updateReady', 'heating', 'key'].indexOf(cmd.type) < 0) wake();
-    if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); return; }
+    if (['refresh', 'updateReady', 'heating', 'key', 'refreshShows'].indexOf(cmd.type) < 0) wake();
+    if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); fetchUpnext(false); return; }
+    if (cmd.type === 'refreshShows') { fetchUpnext(true); renderWatching(); return; }
+    if (cmd.type === 'watch') {
+      closeOverlays();
+      if (cmd.value === 'carry') return carryOn();
+      var w0 = watchingShows().filter(function (x) { return x.title === cmd.value; })[0];
+      return w0 ? openShow(w0.title, w0.app) : interpret('put on ' + cmd.value);
+    }
     if (cmd.type === 'updateFailed') return say('The update didn’t install', cmd.message || 'Try again later.', true);
     if (cmd.type === 'key') return window.hearthKey(cmd.value);
     if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
@@ -734,7 +896,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   });
 
   // ---------- Start ----------
-  markKids(); checkUpdate();
+  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick();
   var p0 = JSON.parse(N.pairing());
   setPaired(!!p0.paired);
   var seen = false;

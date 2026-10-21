@@ -207,6 +207,23 @@ final class RemoteServer {
                     tado.setMinTarget(req.optDouble("minTarget", 17));
                 }
                 sendJson(out, 200, res.put("status", tadoStatus()));
+            } else if ("GET".equals(method) && ("/api/follows".equals(path) || "/api/watching".equals(path))) {
+                if (!pairing.isPaired(param(query, "token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                String json = "/api/follows".equals(path) ? "{\"follows\":" + assistant.follows() + "}" : assistant.watching();
+                send(out, 200, "application/json; charset=utf-8", bytes(json));
+            } else if ("POST".equals(method) && "/api/follows".equals(path)) {
+                JSONObject req = new JSONObject(new String(body, UTF8));
+                if (!pairing.isPaired(req.optString("token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                org.json.JSONArray list = req.optJSONArray("follows");
+                if (list != null) assistant.setFollows(list.toString());
+                Remote.deliverIfVisible(new JSONObject().put("type", "refreshShows"));
+                send(out, 200, "application/json; charset=utf-8", bytes("{\"follows\":" + assistant.follows() + "}"));
             } else if ("GET".equals(method) && "/api/volume".equals(path)) {
                 if (!pairing.isPaired(param(query, "token"))) {
                     sendJson(out, 401, new JSONObject().put("ok", false));
