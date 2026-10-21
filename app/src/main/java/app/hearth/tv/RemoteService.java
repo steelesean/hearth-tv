@@ -17,6 +17,7 @@ public class RemoteService extends Service {
     private Pairing pairing;
     private RemoteServer server;
     private HeatingReminder heating;
+    private Thread background;
 
     static void start(Context context) {
         Intent intent = new Intent(context, RemoteService.class);
@@ -37,9 +38,31 @@ public class RemoteService extends Service {
         running = this;
         pairing = new Pairing(this);
         Tado tado = new Tado(this);
-        heating = new HeatingReminder(this, tado);
+        final Weather weather = new Weather(this);
+        final KidCheck kids = new KidCheck(this);
+        heating = new HeatingReminder(this, tado, weather);
         heating.start();
-        server = new RemoteServer(this, pairing, new AppLauncher(this), tado, heating);
+        server = new RemoteServer(this, pairing, new AppLauncher(this), tado, heating, weather);
+        // Hourly housekeeping: look for updates, check the children's tiles, refresh the weather.
+        background = new Thread(new Runnable() {
+            @Override public void run() {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        if (Updater.check(RemoteService.this) != null) {
+                            Remote.deliverIfVisible(new org.json.JSONObject().put("type", "updateReady"));
+                        }
+                        kids.checkIfDue();
+                        weather.today();
+                        Thread.sleep(3600 * 1000L);
+                    } catch (InterruptedException e) {
+                        return;
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }, "hearth-housekeeping");
+        background.setDaemon(true);
+        background.start();
         server.start();
         startForeground(1, buildNotification());
     }
@@ -52,6 +75,7 @@ public class RemoteService extends Service {
     @Override public void onDestroy() {
         if (server != null) server.stop();
         if (heating != null) heating.stop();
+        if (background != null) background.interrupt();
         running = null;
         super.onDestroy();
     }

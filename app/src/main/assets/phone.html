@@ -130,6 +130,20 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       <div class="label">For the children</div>
       <div class="kids" id="kids"></div>
 
+      <details class="settings" id="homeSettings">
+        <summary>Weather and morning card</summary>
+        <div class="fields">
+          <p class="hint">Used for the weather on the TV, the screensaver, frost warnings and the morning card.</p>
+          <label for="homeTown">Town</label>
+          <input id="homeTown" type="text" autocomplete="off" placeholder="Edinburgh">
+          <label><input id="homeMorning" type="checkbox" checked style="width:auto;margin-right:8px">Show a morning card</label>
+          <label for="homeMorningTime">At</label>
+          <input id="homeMorningTime" type="time" value="07:30">
+          <button class="btn" id="homeSave" type="button">Save</button>
+          <button class="btn ghost" id="homeTest" type="button">Show the morning card now</button>
+        </div>
+      </details>
+
       <details class="settings" id="heatSettings">
         <summary>Heating reminder</summary>
         <div class="fields">
@@ -282,6 +296,26 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       $('aProfile').value = ''; toast('Done. Hearth has forgotten what it learned.');
     }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
   });
+
+  // Weather and morning card
+  function homeShow(st) {
+    if (!st) return;
+    $('homeTown').value = st.town || '';
+    $('homeMorning').checked = !!st.morning;
+    if (st.morningTime) $('homeMorningTime').value = st.morningTime;
+  }
+  $('homeSettings').addEventListener('toggle', function () {
+    if ($('homeSettings').open) fetch('/api/home?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(homeShow).catch(function () {});
+  });
+  $('homeSave').addEventListener('click', function () {
+    post('/api/home', { token: token, town: $('homeTown').value, morning: $('homeMorning').checked, morningTime: $('homeMorningTime').value })
+      .then(function (j) {
+        if (j._status === 401) { show('pair'); return; }
+        if (!j.ok) { toast(j.error || 'Couldn’t find that town. Try a nearby city.'); return; }
+        homeShow(j.status); toast(j.found ? 'Saved. Weather for ' + j.found + '.' : 'Saved');
+      }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  });
+  $('homeTest').addEventListener('click', function () { post('/api/home', { token: token, action: 'test' }).then(function () { toast('Look at the TV'); }); });
 
   // Heating reminder (Tado)
   var tadoPoll;

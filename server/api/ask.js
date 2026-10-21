@@ -28,7 +28,7 @@ const ANSWER_SCHEMA = {
     },
     suggestions: {
       type: "array",
-      description: "Only for action suggest: up to 3 picks. Otherwise empty.",
+      description: "Only for action suggest: up to 6 picks, best first (the TV checks availability and shows 3). Otherwise empty.",
       items: {
         type: "object",
         properties: {
@@ -53,7 +53,7 @@ Choose exactly one action:
 - open_app: open one of the installed apps (use its key).
 - open_channel: start a live channel (use its key).
 - open_kid: play one of the children's programmes (use its key).
-- suggest: when they ask what to watch, or for something they'd like. Give up to 3 films or series that are likely streaming in the UK now on one of their installed apps, matched to their taste notes, learned profile, feedback and history. Their own taste notes win over the learned profile. Prefer variety. Never suggest anything they've marked as seen or not for them, or have obviously already watched.
+- suggest: when they ask what to watch, or for something they'd like. Give up to 6 films or series, best first, that are likely streaming in the UK now on one of their installed apps, matched to their taste notes, learned profile, feedback and history. Their own taste notes win over the learned profile. Prefer variety. Never suggest anything they've marked as seen or not for them, or have obviously already watched.
 - none: when nothing fits, and say briefly what you can do instead.
 
 Only use keys that appear in the catalogue, and only installed apps. If you're unsure a title is on a service, pick another title. Keep the reply warm and brief, no exclamation marks.`;
@@ -101,6 +101,12 @@ export default async function handler(req, res) {
     const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     const answer = safeParse(text);
     if (!answer) return res.status(502).json({ error: "The assistant's answer couldn't be read." });
+    if (answer.action?.type === "suggest" && Array.isArray(answer.suggestions)) {
+      const installed = (context.catalogue.apps || []).map((a) => a.key);
+      const checked = await checkAvailability(answer.suggestions, installed);
+      answer.suggestions = checked.suggestions;
+      if (checked.attribution) answer.attribution = checked.attribution;
+    }
     return res.status(200).json(answer);
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
@@ -117,6 +123,65 @@ export default async function handler(req, res) {
   }
 }
 
+// ---------- Where to watch (TMDB, with data from JustWatch) ----------
+// Optional: set TMDB_TOKEN (TMDB's "API Read Access Token") or TMDB_API_KEY in Vercel.
+// Without either, suggestions go through unchecked.
+
+// TMDB provider names for each Hearth app key.
+const PROVIDERS = {
+  netflix: ["netflix"],
+  disney: ["disney plus", "disney+"],
+  prime: ["amazon prime video"],
+  appletv: ["apple tv plus", "apple tv+"],
+  iplayer: ["bbc iplayer"],
+  channel4: ["channel 4", "channel4"],
+  itvx: ["itvx"],
+  my5: ["my5", "channel 5"],
+};
+
+async function tmdb(path) {
+  const token = process.env.TMDB_TOKEN;
+  const key = process.env.TMDB_API_KEY;
+  const url = new URL("https://api.themoviedb.org/3" + path);
+  if (!token) url.searchParams.set("api_key", key);
+  const r = await fetch(url, {
+    headers: token ? { Authorization: "Bearer " + token, Accept: "application/json" } : { Accept: "application/json" },
+    signal: AbortSignal.timeout(4000),
+  });
+  if (!r.ok) throw new Error("TMDB " + r.status);
+  return r.json();
+}
+
+/** The installed app keys a title is streaming on in the UK, plus its TMDB year. */
+async function whereToWatch(s) {
+  const type = s.kind === "series" ? "tv" : "movie";
+  const yearParam = type === "tv" ? "first_air_date_year" : "primary_release_year";
+  const q = "/search/" + type + "?query=" + encodeURIComponent(s.title) + (s.year ? "&" + yearParam + "=" + encodeURIComponent(s.year) : "");
+  let found = (await tmdb(q)).results?.[0];
+  if (!found && s.year) found = (await tmdb("/search/" + type + "?query=" + encodeURIComponent(s.title))).results?.[0];
+  if (!found) return null;
+  const gb = (await tmdb("/" + type + "/" + found.id + "/watch/providers")).results?.GB || {};
+  const names = [...(gb.flatrate || []), ...(gb.free || []), ...(gb.ads || [])].map((p) => String(p.provider_name).toLowerCase());
+  const apps = Object.keys(PROVIDERS).filter((k) => PROVIDERS[k].some((n) => names.some((x) => x.startsWith(n))));
+  const date = found.release_date || found.first_air_date || "";
+  return { apps, year: date.slice(0, 4) };
+}
+
+async function checkAvailability(suggestions, installed) {
+  if (!process.env.TMDB_TOKEN && !process.env.TMDB_API_KEY) return { suggestions: suggestions.slice(0, 3) };
+  const results = await Promise.all(suggestions.map((s) => whereToWatch(s).catch(() => undefined)));
+  const kept = [];
+  results.forEach((r, i) => {
+    if (!r) return;                                    // not found, or the check failed
+    const onTheirApps = r.apps.filter((a) => installed.includes(a));
+    if (!onTheirApps.length) return;                   // not streaming on anything they have
+    const s = suggestions[i];
+    kept.push({ ...s, app: onTheirApps.includes(s.app) ? s.app : onTheirApps[0], year: r.year || s.year });
+  });
+  if (!kept.length) return { suggestions: suggestions.slice(0, 3) };   // better unchecked than nothing
+  return { suggestions: kept.slice(0, 3), attribution: "Where-to-watch data from JustWatch, via TMDB." };
+}
+
 function noAction(reply) {
   return { reply, action: { type: "none", key: "" }, suggestions: [] };
 }
@@ -124,3 +189,4 @@ function noAction(reply) {
 function safeParse(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
+export { checkAvailability };
