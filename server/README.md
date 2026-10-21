@@ -8,3 +8,5 @@ Deploy it as a Vercel project with **Root Directory** set to `server`, then add 
 - `HEARTH_ASSISTANT_KEY`: a long random string. Enter the same string in the phone remote's settings, so only your TV can use the assistant.
 
 Optional: `CLAUDE_MODEL` to try another model (for example `claude-haiku-5-5`, which is much cheaper).
+
+Optional: `TMDB_TOKEN` (TMDB's "API Read Access Token", from themoviedb.org > Settings > API) so suggestions are checked against what's actually streaming in the UK. Where-to-watch data comes from JustWatch via TMDB.

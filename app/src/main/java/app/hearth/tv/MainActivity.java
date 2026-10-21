@@ -22,6 +22,8 @@ public class MainActivity extends Activity {
     private AppLauncher launcher;
     private Pairing pairing;
     private Assistant assistant;
+    private Weather weather;
+    private KidCheck kids;
     private volatile boolean ready;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -31,6 +33,8 @@ public class MainActivity extends Activity {
         launcher = new AppLauncher(this);
         pairing = new Pairing(this);
         assistant = new Assistant(this);
+        weather = new Weather(this);
+        kids = new KidCheck(this);
         RemoteService.start(this);
 
         web = new WebView(this);
@@ -66,6 +70,7 @@ public class MainActivity extends Activity {
         Remote.setVisible(true);
         // Coming back from another app: the page may want to ask how it was.
         if (ready) web.evaluateJavascript("window.hearthResumed && hearthResumed()", null);
+        refreshCaches();
     }
 
     @Override protected void onPause() {
@@ -80,6 +85,25 @@ public class MainActivity extends Activity {
     }
 
     boolean isReady() { return ready; }
+
+    private volatile JSONObject updateCache;
+    private volatile JSONObject weatherCache;
+
+    /** Refreshes the update and weather caches off the main thread, so the bridge never waits. */
+    private void refreshCaches() {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                updateCache = Updater.check(MainActivity.this);
+                weatherCache = weather.today();
+                if (ready) runCommand(safe("refresh", ""));
+            }
+        }, "hearth-caches").start();
+    }
+
+    private static JSONObject safe(String type, String message) {
+        try { return new JSONObject().put("type", type).put("message", message == null ? "" : message); }
+        catch (Exception e) { return new JSONObject(); }
+    }
 
     /** Runs a phone command on the page. Safe to call from any thread. */
     void runCommand(final JSONObject cmd) {
@@ -193,6 +217,36 @@ public class MainActivity extends Activity {
                     });
                 }
             }, "hearth-learn").start();
+        }
+
+        /** The waiting update as JSON ({version}), or "" if Hearth is up to date. Never blocks. */
+        @JavascriptInterface public String update() {
+            final JSONObject u = updateCache;
+            return u == null ? "" : u.toString();
+        }
+
+        /** Downloads the update and opens Fire TV's install screen. Reports failures to the page. */
+        @JavascriptInterface public void installUpdate() {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        Updater.install(MainActivity.this);
+                    } catch (final Exception e) {
+                        runCommand(safe("updateFailed", e.getMessage()));
+                    }
+                }
+            }, "hearth-update").start();
+        }
+
+        /** Today's weather as JSON, or "" if no town is set. */
+        @JavascriptInterface public String weather() {
+            JSONObject w = weatherCache;
+            return w == null ? "" : w.toString();
+        }
+
+        /** Which children's programmes iPlayer still has, as JSON {key: true|false}. */
+        @JavascriptInterface public String kidStatus() {
+            return kids.status().toString();
         }
 
         @JavascriptInterface public void showKeyboard() {

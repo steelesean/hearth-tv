@@ -46,17 +46,19 @@ final class RemoteServer {
     private final Assistant assistant;
     private final Tado tado;
     private final HeatingReminder heating;
+    private final Weather weather;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private ServerSocket socket;
     private int port = -1;
 
-    RemoteServer(Context context, Pairing pairing, AppLauncher launcher, Tado tado, HeatingReminder heating) {
+    RemoteServer(Context context, Pairing pairing, AppLauncher launcher, Tado tado, HeatingReminder heating, Weather weather) {
         this.context = context.getApplicationContext();
         this.pairing = pairing;
         this.launcher = launcher;
         this.assistant = new Assistant(context);
         this.tado = tado;
         this.heating = heating;
+        this.weather = weather;
     }
 
     int port() { return port; }
@@ -203,6 +205,26 @@ final class RemoteServer {
                     tado.setMinTarget(req.optDouble("minTarget", 17));
                 }
                 sendJson(out, 200, res.put("status", tadoStatus()));
+            } else if ("GET".equals(method) && "/api/home".equals(path)) {
+                if (!pairing.isPaired(param(query, "token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                sendJson(out, 200, homeStatus());
+            } else if ("POST".equals(method) && "/api/home".equals(path)) {
+                JSONObject req = new JSONObject(new String(body, UTF8));
+                if (!pairing.isPaired(req.optString("token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                JSONObject res = new JSONObject().put("ok", true);
+                String town = req.optString("town", "").trim();
+                if (!town.isEmpty() && !town.equalsIgnoreCase(weather.town())) {
+                    try { res.put("found", weather.setTown(town)); } catch (Exception e) { res.put("ok", false).put("error", e.getMessage()); }
+                }
+                if (req.has("morning")) weather.setMorning(req.optBoolean("morning"), req.optString("morningTime", null));
+                if ("test".equals(req.optString("action"))) heating.morning();
+                sendJson(out, 200, res.put("status", homeStatus()));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
                 // Lists what's installed so we can tune config.js. Paired phones only.
                 if (!pairing.isPaired(param(query, "token"))) {
@@ -220,6 +242,13 @@ final class RemoteServer {
         } finally {
             try { client.close(); } catch (IOException ignored) {}
         }
+    }
+
+    private JSONObject homeStatus() throws Exception {
+        return new JSONObject()
+                .put("town", weather.town())
+                .put("morning", weather.morningOn())
+                .put("morningTime", weather.morningTime());
     }
 
     private JSONObject tadoStatus() throws Exception {

@@ -34,25 +34,49 @@ final class HeatingReminder {
 
     private final Context context;
     private final Tado tado;
+    private final Weather weather;
     private final Handler main = new Handler(Looper.getMainLooper());
     private String firedOn = "";
+    private String morningOn = "";
     private View card;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             String now = new SimpleDateFormat("HH:mm", Locale.UK).format(new Date());
             String today = new SimpleDateFormat("yyyy-MM-dd", Locale.UK).format(new Date());
-            if (tado.isConnected() && now.equals(tado.reminderTime()) && !today.equals(firedOn)) {
+            boolean evening = tado.isConnected() || !weather.town().isEmpty();
+            if (evening && now.equals(tado.reminderTime()) && !today.equals(firedOn)) {
                 firedOn = today;
                 check(false);
+            }
+            if (weather.morningOn() && !weather.town().isEmpty() && now.equals(weather.morningTime()) && !today.equals(morningOn)) {
+                morningOn = today;
+                morning();
             }
             main.postDelayed(this, 30000);
         }
     };
 
-    HeatingReminder(Context context, Tado tado) {
+    HeatingReminder(Context context, Tado tado, Weather weather) {
         this.context = context.getApplicationContext();
         this.tado = tado;
+        this.weather = weather;
+    }
+
+    /** The morning card: today's weather, and any rooms already heating. */
+    void morning() {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                JSONObject w = weather.today();
+                if (w == null) return;
+                StringBuilder body = new StringBuilder(String.format(Locale.UK, "%d° and %s now. High of %d°, low of %d°.",
+                        w.optInt("now"), w.optString("desc").toLowerCase(Locale.UK), w.optInt("high"), w.optInt("low")));
+                if (w.optInt("rain") >= 50) body.append(String.format(Locale.UK, "\n%d%% chance of rain today.", w.optInt("rain")));
+                if (w.optInt("low") <= 0) body.append("\nFrosty this morning.");
+                final String b = body.toString();
+                main.post(new Runnable() { @Override public void run() { show("TODAY", "Good morning", b); } });
+            }
+        }, "hearth-morning").start();
     }
 
     void start() { main.post(tick); }
@@ -70,9 +94,23 @@ final class HeatingReminder {
             @Override public void run() {
                 String title;
                 String body;
+                JSONObject w = weather.today();
+                String frost = (w != null && w.optBoolean("frost"))
+                        ? String.format(Locale.UK, "Frost tonight, down to %d°.", w.optInt("tonightLow")) : null;
+                if (!tado.isConnected()) {
+                    if (frost == null) return;
+                    final String f = frost;
+                    main.post(new Runnable() { @Override public void run() { show("TONIGHT", "Frost tonight", f); } });
+                    return;
+                }
                 try {
                     List<Tado.Room> rooms = tado.heatingRooms();
-                    if (rooms.isEmpty() && !test) return;
+                    if (rooms.isEmpty() && !test) {
+                        if (frost == null) return;
+                        final String f = frost + "\nNo rooms are left on.";
+                        main.post(new Runnable() { @Override public void run() { show("TONIGHT", "Frost tonight", f); } });
+                        return;
+                    }
                     if (rooms.isEmpty()) {
                         // A test shows every room, so we can see what Tado reports.
                         List<Tado.Room> all = tado.allRooms();
@@ -92,17 +130,18 @@ final class HeatingReminder {
                     title = "Couldn’t reach Tado";
                     body = "Check the stick is online, or reconnect Tado from your phone. (" + e.getMessage() + ")";
                 }
+                if (frost != null) body = body + "\n" + frost;
                 final String t = title, b = body;
-                main.post(new Runnable() { @Override public void run() { show(t, b); } });
+                main.post(new Runnable() { @Override public void run() { show("HEATING", t, b); } });
             }
         }, "hearth-tado").start();
     }
 
-    private void show(String title, String body) {
+    private void show(String eyebrowText, String title, String body) {
         if (!canShowOverApps()) {
             // Without permission, the card can only appear when Hearth itself is on screen.
             try {
-                Remote.deliverIfVisible(new JSONObject().put("type", "heating").put("title", title).put("body", body));
+                Remote.deliverIfVisible(new JSONObject().put("type", "heating").put("title", title).put("body", body.replace("\n", " · ")));
             } catch (Exception ignored) {
             }
             return;
@@ -120,7 +159,7 @@ final class HeatingReminder {
         lp.x = dp(32);
         lp.y = dp(28);
 
-        final View view = buildCard(title, body);
+        final View view = buildCard(eyebrowText, title, body);
         view.setAlpha(0f);
         try {
             wm.addView(view, lp);
@@ -155,7 +194,7 @@ final class HeatingReminder {
     }
 
     /** The card: Hearth's stone surface, ink text, one moss accent. */
-    private View buildCard(String title, String body) {
+    private View buildCard(String eyebrowText, String title, String body) {
         LinearLayout box = new LinearLayout(context);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(20), dp(16), dp(22), dp(18));
@@ -166,7 +205,7 @@ final class HeatingReminder {
         bg.setStroke(dp(2), Color.parseColor("#2F4A3F"));
         box.setBackground(bg);
 
-        TextView eyebrow = text("HEATING", 11, "#6B706C", true);
+        TextView eyebrow = text(eyebrowText, 11, "#6B706C", true);
         eyebrow.setLetterSpacing(0.12f);
         TextView head = text(title, 18, "#1F2321", true);
         head.setPadding(0, dp(4), 0, dp(6));

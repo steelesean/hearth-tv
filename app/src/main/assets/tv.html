@@ -131,6 +131,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
 .channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: #fff; font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
 
+/* Screensaver: big quiet time and weather, drifting slowly so nothing burns in */
+.saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--ground); }
+.saver-inner { position: absolute; left: 200px; top: 220px; transition: left 3s ease, top 3s ease; }
+.saver-time { font: 400 280px/1 var(--font-display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.saver-date { font-size: 40px; color: var(--ink-soft); margin-top: 24px; }
+.saver-weather { font-size: 40px; color: var(--ink); margin-top: 14px; }
+.kid .gone { position: absolute; left: 24px; top: 22px; font-size: 18px; font-weight: 600; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; }
+#updateBtn .dot { background: var(--focus); }
+.picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
+
 /* Kids mode */
 .stage.kids-mode .apps-row, .stage.kids-mode .chips { display: none; }
 .stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
@@ -147,6 +157,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <span class="meta" id="date"></span>
     </div>
     <div class="top-right">
+      <button class="pill focusable" id="updateBtn" type="button" hidden><span class="dot"></span><span>Update ready</span></button>
       <button class="pill focusable" id="phoneBtn" type="button">
         <svg id="phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6v-2"/></svg>
         <span class="dot ok" id="phoneDot" hidden></span>
@@ -182,6 +193,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
     <div><h2 id="sheetTitle"></h2><p id="sheetBody"></p></div>
   </div>
 
+  <div class="saver" id="saver" hidden>
+    <div class="saver-inner" id="saverInner">
+      <div class="saver-time" id="saverTime"></div>
+      <div class="saver-date" id="saverDate"></div>
+      <div class="saver-weather" id="saverWeather"></div>
+    </div>
+  </div>
+
   <div class="overlay" id="pairModal" hidden>
     <div class="card pair-card">
       <div class="qr" id="qr"></div>
@@ -203,6 +222,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <h2 id="picksTitle">A few ideas</h2>
       <p class="lede" id="picksLede"></p>
       <div class="picks" id="picks"></div>
+      <p class="picks-note" id="picksNote" hidden></p>
     </div>
   </div>
 
@@ -238,6 +258,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
     showKeyboard: function () {},
     installed: function () { return JSON.stringify(C.apps.map(function (a) { return a.key; })); },
     assistantReady: function () { return true; },
+    update: function () { return ''; },
+    installUpdate: function () {},
+    weather: function () { return JSON.stringify({ town: 'Edinburgh', now: 9, desc: 'Cloudy', high: 12, low: 4, tonightLow: -1, frost: true, rain: 20 }); },
+    kidStatus: function () { return JSON.stringify({ gruffalo: false }); },
     learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
     ask: function (id, payload) {
       setTimeout(function () {
@@ -274,6 +298,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     b.querySelector('.src').textContent = k.src;
     b.addEventListener('click', function () { openKid(k.key); });
     b._kid = k; kidButtons.push(b);
+    var gone = el('span', 'gone'); gone.textContent = 'Not on iPlayer now'; gone.hidden = true; b.appendChild(gone); b._gone = gone;
     $('kids').appendChild(b);
   });
 
@@ -312,12 +337,45 @@ body { color: var(--ink); font-family: var(--font-ui); }
   function tick() {
     var d = new Date();
     $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var w = weatherNow();
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+      + (w ? ' · ' + w.now + '° ' + w.desc.toLowerCase() : '');
+    if (!$('saver').hidden) paintSaver(d, w);
     var h = d.getHours();
     $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
       : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   }
+  function weatherNow() { try { var j = N.weather ? N.weather() : ''; return j ? JSON.parse(j) : null; } catch (e) { return null; } }
   tick(); setInterval(tick, 15000);
+
+  // ---------- Screensaver after five quiet minutes ----------
+  var lastActive = Date.now();
+  function paintSaver(d, w) {
+    $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('saverWeather').textContent = w ? w.now + '° and ' + w.desc.toLowerCase() + ' in ' + w.town + '. High of ' + w.high + '°.' + (w.frost ? ' Frost tonight.' : '') : '';
+    $('saverInner').style.left = (120 + Math.round(Math.random() * 700)) + 'px';
+    $('saverInner').style.top = (100 + Math.round(Math.random() * 380)) + 'px';
+  }
+  function wake() { lastActive = Date.now(); if (!$('saver').hidden) { $('saver').hidden = true; return true; } return false; }
+  setInterval(function () {
+    var busy = asking || !$('pairModal').hidden || !$('howPanel').hidden;
+    if ($('saver').hidden && !busy && Date.now() - lastActive > 5 * 60 * 1000) { $('saver').hidden = false; paintSaver(new Date(), weatherNow()); }
+    else if (!$('saver').hidden && new Date().getSeconds() < 15) paintSaver(new Date(), weatherNow());
+  }, 15000);
+
+  // ---------- Updates ----------
+  function checkUpdate() {
+    var u = null; try { u = N.update && N.update() ? JSON.parse(N.update()) : null; } catch (e) {}
+    $('updateBtn').hidden = !u;
+    if (u) $('updateBtn').lastChild.textContent = 'Update ready';
+  }
+  $('updateBtn').addEventListener('click', function () {
+    $('sheetTitle').textContent = 'Downloading the update…'; $('sheetBody').textContent = 'Fire TV will ask you to confirm. Choose Install.';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, 20000);
+    N.installUpdate();
+  });
 
   // ---------- Focus (class-based so the remote and phone share it) ----------
   var cur = null;
@@ -393,9 +451,18 @@ body { color: var(--ink); font-family: var(--font-ui); }
     remember({ kind: 'channel', key: key, title: ch.name + ' live', app: ch.app });
     setTimeout(function () { if (N.openLink(ch.app, ch.url || '') === 'missing') missing(app); }, 700);
   }
+  function kidAvailable(key) {
+    try { return JSON.parse(N.kidStatus ? N.kidStatus() : '{}')[key] !== false; } catch (e) { return true; }
+  }
+  function markKids() { kidButtons.forEach(function (b) { b._gone.hidden = kidAvailable(b._kid.key); }); }
   function openKid(key) {
     var k = C.kids.filter(function (x) { return x.key === key; })[0]; if (!k) return;
     var app = appByKey(k.app);
+    if (!kidAvailable(key)) {
+      say(k.title + ' isn’t on iPlayer at the moment', 'Opening iPlayer instead.', true);
+      setTimeout(function () { if (N.openApp(k.app) === 'missing') missing(app); }, 1500);
+      return;
+    }
     say(k.title, 'Opening ' + app.name);
     remember({ kind: 'kid', key: key, title: k.title, app: k.app });
     setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
@@ -462,7 +529,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (t === 'open_app' && key) return openApp(key);
     if (t === 'open_channel' && key) return openChannel(key);
     if (t === 'open_kid' && key) return openKid(key);
-    if (t === 'suggest' && a.suggestions && a.suggestions.length) return showPicks(a.reply, a.suggestions);
+    if (t === 'suggest' && a.suggestions && a.suggestions.length) {
+      $('picksNote').hidden = !a.attribution; $('picksNote').textContent = a.attribution || '';
+      return showPicks(a.reply, a.suggestions);
+    }
     say(a.reply || 'Sorry, I’m not sure', '', true);
   };
 
@@ -624,6 +694,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   // ---------- Keys: from the Android side (remote) and from the phone ----------
   window.hearthKey = function (k) {
+    if (wake()) return;   // the first press just wakes the screen
     if (k === 'back') return back();
     if (k === 'ok') return select();
     if (k === 'home') { closeOverlays(); if (kidsMode) setMode(false); return; }
@@ -638,6 +709,9 @@ body { color: var(--ink); font-family: var(--font-ui); }
   window.hearthBack = back;
 
   window.hearthRemote = function (cmd) {
+    if (['refresh', 'updateReady', 'heating', 'key'].indexOf(cmd.type) < 0) wake();
+    if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); return; }
+    if (cmd.type === 'updateFailed') return say('The update didn’t install', cmd.message || 'Try again later.', true);
     if (cmd.type === 'key') return window.hearthKey(cmd.value);
     if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
     if (cmd.type === 'app') { closeOverlays(); return cmd.value === 'live' ? openLive() : openApp(cmd.value); }
@@ -660,6 +734,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   });
 
   // ---------- Start ----------
+  markKids(); checkUpdate();
   var p0 = JSON.parse(N.pairing());
   setPaired(!!p0.paired);
   var seen = false;
