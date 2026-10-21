@@ -30,3 +30,14 @@ To update later, repeat step 4. Every change pushed to `main` builds a new versi
 ## Fonts and libraries
 
 Figtree and Newsreader (SIL Open Font License) are bundled in `assets/fonts`. QR codes use qrcode-generator 1.4.4 by Kazuhiko Arase (MIT).
+
+## Making Hearth the home screen
+
+Fire TV keeps Home for Amazon's own screen. Hearth's `HomeWatcher` switches to Hearth whenever Amazon's home appears (after Home, waking the TV or a restart). Turn it on once from a computer:
+
+```
+adb shell settings put secure enabled_accessibility_services app.hearth.tv/app.hearth.tv.HomeWatcher
+adb shell settings put secure accessibility_enabled 1
+```
+
+Press Home twice quickly to stay on Amazon's home for two minutes. To turn it off: `adb shell settings put secure enabled_accessibility_services ""`.
