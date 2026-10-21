@@ -475,15 +475,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var shows = topShows(); if (!shows.length || !N.upnext || !(N.assistantReady && N.assistantReady())) return;
     var c = upnextCache(), key = shows.map(function (x) { return x.title.toLowerCase(); }).sort().join('|');
     if (!force && c.key === key && Date.now() - (c.at || 0) < 6 * 3600 * 1000) return;
-    upnextKey = key;
+    upnextKey = key; upnextSent = shows.map(function (x) { return x.title; });
     N.upnext(JSON.stringify({ shows: shows.map(function (x) { return { title: x.title, app: x.app }; }),
       apps: installedApps().map(function (a) { return a.key; }) }));
   }
-  var upnextKey = '';
+  var upnextKey = '', upnextSent = [];
   window.hearthUpnext = function (a) {
     if (!a || !a.shows) return;
-    var map = {};
-    a.shows.forEach(function (x, i) { if (x.found) map[(topShows()[i] || x).title.toLowerCase()] = x; });
+    // Key each answer by the title we asked about (TMDB may spell it differently), in order.
+    var map = {}, sent = upnextSent;
+    a.shows.forEach(function (x, i) { if (x.found && sent[i]) map[sent[i].toLowerCase()] = x; });
     try { localStorage.setItem('hearth.upnext', JSON.stringify({ at: Date.now(), key: upnextKey, shows: map })); } catch (e) {}
     renderWatching(); renderNow(weatherNow());
   };
