@@ -130,6 +130,24 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       <div class="label">For the children</div>
       <div class="kids" id="kids"></div>
 
+      <details class="settings" id="heatSettings">
+        <summary>Heating reminder</summary>
+        <div class="fields">
+          <p class="hint">Each evening, the TV checks Tado and shows which rooms are still heating, over whatever you’re watching.</p>
+          <p id="tadoStatus">Checking…</p>
+          <div id="tadoSignIn" hidden>
+            <p>Open this link and approve Hearth in your Tado account. The code is <strong id="tadoCode"></strong>.</p>
+            <a class="btn" id="tadoLink" href="#" target="_blank" rel="noopener" style="display:grid;place-items:center;text-decoration:none">Open Tado</a>
+          </div>
+          <button class="btn" id="tadoConnect" type="button">Connect Tado</button>
+          <label for="tadoTime">Remind us at</label>
+          <input id="tadoTime" type="time" value="21:45">
+          <button class="btn ghost" id="tadoTest" type="button">Show the reminder now</button>
+          <p class="hint" id="tadoOverlayHint" hidden>The reminder can only appear over other apps once Fire TV allows it. Ask the Claude on your Mac to run: adb shell appops set app.hearth.tv SYSTEM_ALERT_WINDOW allow</p>
+          <button class="btn ghost" id="tadoDisconnect" type="button" hidden>Disconnect Tado</button>
+        </div>
+      </details>
+
       <details class="settings" id="settings">
         <summary>Assistant settings</summary>
         <div class="fields">
@@ -262,6 +280,43 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
       $('aProfile').value = ''; toast('Done. Hearth has forgotten what it learned.');
     }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
   });
+
+  // Heating reminder (Tado)
+  var tadoPoll;
+  function tadoShow(st) {
+    if (!st) return;
+    $('tadoStatus').textContent = st.connected ? 'Connected' + (st.home ? ' to ' + st.home : '') + '. Reminder at ' + st.time + '.' : 'Not connected yet.';
+    $('tadoConnect').hidden = st.connected;
+    $('tadoDisconnect').hidden = !st.connected;
+    $('tadoTest').hidden = !st.connected;
+    $('tadoOverlayHint').hidden = !!st.overApps;
+    if (st.time) $('tadoTime').value = st.time;
+    if (st.connected) { $('tadoSignIn').hidden = true; clearInterval(tadoPoll); }
+  }
+  function tadoLoad() {
+    fetch('/api/tado?token=' + encodeURIComponent(token)).then(function (r) { return r.json(); }).then(tadoShow).catch(function () {});
+  }
+  function tadoDo(action, extra) {
+    var body = { token: token, action: action };
+    for (var k in extra || {}) body[k] = extra[k];
+    return post('/api/tado', body).then(function (j) {
+      if (j._status === 401) { show('pair'); return j; }
+      tadoShow(j.status); return j;
+    });
+  }
+  $('heatSettings').addEventListener('toggle', function () { if ($('heatSettings').open) tadoLoad(); });
+  $('tadoConnect').addEventListener('click', function () {
+    tadoDo('connect').then(function (j) {
+      if (!j || !j.signIn) { toast('Couldn’t start the Tado sign-in. Try again.'); return; }
+      $('tadoCode').textContent = j.signIn.code;
+      $('tadoLink').href = j.signIn.link;
+      $('tadoSignIn').hidden = false;
+      clearInterval(tadoPoll); tadoPoll = setInterval(tadoLoad, 4000);
+    }).catch(function () { toast('Can’t reach the TV. Is it switched on?'); });
+  });
+  $('tadoTest').addEventListener('click', function () { tadoDo('test').then(function () { toast('Look at the TV'); }); });
+  $('tadoTime').addEventListener('change', function () { tadoDo('time', { time: $('tadoTime').value }).then(function () { toast('Reminder time saved'); }); });
+  $('tadoDisconnect').addEventListener('click', function () { tadoDo('disconnect').then(function () { toast('Tado disconnected'); }); });
 
   // Start: check the saved pairing still works
   if (!token) { show('pair'); return; }

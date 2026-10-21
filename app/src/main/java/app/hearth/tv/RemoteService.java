@@ -16,6 +16,7 @@ public class RemoteService extends Service {
 
     private Pairing pairing;
     private RemoteServer server;
+    private HeatingReminder heating;
 
     static void start(Context context) {
         Intent intent = new Intent(context, RemoteService.class);
@@ -35,7 +36,10 @@ public class RemoteService extends Service {
         super.onCreate();
         running = this;
         pairing = new Pairing(this);
-        server = new RemoteServer(this, pairing, new AppLauncher(this));
+        Tado tado = new Tado(this);
+        heating = new HeatingReminder(this, tado);
+        heating.start();
+        server = new RemoteServer(this, pairing, new AppLauncher(this), tado, heating);
         server.start();
         startForeground(1, buildNotification());
     }
@@ -47,6 +51,7 @@ public class RemoteService extends Service {
 
     @Override public void onDestroy() {
         if (server != null) server.stop();
+        if (heating != null) heating.stop();
         running = null;
         super.onDestroy();
     }

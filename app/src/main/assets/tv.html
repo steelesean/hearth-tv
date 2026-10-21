@@ -645,6 +645,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
     if (cmd.type === 'mode') return setMode(!kidsMode);
     if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'heating') return say(cmd.title, cmd.body);
     if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
     if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
   };

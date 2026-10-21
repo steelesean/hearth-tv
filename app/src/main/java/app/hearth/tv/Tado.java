@@ -1,0 +1,221 @@
+package app.hearth.tv;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * Reads which rooms are heating from Tado. Uses Tado's unofficial web API with its
+ * "device code" sign-in: the phone shows a link, you approve it in your Tado account, and
+ * the stick keeps the sign-in. Tado limits calls per day, so this only checks when asked.
+ */
+final class Tado {
+    private static final String TAG = "Hearth";
+    private static final Charset UTF8 = Charset.forName("UTF-8");
+    // Tado's public client id for device sign-in (the same for everyone).
+    private static final String CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46";
+    private static final String AUTH = "https://login.tado.com/oauth2/";
+    private static final String API = "https://my.tado.com/api/v2/";
+
+    /** One room that is heating right now. */
+    static final class Room {
+        final String name;
+        final double inside;   // NaN if unknown
+        final double target;   // NaN if unknown
+        Room(String name, double inside, double target) { this.name = name; this.inside = inside; this.target = target; }
+    }
+
+    private final SharedPreferences prefs;
+    private String accessToken;
+    private long accessExpires;
+
+    Tado(Context context) {
+        prefs = context.getSharedPreferences("tado", Context.MODE_PRIVATE);
+    }
+
+    boolean isConnected() { return !prefs.getString("refresh", "").isEmpty(); }
+
+    String homeName() { return prefs.getString("homeName", ""); }
+
+    String reminderTime() { return prefs.getString("time", "21:45"); }
+
+    void setReminderTime(String hhmm) {
+        if (hhmm != null && hhmm.matches("([01]\\d|2[0-3]):[0-5]\\d")) prefs.edit().putString("time", hhmm).apply();
+    }
+
+    void disconnect() {
+        prefs.edit().remove("refresh").remove("homeId").remove("homeName").remove("device").apply();
+        accessToken = null;
+    }
+
+    // ---------- Sign-in ----------
+
+    /** Starts sign-in. Returns {code, link, expiresIn} for the phone to show. */
+    synchronized JSONObject startSignIn() throws Exception {
+        JSONObject r = post(AUTH + "device_authorize", "client_id=" + CLIENT_ID + "&scope=offline_access");
+        prefs.edit()
+                .putString("device", r.optString("device_code"))
+                .putLong("deviceExpires", System.currentTimeMillis() + r.optLong("expires_in", 300) * 1000)
+                .putLong("interval", Math.max(5, r.optLong("interval", 5)))
+                .apply();
+        return new JSONObject()
+                .put("code", r.optString("user_code"))
+                .put("link", r.optString("verification_uri_complete", r.optString("verification_uri")))
+                .put("expiresIn", r.optLong("expires_in", 300));
+    }
+
+    /** Waits for the household to approve the sign-in. Blocking: run on a background thread. */
+    void finishSignIn() {
+        long interval = prefs.getLong("interval", 5) * 1000;
+        while (System.currentTimeMillis() < prefs.getLong("deviceExpires", 0)) {
+            String device = prefs.getString("device", "");
+            if (device.isEmpty()) return;
+            try { Thread.sleep(interval); } catch (InterruptedException e) { return; }
+            try {
+                JSONObject t = post(AUTH + "token", "client_id=" + CLIENT_ID + "&device_code=" + enc(device)
+                        + "&grant_type=" + enc("urn:ietf:params:oauth:grant-type:device_code"));
+                keepTokens(t);
+                prefs.edit().remove("device").apply();
+                loadHome();
+                Log.i(TAG, "Tado connected: " + homeName());
+                return;
+            } catch (HttpError e) {
+                if (e.body.contains("slow_down")) interval += 5000;
+                else if (!e.body.contains("authorization_pending")) { Log.w(TAG, "Tado sign-in failed: " + e.body); return; }
+            } catch (Exception e) {
+                Log.w(TAG, "Tado sign-in error", e);
+            }
+        }
+    }
+
+    // ---------- Reading the rooms ----------
+
+    /** Rooms that are calling for heat right now. Blocking. */
+    synchronized List<Room> heatingRooms() throws Exception {
+        String home = prefs.getString("homeId", "");
+        if (home.isEmpty()) home = loadHome();
+        JSONArray zones = getArray(API + "homes/" + home + "/zones");
+        JSONObject states = get(API + "homes/" + home + "/zoneStates").optJSONObject("zoneStates");
+        List<Room> rooms = new ArrayList<>();
+        for (int i = 0; i < zones.length(); i++) {
+            JSONObject zone = zones.optJSONObject(i);
+            if (zone == null || !"HEATING".equals(zone.optString("type"))) continue;
+            JSONObject state = states == null ? null : states.optJSONObject(String.valueOf(zone.optInt("id")));
+            if (state == null) continue;
+            JSONObject setting = state.optJSONObject("setting");
+            if (setting == null || !"ON".equals(setting.optString("power"))) continue;
+            JSONObject activity = state.optJSONObject("activityDataPoints");
+            JSONObject power = activity == null ? null : activity.optJSONObject("heatingPower");
+            double percent = power == null ? 0 : power.optDouble("percentage", 0);
+            if (percent <= 0) continue;
+            double target = celsius(setting.optJSONObject("temperature"));
+            JSONObject sensors = state.optJSONObject("sensorDataPoints");
+            double inside = celsius(sensors == null ? null : sensors.optJSONObject("insideTemperature"));
+            rooms.add(new Room(zone.optString("name"), inside, target));
+        }
+        return rooms;
+    }
+
+    private String loadHome() throws Exception {
+        JSONObject me = get(API + "me");
+        JSONArray homes = me.optJSONArray("homes");
+        if (homes == null || homes.length() == 0) throw new Exception("No Tado home on this account");
+        JSONObject h = homes.getJSONObject(0);
+        prefs.edit().putString("homeId", String.valueOf(h.optLong("id"))).putString("homeName", h.optString("name")).apply();
+        return String.valueOf(h.optLong("id"));
+    }
+
+    private static double celsius(JSONObject t) {
+        return t == null ? Double.NaN : t.optDouble("celsius", Double.NaN);
+    }
+
+    // ---------- Tokens and HTTP ----------
+
+    private String token() throws Exception {
+        if (accessToken != null && System.currentTimeMillis() < accessExpires - 30000) return accessToken;
+        String refresh = prefs.getString("refresh", "");
+        if (refresh.isEmpty()) throw new Exception("Tado isn't connected");
+        JSONObject t = post(AUTH + "token", "client_id=" + CLIENT_ID + "&grant_type=refresh_token&refresh_token=" + enc(refresh));
+        keepTokens(t);
+        return accessToken;
+    }
+
+    /** Tado issues a new refresh token each time, so always keep the latest one. */
+    private void keepTokens(JSONObject t) {
+        accessToken = t.optString("access_token");
+        accessExpires = System.currentTimeMillis() + t.optLong("expires_in", 600) * 1000;
+        String refresh = t.optString("refresh_token", "");
+        if (!refresh.isEmpty()) prefs.edit().putString("refresh", refresh).apply();
+    }
+
+    private JSONObject get(String url) throws Exception {
+        return new JSONObject(request("GET", url, null, token()));
+    }
+
+    private JSONArray getArray(String url) throws Exception {
+        return new JSONArray(request("GET", url, null, token()));
+    }
+
+    private static JSONObject post(String url, String form) throws Exception {
+        return new JSONObject(request("POST", url, form, null));
+    }
+
+    static final class HttpError extends Exception {
+        final String body;
+        HttpError(int status, String body) { super("HTTP " + status); this.body = body == null ? "" : body; }
+    }
+
+    private static String request(String method, String url, String form, String bearer) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(15000);
+            c.setRequestMethod(method);
+            c.setRequestProperty("Accept", "application/json");
+            if (bearer != null) c.setRequestProperty("Authorization", "Bearer " + bearer);
+            if (form != null) {
+                c.setDoOutput(true);
+                c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                try (OutputStream out = c.getOutputStream()) { out.write(form.getBytes(UTF8)); }
+            }
+            int status = c.getResponseCode();
+            InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
+            String body = in == null ? "" : read(in);
+            if (status >= 400) throw new HttpError(status, body);
+            return body;
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private static String enc(String s) throws Exception { return URLEncoder.encode(s, "UTF-8"); }
+
+    private static String read(InputStream in) throws Exception {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = in.read(chunk)) > 0) buf.write(chunk, 0, n);
+        in.close();
+        return buf.toString("UTF-8");
+    }
+
+    static String describe(Room r) {
+        if (Double.isNaN(r.inside)) return r.name;
+        return String.format(Locale.UK, "%s  %.0f°", r.name, r.inside);
+    }
+
+}

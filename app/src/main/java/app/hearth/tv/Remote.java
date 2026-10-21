@@ -53,6 +53,11 @@ final class Remote {
         return true;
     }
 
+    /** Shows something on the Hearth page only if it's on screen right now; otherwise drops it. */
+    static synchronized void deliverIfVisible(JSONObject cmd) {
+        if (screen != null && visible && screen.isReady()) screen.runCommand(cmd);
+    }
+
     static void bringToFront(Context context) {
         Intent intent = new Intent(context, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);

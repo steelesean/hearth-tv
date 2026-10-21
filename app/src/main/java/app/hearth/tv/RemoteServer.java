@@ -44,15 +44,19 @@ final class RemoteServer {
     private final Pairing pairing;
     private final AppLauncher launcher;
     private final Assistant assistant;
+    private final Tado tado;
+    private final HeatingReminder heating;
     private final ExecutorService pool = Executors.newFixedThreadPool(4);
     private ServerSocket socket;
     private int port = -1;
 
-    RemoteServer(Context context, Pairing pairing, AppLauncher launcher) {
+    RemoteServer(Context context, Pairing pairing, AppLauncher launcher, Tado tado, HeatingReminder heating) {
         this.context = context.getApplicationContext();
         this.pairing = pairing;
         this.launcher = launcher;
         this.assistant = new Assistant(context);
+        this.tado = tado;
+        this.heating = heating;
     }
 
     int port() { return port; }
@@ -172,6 +176,31 @@ final class RemoteServer {
                 if (req.optBoolean("forget")) Remote.deliver(context, new JSONObject().put("type", "forget"));
                 sendJson(out, 200, new JSONObject().put("ok", true).put("ready", assistant.isReady()));
                 Remote.deliver(context, new JSONObject().put("type", "reload"));
+            } else if ("GET".equals(method) && "/api/tado".equals(path)) {
+                if (!pairing.isPaired(param(query, "token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                sendJson(out, 200, tadoStatus());
+            } else if ("POST".equals(method) && "/api/tado".equals(path)) {
+                JSONObject req = new JSONObject(new String(body, UTF8));
+                if (!pairing.isPaired(req.optString("token"))) {
+                    sendJson(out, 401, new JSONObject().put("ok", false));
+                    return;
+                }
+                String action = req.optString("action");
+                JSONObject res = new JSONObject().put("ok", true);
+                if ("connect".equals(action)) {
+                    res.put("signIn", tado.startSignIn());
+                    new Thread(new Runnable() { @Override public void run() { tado.finishSignIn(); } }, "hearth-tado-signin").start();
+                } else if ("disconnect".equals(action)) {
+                    tado.disconnect();
+                } else if ("test".equals(action)) {
+                    heating.check(true);
+                } else if ("time".equals(action)) {
+                    tado.setReminderTime(req.optString("time"));
+                }
+                sendJson(out, 200, res.put("status", tadoStatus()));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
                 // Lists what's installed so we can tune config.js. Paired phones only.
                 if (!pairing.isPaired(param(query, "token"))) {
@@ -189,6 +218,14 @@ final class RemoteServer {
         } finally {
             try { client.close(); } catch (IOException ignored) {}
         }
+    }
+
+    private JSONObject tadoStatus() throws Exception {
+        return new JSONObject()
+                .put("connected", tado.isConnected())
+                .put("home", tado.homeName())
+                .put("time", tado.reminderTime())
+                .put("overApps", heating.canShowOverApps());
     }
 
     private void serveAsset(OutputStream out, String asset) throws IOException {
