@@ -10,6 +10,7 @@ import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
+import android.util.Log;
 
 /**
  * Makes Hearth the home screen. Fire TV keeps Home and the wake-up screen for Amazon's own
@@ -34,6 +35,7 @@ final class HomeGuard {
     private long stayUntil;
     private long lastChecked;
     private String front = "";
+    private boolean warned;
 
     private final BroadcastReceiver screenOn = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent intent) {
@@ -54,6 +56,7 @@ final class HomeGuard {
     }
 
     void start() {
+        Log.i("HearthHome", "Watching for Amazon's home (usage access: " + canWatch() + ")");
         context.registerReceiver(screenOn, new IntentFilter(Intent.ACTION_SCREEN_ON));
         lastChecked = System.currentTimeMillis() - 5000;
         main.post(poll);
@@ -72,7 +75,11 @@ final class HomeGuard {
     }
 
     private void check() {
-        if (!canWatch()) return;
+        if (!canWatch()) {
+            if (!warned) Log.w("HearthHome", "No usage access, so Home can't be caught");
+            warned = true;
+            return;
+        }
         UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
         long now = System.currentTimeMillis();
         UsageEvents events = usm.queryEvents(lastChecked, now);
@@ -85,10 +92,12 @@ final class HomeGuard {
         }
         if (newFront == null || newFront.equals(front)) return;
         front = newFront;
+        Log.i("HearthHome", "In front: " + newFront);
         if (!AMAZON_HOME.equals(newFront) || now < stayUntil) return;
         if (now - lastSwitch < DOUBLE_PRESS_MS) {
             // Amazon's home came back straight after we left it: they pressed Home again.
             stayUntil = now + STAY_MS;
+            Log.i("HearthHome", "Home pressed twice: staying on Amazon's home");
             return;
         }
         openHearth();
@@ -100,6 +109,11 @@ final class HomeGuard {
         front = context.getPackageName();
         Intent open = new Intent(context, MainActivity.class);
         open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-        context.startActivity(open);
+        try {
+            context.startActivity(open);
+            Log.i("HearthHome", "Switched to Hearth");
+        } catch (Exception e) {
+            Log.w("HearthHome", "Couldn't switch to Hearth", e);
+        }
     }
 }
