@@ -29,11 +29,13 @@ final class HomeGuard {
     private static final long DOUBLE_PRESS_MS = 4000;
     private static final long STAY_MS = 2 * 60 * 1000;
 
+    private static HomeGuard current;
+
     private final Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private long lastSwitch;
     private long stayUntil;
-    private long lastChecked;
+    private long lastEventAt;
     private String front = "";
     private boolean warned;
 
@@ -47,7 +49,7 @@ final class HomeGuard {
     private final Runnable poll = new Runnable() {
         @Override public void run() {
             check();
-            main.postDelayed(this, 1000);
+            main.postDelayed(this, 500);
         }
     };
 
@@ -58,13 +60,27 @@ final class HomeGuard {
     void start() {
         Log.i("HearthHome", "Watching for Amazon's home (usage access: " + canWatch() + ")");
         context.registerReceiver(screenOn, new IntentFilter(Intent.ACTION_SCREEN_ON));
-        lastChecked = System.currentTimeMillis() - 5000;
+        lastEventAt = System.currentTimeMillis();
+        current = this;
         main.post(poll);
     }
 
     void stop() {
         try { context.unregisterReceiver(screenOn); } catch (Exception ignored) { }
         main.removeCallbacks(poll);
+        if (current == this) current = null;
+    }
+
+    /**
+     * Hearth was on screen and someone pressed Home (or opened Amazon's menus). Come straight
+     * back, unless it's the second press in a row.
+     */
+    static void leftByUser() {
+        final HomeGuard g = current;
+        if (g == null) return;
+        g.main.postDelayed(new Runnable() {
+            @Override public void run() { g.onAmazonHome(System.currentTimeMillis()); }
+        }, 400);
     }
 
     /** Whether usage access has been granted, so Home can be caught. */
@@ -82,18 +98,28 @@ final class HomeGuard {
         }
         UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
         long now = System.currentTimeMillis();
-        UsageEvents events = usm.queryEvents(lastChecked, now);
-        lastChecked = now;
+        // Fire OS can report a switch a few seconds late, so look back a little and only act
+        // on events newer than the last one we handled.
+        UsageEvents events = usm.queryEvents(now - 15000, now + 1000);
         UsageEvents.Event e = new UsageEvents.Event();
         String newFront = null;
+        long newFrontAt = 0;
         while (events.hasNextEvent()) {
             events.getNextEvent(e);
-            if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND) newFront = e.getPackageName();
+            if (e.getEventType() != UsageEvents.Event.MOVE_TO_FOREGROUND || e.getTimeStamp() <= lastEventAt) continue;
+            lastEventAt = e.getTimeStamp();
+            newFront = e.getPackageName();
+            newFrontAt = e.getTimeStamp();
         }
         if (newFront == null || newFront.equals(front)) return;
         front = newFront;
         Log.i("HearthHome", "In front: " + newFront);
-        if (!AMAZON_HOME.equals(newFront) || now < stayUntil) return;
+        // A late report of Amazon's home from before we last switched is old news.
+        if (AMAZON_HOME.equals(newFront) && newFrontAt > lastSwitch) onAmazonHome(now);
+    }
+
+    private void onAmazonHome(long now) {
+        if (now < stayUntil) return;
         if (now - lastSwitch < DOUBLE_PRESS_MS) {
             // Amazon's home came back straight after we left it: they pressed Home again.
             stayUntil = now + STAY_MS;

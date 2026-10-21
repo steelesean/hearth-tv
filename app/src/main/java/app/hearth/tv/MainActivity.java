@@ -73,6 +73,12 @@ public class MainActivity extends Activity {
         refreshCaches();
     }
 
+    /** Called when someone leaves Hearth themselves, e.g. by pressing Home. */
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        HomeGuard.leftByUser();
+    }
+
     @Override protected void onPause() {
         Remote.setVisible(false);
         super.onPause();

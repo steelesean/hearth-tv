@@ -51,7 +51,7 @@ final class AppLauncher {
             try {
                 Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
                 // Open the app fresh: iPlayer ignores the link if it's resumed mid-browse.
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
                 if (start(intent)) return "ok";
             } catch (URISyntaxException e) {
                 Log.w(TAG, "Bad link for " + key + ": " + url, e);
@@ -61,7 +61,7 @@ final class AppLauncher {
         if (url != null && !url.isEmpty()) {
             Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             view.setPackage(pkg);
-            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
             if (!context.getPackageManager().queryIntentActivities(view, 0).isEmpty() && start(view)) {
                 return "ok";
             }
@@ -114,7 +114,7 @@ final class AppLauncher {
         PackageManager pm = context.getPackageManager();
         Intent intent = pm.getLeanbackLaunchIntentForPackage(pkg);
         if (intent == null) intent = pm.getLaunchIntentForPackage(pkg);
-        if (intent != null) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (intent != null) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
         return intent;
     }
 

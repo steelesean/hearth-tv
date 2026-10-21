@@ -13,7 +13,8 @@ public class UpdateReceiver extends BroadcastReceiver {
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirm != null) {
-                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // NO_USER_ACTION: so the home screen guard doesn't pull Hearth back over the install screen.
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
                 context.startActivity(confirm);
             }
         } else if (status != PackageInstaller.STATUS_SUCCESS) {
