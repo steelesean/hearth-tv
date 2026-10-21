@@ -199,6 +199,8 @@ final class RemoteServer {
                     heating.check(true);
                 } else if ("time".equals(action)) {
                     tado.setReminderTime(req.optString("time"));
+                } else if ("minTarget".equals(action)) {
+                    tado.setMinTarget(req.optDouble("minTarget", 18));
                 }
                 sendJson(out, 200, res.put("status", tadoStatus()));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
@@ -225,6 +227,7 @@ final class RemoteServer {
                 .put("connected", tado.isConnected())
                 .put("home", tado.homeName())
                 .put("time", tado.reminderTime())
+                .put("minTarget", tado.minTarget())
                 .put("overApps", heating.canShowOverApps());
     }
 

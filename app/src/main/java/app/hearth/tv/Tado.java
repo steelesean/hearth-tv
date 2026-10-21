@@ -31,12 +31,25 @@ final class Tado {
     private static final String AUTH = "https://login.tado.com/oauth2/";
     private static final String API = "https://my.tado.com/api/v2/";
 
-    /** One room that is heating right now. */
+    /** One heating room and what Tado says about it. */
     static final class Room {
         final String name;
+        final boolean on;      // switched on (power ON)
         final double inside;   // NaN if unknown
-        final double target;   // NaN if unknown
-        Room(String name, double inside, double target) { this.name = name; this.inside = inside; this.target = target; }
+        final double target;   // NaN if unknown, or when off
+        final double power;    // 0-100, how hard it's heating right now
+        Room(String name, boolean on, double inside, double target, double power) {
+            this.name = name; this.on = on; this.inside = inside; this.target = target; this.power = power;
+        }
+        /** "Left on": switched on and set to a warm temperature, whether or not it's warm yet. */
+        boolean leftOn(double minTarget) { return on && !Double.isNaN(target) && target >= minTarget; }
+    }
+
+    /** Rooms counted as left on are set to at least this. Overnight setbacks sit lower. */
+    double minTarget() { return prefs.getFloat("minTarget", 18f); }
+
+    void setMinTarget(double c) {
+        if (c >= 5 && c <= 25) prefs.edit().putFloat("minTarget", (float) c).apply();
     }
 
     private final SharedPreferences prefs;
@@ -104,8 +117,15 @@ final class Tado {
 
     // ---------- Reading the rooms ----------
 
-    /** Rooms that are calling for heat right now. Blocking. */
+    /** Rooms left on, by the minTarget rule. Blocking. */
     synchronized List<Room> heatingRooms() throws Exception {
+        List<Room> out = new ArrayList<>();
+        for (Room r : allRooms()) if (r.leftOn(minTarget())) out.add(r);
+        return out;
+    }
+
+    /** Every heating room with its state. Blocking. */
+    synchronized List<Room> allRooms() throws Exception {
         String home = prefs.getString("homeId", "");
         if (home.isEmpty()) home = loadHome();
         JSONArray zones = getArray(API + "homes/" + home + "/zones");
@@ -117,15 +137,14 @@ final class Tado {
             JSONObject state = states == null ? null : states.optJSONObject(String.valueOf(zone.optInt("id")));
             if (state == null) continue;
             JSONObject setting = state.optJSONObject("setting");
-            if (setting == null || !"ON".equals(setting.optString("power"))) continue;
+            boolean on = setting != null && "ON".equals(setting.optString("power"));
             JSONObject activity = state.optJSONObject("activityDataPoints");
             JSONObject power = activity == null ? null : activity.optJSONObject("heatingPower");
             double percent = power == null ? 0 : power.optDouble("percentage", 0);
-            if (percent <= 0) continue;
-            double target = celsius(setting.optJSONObject("temperature"));
+            double target = on ? celsius(setting.optJSONObject("temperature")) : Double.NaN;
             JSONObject sensors = state.optJSONObject("sensorDataPoints");
             double inside = celsius(sensors == null ? null : sensors.optJSONObject("insideTemperature"));
-            rooms.add(new Room(zone.optString("name"), inside, target));
+            rooms.add(new Room(zone.optString("name"), on, inside, target, percent));
         }
         return rooms;
     }
@@ -213,9 +232,14 @@ final class Tado {
         return buf.toString("UTF-8");
     }
 
+    /** "Living room  set to 21°, heating" for the card. */
     static String describe(Room r) {
-        if (Double.isNaN(r.inside)) return r.name;
-        return String.format(Locale.UK, "%s  %.0f°", r.name, r.inside);
+        StringBuilder sb = new StringBuilder(r.name);
+        if (!r.on) return sb.append("  off").toString();
+        if (!Double.isNaN(r.target)) sb.append(String.format(Locale.UK, "  set to %.0f°", r.target));
+        if (r.power > 0) sb.append(", heating");
+        else if (!Double.isNaN(r.inside)) sb.append(String.format(Locale.UK, ", %.0f° now", r.inside));
+        return sb.toString();
     }
 
 }

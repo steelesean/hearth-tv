@@ -74,10 +74,14 @@ final class HeatingReminder {
                     List<Tado.Room> rooms = tado.heatingRooms();
                     if (rooms.isEmpty() && !test) return;
                     if (rooms.isEmpty()) {
-                        title = "Nothing’s heating";
-                        body = "All rooms are off or up to temperature.";
+                        // A test shows every room, so we can see what Tado reports.
+                        List<Tado.Room> all = tado.allRooms();
+                        title = String.format(Locale.UK, "No rooms left on (set to %.0f° or more)", tado.minTarget());
+                        StringBuilder sb = new StringBuilder();
+                        for (Tado.Room r : all) sb.append(sb.length() == 0 ? "" : "\n").append(Tado.describe(r));
+                        body = all.isEmpty() ? "Tado didn’t list any heating rooms for this home." : sb.toString();
                     } else {
-                        title = rooms.size() == 1 ? "1 room still heating" : rooms.size() + " rooms still heating";
+                        title = rooms.size() == 1 ? "1 room still on" : rooms.size() + " rooms still on";
                         StringBuilder sb = new StringBuilder();
                         for (Tado.Room r : rooms) sb.append(sb.length() == 0 ? "" : "\n").append(Tado.describe(r));
                         body = sb.toString();
