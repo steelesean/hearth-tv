@@ -18,6 +18,7 @@ public class RemoteService extends Service {
     private RemoteServer server;
     private HeatingReminder heating;
     private Thread background;
+    private HomeGuard home;
 
     static void start(Context context) {
         Intent intent = new Intent(context, RemoteService.class);
@@ -42,6 +43,8 @@ public class RemoteService extends Service {
         final KidCheck kids = new KidCheck(this);
         heating = new HeatingReminder(this, tado, weather);
         heating.start();
+        home = new HomeGuard(this);
+        home.start();
         server = new RemoteServer(this, pairing, new AppLauncher(this), tado, heating, weather);
         // Hourly housekeeping: look for updates, check the children's tiles, refresh the weather.
         background = new Thread(new Runnable() {
@@ -76,6 +79,7 @@ public class RemoteService extends Service {
         if (server != null) server.stop();
         if (heating != null) heating.stop();
         if (background != null) background.interrupt();
+        if (home != null) home.stop();
         running = null;
         super.onDestroy();
     }

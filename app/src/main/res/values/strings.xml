@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hearth</string>
-    <string name="home_watcher_label">Hearth as home screen</string>
-    <string name="home_watcher_description">Opens Hearth whenever Fire TV shows its own home screen. Press Home twice to stay on Amazon’s home for two minutes.</string>
 </resources>
