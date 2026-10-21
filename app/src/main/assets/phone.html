@@ -142,6 +142,8 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
           <button class="btn" id="tadoConnect" type="button">Connect Tado</button>
           <label for="tadoTime">Remind us at</label>
           <input id="tadoTime" type="time" value="21:45">
+          <label for="tadoMin">Count a room as left on if it’s set to at least (°C)</label>
+          <input id="tadoMin" type="number" inputmode="decimal" min="5" max="25" step="0.5" value="18">
           <button class="btn ghost" id="tadoTest" type="button">Show the reminder now</button>
           <p class="hint" id="tadoOverlayHint" hidden>The reminder can only appear over other apps once Fire TV allows it. Ask the Claude on your Mac to run: adb shell appops set app.hearth.tv SYSTEM_ALERT_WINDOW allow</p>
           <button class="btn ghost" id="tadoDisconnect" type="button" hidden>Disconnect Tado</button>
@@ -291,6 +293,7 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     $('tadoTest').hidden = !st.connected;
     $('tadoOverlayHint').hidden = !!st.overApps;
     if (st.time) $('tadoTime').value = st.time;
+    if (st.minTarget) $('tadoMin').value = st.minTarget;
     if (st.connected) { $('tadoSignIn').hidden = true; clearInterval(tadoPoll); }
   }
   function tadoLoad() {
@@ -316,6 +319,7 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
   });
   $('tadoTest').addEventListener('click', function () { tadoDo('test').then(function () { toast('Look at the TV'); }); });
   $('tadoTime').addEventListener('change', function () { tadoDo('time', { time: $('tadoTime').value }).then(function () { toast('Reminder time saved'); }); });
+  $('tadoMin').addEventListener('change', function () { tadoDo('minTarget', { minTarget: Number($('tadoMin').value) }).then(function () { toast('Saved'); }); });
   $('tadoDisconnect').addEventListener('click', function () { tadoDo('disconnect').then(function () { toast('Tado disconnected'); }); });
 
   // Start: check the saved pairing still works
