@@ -46,7 +46,7 @@ final class Tado {
     }
 
     /** Rooms counted as left on are set to at least this. Overnight setbacks sit lower. */
-    double minTarget() { return prefs.getFloat("minTarget", 18f); }
+    double minTarget() { return prefs.getFloat("minTarget", 17f); }
 
     void setMinTarget(double c) {
         if (c >= 5 && c <= 25) prefs.edit().putFloat("minTarget", (float) c).apply();

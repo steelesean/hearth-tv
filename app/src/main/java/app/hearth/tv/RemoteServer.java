@@ -200,7 +200,7 @@ final class RemoteServer {
                 } else if ("time".equals(action)) {
                     tado.setReminderTime(req.optString("time"));
                 } else if ("minTarget".equals(action)) {
-                    tado.setMinTarget(req.optDouble("minTarget", 18));
+                    tado.setMinTarget(req.optDouble("minTarget", 17));
                 }
                 sendJson(out, 200, res.put("status", tadoStatus()));
             } else if ("GET".equals(method) && "/api/apps".equals(path)) {
