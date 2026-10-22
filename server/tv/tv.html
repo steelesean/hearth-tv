@@ -170,7 +170,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
 .energy .e-sum { display: flex; align-items: flex-end; margin-top: 18px; }
 .energy .e-total { width: 420px; flex: none; }
-.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; font-weight: 400; }
+.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; font-weight: 400; }
 .energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
 .energy .e-total small.e-month { color: var(--ink-soft); margin-top: 6px; line-height: 1.35; }
 .energy .e-figs { flex: 1; display: flex; }
@@ -179,7 +179,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-fig .k i { display: inline-block; width: 16px; height: 16px; border-radius: 5px; margin-right: 10px; vertical-align: -2px; }
 .energy .e-fig .v { font: 500 40px/1.1 var(--font-ui); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .energy .e-chart { margin-top: 20px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 20px 32px 14px 28px; display: flex; flex-direction: column; }
-.energy .e-plot { position: relative; height: 320px; margin-left: 64px; }
+.energy .e-plot { position: relative; height: 290px; margin-left: 64px; }
 .energy .e-grid-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--line); }
 .energy .e-grid-line span { position: absolute; right: 100%; margin-right: 14px; top: -13px; font-size: 18px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .energy .e-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; }
@@ -193,12 +193,15 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-days { display: flex; margin-left: 64px; margin-top: 12px; }
 .energy .e-days span { flex: 1; margin: 0 30px; text-align: center; font-size: 21px; color: var(--ink-soft); }
 .energy .e-days span b { color: var(--ink); font-weight: 600; }
-.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; }
+.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line, so picking a day never moves the cards */
 .energy .e-detail.odd { color: #B5542D; }
 .energy .e-cards { display: flex; margin-top: 18px; flex: 1; min-height: 0; }
 .energy .e-card { flex: 1; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 18px 24px; text-align: left; font-family: var(--font-ui); color: var(--ink); overflow: hidden; display: flex; flex-direction: column; }
 .energy .e-card + .e-card { margin-left: 24px; }
+.energy .e-card > * { flex-shrink: 0; }   /* overflow shows as the card overflowing, so fitCards() can trim it */
 .energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
+.energy .e-card h4.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.energy .e-card p.one { -webkit-line-clamp: 1; }
 .energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
 .energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .energy .e-card .how { font-size: 17px; color: var(--ink-soft); margin-top: auto; padding-top: 8px; }
@@ -214,14 +217,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .eday .usual::before, .energy .eday .usual::after { content: ""; position: absolute; top: -2px; width: 12px; border-top: 4px solid var(--ink); }
 .energy .eday .usual::before { left: 0; } .energy .eday .usual::after { right: 0; }
 .energy .e-detail .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
-.energy .e-trend { display: flex; align-items: flex-end; height: 64px; margin-top: 12px; }
+.energy .e-trend { display: flex; align-items: flex-end; height: 44px; margin-top: 10px; }
 .energy .e-trend i { flex: 1; margin: 0 4px; background: var(--line); border-radius: 5px 5px 2px 2px; }
 .energy .e-trend i.now { background: var(--focus); }
 .energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
 .energy .e-card p.two { -webkit-line-clamp: 2; }
 .energy .e-rooms td.cold { color: #B5542D; }
 .energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
-.energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
+.energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .energy .e-foot .e-eff { font-size: 20px; font-weight: 600; color: var(--ink-2); margin-right: 10px; }
 [hidden] { display: none !important; }
 </style>
@@ -316,7 +319,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <div class="e-made" id="eMade"></div>
     </div>
     <div class="e-sum">
-      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small><small id="eMonth" class="e-month"></small></div>
+      <div class="e-total"><b id="eTotal"></b><small id="eSub"></small><small id="eMonth" class="e-month"></small></div>
       <div class="e-figs" id="eFigs"></div>
     </div>
     <div class="e-warn" id="eWarn" hidden></div>
@@ -3642,12 +3645,12 @@ var qrcode = function() {
     var sources = ['your Octopus meter'];
     if (rooms) sources.push('Tado');
     if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
-    $('eFoot').innerHTML = effLine(d.efficiency) + esc('Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.');
+    $('eFoot').innerHTML = effLine(d.efficiency) + esc('Calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ', then explained by Claude.');
     $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
     $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
 
     // The chart: a £ scale with gridlines, one stacked bar a day.
-    var plot = $('ePlot'), area = 320 - 38;            // leave room above for the day totals
+    var plot = $('ePlot'), area = 290 - 38;            // leave room above for the day totals
     var max = Math.max.apply(null, w.days.map(dayTotal).concat(w.days.map(function (x) { return x.usual || 0; }), [0.5]));
     var step = niceStep(max), top = Math.ceil(max / step) * step;
     [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
@@ -3681,7 +3684,7 @@ var qrcode = function() {
     var cards = $('eCards'); cards.innerHTML = '';
     var c1 = el('div', 'e-card');
     var tr = d.trend || [];
-    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
+    c1.innerHTML = '<div class="e-label">The week</div><h4 class="clamp"></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
     c1.querySelector('h4').textContent = note.headline || '';
     c1.querySelector('p').textContent = note.summary || '';
     if (tr.length > 2) {
@@ -3690,7 +3693,7 @@ var qrcode = function() {
       var strip = el('div', 'e-trend');
       tr.forEach(function (t, i) {
         var bar = el('i', i === tr.length - 1 ? 'now' : '');
-        bar.style.height = Math.max(4, Math.round(t.total / tmax * 64)) + 'px';
+        bar.style.height = Math.max(4, Math.round(t.total / tmax * 44)) + 'px';
         strip.appendChild(bar);
       });
       c1.appendChild(strip);
@@ -3741,6 +3744,23 @@ var qrcode = function() {
         + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
       cards.appendChild(c3);
     }
+    fitCards();
+  }
+  // Live text varies in length, so trim each card until it fits rather than cutting it off:
+  // the least useful part goes first (trend key, then a line of text, then the trend, a room, the note).
+  function fitCards() {
+    var steps = [
+      // The trend only makes sense with its key, so they go together; the note gets the room back.
+      function (c) { var had = drop(c, '.e-trend-k') | drop(c, '.e-trend'); var p = c.querySelector('p'); if (had && p) p.className = p.className.replace(/\btwo\b/, ''); return !!had; },
+      function (c) { var p = c.querySelector('p'); if (p && !/\bone\b/.test(p.className) && !/\btwo\b/.test(p.className)) { p.className += ' two'; return true; } return false; },
+      function (c) { var rows = c.querySelectorAll('.e-rooms tr'); if (rows.length > 3) { rows[rows.length - 2].parentNode.removeChild(rows[rows.length - 2]); return true; } return false; },
+      function (c) { return drop(c, '.how'); },
+      function (c) { var p = c.querySelector('p'); if (p && !/\bone\b/.test(p.className)) { p.className = p.className.replace(/\btwo\b/, '') + ' one'; return true; } return false; },
+    ];
+    function drop(c, sel) { var x = c.querySelector(sel); if (x) { x.parentNode.removeChild(x); return true; } return false; }
+    [].slice.call($('eCards').children).forEach(function (c) {
+      for (var i = 0; i < steps.length && c.scrollHeight > c.clientHeight + 1; i++) steps[i](c);
+    });
   }
   // One quiet line on the heating card: the before-and-after since the insulation. The chart lives on the web dashboard.
   function effLine(ef) {
