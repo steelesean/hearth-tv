@@ -33,18 +33,19 @@ export async function account() {
   const elec = (property.electricity_meter_points || []).find((m) => !m.is_export);
   const gas = (property.gas_meter_points || [])[0];
   return {
+    postcode: property.postcode || null,
     elec: elec && { id: elec.mpan, serials: (elec.meters || []).map((m) => m.serial_number), agreements: elec.agreements || [] },
     gas: gas && { id: gas.mprn, serials: (gas.meters || []).map((m) => m.serial_number), agreements: gas.agreements || [] },
   };
 }
 
 /** Half-hourly readings between two dates, from whichever meter serial has data. */
-export async function consumption(kind, point, from, to) {
+export async function consumption(kind, point, from, to, groupBy = "") {
   const base = kind === "elec" ? "/electricity-meter-points/" : "/gas-meter-points/";
   for (const serial of point.serials) {
     const rows = await all(
       base + point.id + "/meters/" + serial + "/consumption/?page_size=25000&order_by=period" +
-        "&period_from=" + from.toISOString() + "&period_to=" + to.toISOString(),
+        "&period_from=" + from.toISOString() + "&period_to=" + to.toISOString() + (groupBy ? "&group_by=" + groupBy : ""),
       { auth: true }
     );
     if (rows.length) return rows.map((r) => ({ t: new Date(r.interval_start).getTime(), v: Number(r.consumption) }));

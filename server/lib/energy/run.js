@@ -6,6 +6,7 @@ import { weeklyNote, plainNote } from "./note.js";
 import { loadFeedback, mergeDispatches } from "./store.js";
 import { chargingByHour } from "./ohme.js";
 import { mileage, TRIP_METER } from "./polestar.js";
+import { heatingEfficiency } from "./efficiency.js";
 import { heatHistory } from "./tado.js";
 import { local } from "./analyse.js";
 
@@ -119,6 +120,23 @@ export async function refresh(now = Date.now()) {
     elec, gas, elecPricing, gasPricing, alternatives, now, heat, roomTemps, ohme, carReadings, tripMeter: TRIP_METER,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
+  // Heating efficiency before and after the roof insulation, from up to two years of daily gas.
+  try {
+    facts.efficiency = await heatingEfficiency(meters, gasPricing.at(-1)?.rates?.unit?.at(-1)?.p, now);
+  } catch (e) {
+    facts.efficiency = { available: false, reason: "Couldn't work it out: " + e.message };
+  }
+  const ef = facts.efficiency;
+  if (ef.available) {
+    facts.candidates.push({
+      id: "insulation-info",
+      per_year_gbp: 0,
+      facts: `Since the ${ef.change.what} in January, the house uses ${ef.after.kwhPerDegreeDay} kWh of gas per degree day of cold, against ${ef.before.kwhPerDegreeDay} before: ${Math.abs(ef.change.pct)}% ${ef.change.pct <= 0 ? "less" : "more"} for the same weather.`
+        + (ef.thisSeason ? ` This autumn so far (${ef.thisSeason.days} cold days) it used ${ef.thisSeason.actualKwh} kWh, where the house as it was would have used about ${ef.thisSeason.beforeKwh} kWh.` : "")
+        + (ef.perYear?.gbp != null ? ` Over a year like the last one, that's about ${ef.perYear.kwh} kWh, or £${ef.perYear.gbp} at today's gas rate.` : ""),
+      how_we_know: `Daily gas from Octopus against daily average temperatures for ${ef.area || "the home"} (Open-Meteo), ${ef.before.days} cold days before and ${ef.after.days} after. Anything else that changed, like thermostat settings or who was home, is mixed in.`,
+    });
+  }
   // Leave out anything the household said they already do, or that isn't for them.
   const feedback = await loadFeedback().catch(() => ({}));
   facts.dismissed = facts.candidates.filter((c) => feedback[c.id] && now - Date.parse(feedback[c.id].at) < QUIET_FOR).map((c) => c.id);
