@@ -164,47 +164,57 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
 .stage.kids-mode .kid { height: 250px; }
 .stage.kids-mode #modeBtn .dot { background: var(--focus); }
-/* Energy: a full screen of its own, opened from the Energy tile */
-.energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 56px 96px 40px; box-sizing: border-box; display: flex; flex-direction: column; }
+/* Energy: a full screen of its own, opened from the Energy tile. Everything lines up on one
+   column grid: header, the five figures (which are also the chart key), the chart, three cards. */
+.energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
 .energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
 .energy .e-title { font-size: 30px; font-weight: 500; }
-.energy .e-title span { color: var(--ink-soft); font-size: 24px; margin-left: 20px; font-weight: 400; }
+.energy .e-title span { color: var(--ink-soft); font-size: 26px; margin-left: 18px; font-weight: 400; }
 .energy .e-made { font-size: 20px; color: var(--ink-soft); }
-.energy .e-grid { display: flex; margin-top: 26px; flex: 1; min-height: 0; }
-.energy .e-left { flex: 1.1; min-width: 0; margin-right: 56px; display: flex; flex-direction: column; }
-.energy .e-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.energy .e-label { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); }
-.energy .e-total { font: 400 104px/1 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; }
-.energy .e-sub { font-size: 26px; color: var(--ink-2); margin-top: 10px; }
-.energy .e-split { font-size: 22px; color: var(--ink-soft); margin-top: 8px; }
-.energy .e-chart { margin-top: 22px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 22px 28px 18px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.energy .e-key { font-size: 18px; color: var(--ink-soft); }
-.energy .e-key i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin: 0 6px 0 16px; vertical-align: -1px; }
-.energy .e-bars { flex: 1; display: flex; align-items: flex-end; margin-top: 10px; min-height: 0; }
-.energy .eday { flex: 1; margin: 0 9px; background: transparent; border: 0; border-radius: 14px; padding: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; font-family: var(--font-ui); color: var(--ink); }
-.energy .eday .tot { font-size: 21px; font-weight: 600; text-align: center; margin-bottom: 6px; }
+.energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
+.energy .e-sum { display: flex; align-items: flex-end; margin-top: 18px; }
+.energy .e-total { width: 420px; flex: none; }
+.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; font-weight: 400; }
+.energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
+.energy .e-figs { flex: 1; display: flex; }
+.energy .e-fig { flex: 1; border-left: 2px solid var(--line); padding: 2px 0 4px 22px; }
+.energy .e-fig .k { font-size: 19px; color: var(--ink-soft); white-space: nowrap; }
+.energy .e-fig .k i { display: inline-block; width: 16px; height: 16px; border-radius: 5px; margin-right: 10px; vertical-align: -2px; }
+.energy .e-fig .v { font: 500 40px/1.1 var(--font-ui); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.energy .e-chart { margin-top: 20px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 20px 32px 14px 28px; display: flex; flex-direction: column; }
+.energy .e-plot { position: relative; height: 320px; margin-left: 64px; }
+.energy .e-grid-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--line); }
+.energy .e-grid-line span { position: absolute; right: 100%; margin-right: 14px; top: -13px; font-size: 18px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.energy .e-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; }
+.energy .eday { flex: 1; margin: 0 30px; background: transparent; border: 0; border-radius: 12px; padding: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; font-family: var(--font-ui); color: var(--ink); position: relative; }
+.energy .eday .tot { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
 .energy .eday.odd .tot { color: #B5542D; }
-.energy .eday .seg { display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; color: #1F2321; overflow: hidden; margin-top: 2px; }
-.energy .eday .seg:first-of-type { border-radius: 10px 10px 0 0; }
+.energy .eday .seg { display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 600; color: #1F2321; overflow: hidden; border-top: 2px solid var(--surface); }
+.energy .eday .seg:first-of-type { border-radius: 10px 10px 0 0; border-top: 0; }
 .energy .eday .seg:last-child { border-radius: 0 0 4px 4px; }
 .energy .eday.is-focus { transform: none; box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px var(--focus); }
-.energy .e-days { display: flex; margin-top: 10px; }
-.energy .e-days span { flex: 1; margin: 0 9px; text-align: center; font-size: 20px; color: var(--ink-soft); }
-.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 58px; line-height: 1.35; }
+.energy .e-days { display: flex; margin-left: 64px; margin-top: 12px; }
+.energy .e-days span { flex: 1; margin: 0 30px; text-align: center; font-size: 21px; color: var(--ink-soft); }
+.energy .e-days span b { color: var(--ink); font-weight: 600; }
+.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; }
 .energy .e-detail.odd { color: #B5542D; }
-.energy .e-card { background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 22px 28px; margin-top: 16px; text-align: left; font-family: var(--font-ui); color: var(--ink); }
-.energy .e-card h4 { display: flex; justify-content: space-between; margin: 0; font: 500 32px/1.15 var(--font-display); }
-.energy .e-card h4 span { font: 600 26px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 16px; }
-.energy .e-card p { margin: 8px 0 0; font-size: 22px; line-height: 1.4; color: var(--ink-2); }
-.energy .e-card .how { font-size: 18px; color: var(--ink-soft); margin-top: 8px; }
+.energy .e-cards { display: flex; margin-top: 18px; flex: 1; min-height: 0; }
+.energy .e-card { flex: 1; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 18px 24px; text-align: left; font-family: var(--font-ui); color: var(--ink); overflow: hidden; display: flex; flex-direction: column; }
+.energy .e-card + .e-card { margin-left: 24px; }
+.energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
+.energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
+.energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.energy .e-card .how { font-size: 17px; color: var(--ink-soft); margin-top: auto; padding-top: 8px; }
 .energy .e-verdicts { display: flex; margin-top: 12px; }
-.energy .e-verdicts > * + * { margin-left: 14px; }
-.energy .e-rooms td { padding: 6px 0; font-size: 22px; }
-.energy .e-rooms td.n { text-align: right; white-space: nowrap; }
-.energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 18px; }
-.energy .e-rooms .track i { display: block; height: 100%; background: #6F7FA8; border-radius: 6px; }
-.energy .e-foot { font-size: 18px; color: var(--ink-soft); margin-top: 16px; }
-.energy .e-warn { color: #B5542D; font-size: 22px; margin-top: 8px; }
+.energy .e-verdicts > * + * { margin-left: 12px; }
+.energy .e-verdicts .verdict { height: 48px; font-size: 20px; }
+.energy .e-rooms { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.energy .e-rooms td { padding: 4px 0; font-size: 20px; white-space: nowrap; }
+.energy .e-rooms td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 14px; }
+.energy .e-rooms .track i { display: block; height: 100%; border-radius: 6px; }
+.energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
+.energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -300,22 +310,17 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <div class="e-title">Energy<span id="eRange"></span></div>
       <div class="e-made" id="eMade"></div>
     </div>
-    <div class="e-grid">
-      <div class="e-left">
-        <div class="e-label">THIS WEEK</div>
-        <div class="e-total" id="eTotal"></div>
-        <div class="e-sub" id="eSub"></div>
-        <div class="e-split" id="eSplit"></div>
-        <div class="e-warn" id="eWarn" hidden></div>
-        <div class="e-chart">
-          <div class="e-key" id="eKey"></div>
-          <div class="e-bars" id="eBars"></div>
-          <div class="e-days" id="eDays"></div>
-          <div class="e-detail" id="eDetail"></div>
-        </div>
-      </div>
-      <div class="e-right" id="eRight"></div>
+    <div class="e-sum">
+      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small></div>
+      <div class="e-figs" id="eFigs"></div>
     </div>
+    <div class="e-warn" id="eWarn" hidden></div>
+    <div class="e-chart">
+      <div class="e-plot" id="ePlot"><div class="e-bars" id="eBars"></div></div>
+      <div class="e-days" id="eDays"></div>
+      <div class="e-detail" id="eDetail"></div>
+    </div>
+    <div class="e-cards" id="eCards"></div>
     <div class="e-foot" id="eFoot"></div>
   </div>
 
@@ -3447,7 +3452,9 @@ var qrcode = function() {
   function dayTotal(x) { return dayParts(x).reduce(function (a, p) { return a + p[1]; }, 0); }
   function dayLine(x) {
     var name = new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-    return name + ': ' + dayParts(x).map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+    var rank = { h: 0, g: 1, w: 2, c: 3, f: 4 };
+    var parts = dayParts(x).slice().sort(function (a, b) { return rank[a[0]] - rank[b[0]]; });
+    return name + ': ' + money(dayTotal(x)) + '. ' + parts.map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
   }
   function openEnergy() {
     if (!energy) { say('Energy isn’t ready yet', 'It’s worked out each morning. Try again later.', true); return; }
@@ -3456,83 +3463,106 @@ var qrcode = function() {
     setFocus($('eBars').children[$('eBars').children.length - 1] || items()[0]);
     fetchEnergy();
   }
+  function niceStep(max) {
+    var steps = [0.5, 1, 2, 2.5, 5, 10, 20], i;
+    for (i = 0; i < steps.length; i++) if (max / steps[i] <= 5) return steps[i];
+    return 50;
+  }
   function renderEnergy() {
     var d = energy, w = d.week, note = d.note || {};
     $('eRange').textContent = w.label;
     $('eMade').textContent = 'Worked out ' + new Date(d.generatedAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-    $('eTotal').textContent = money(w.total);
-    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(w.elec) + ', ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' under' : ' over') + ' your usual week' : '';
+
+    // The five figures: the same parts as the bars, so they add up to the total exactly.
+    var sums = {}, order = ['h', 'g', 'w', 'c', 'f'];
+    w.days.forEach(function (x) { dayParts(x).forEach(function (p) { sums[p[0]] = (sums[p[0]] || 0) + p[1]; }); });
+    var total = order.reduce(function (a, k) { return a + (sums[k] || 0); }, 0);
+    $('eTotal').textContent = money(total);
+    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' less' : ' more') + ' than a usual week' : '';
+    $('eFigs').innerHTML = order.filter(function (k) { return sums[k] > 0; }).map(function (k) {
+      var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
+      return '<div class="e-fig"><div class="k"><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</div><div class="v">' + money(sums[k]) + '</div></div>';
+    }).join('');
     var rooms = d.heating && d.heating.week;
-    $('eSplit').textContent = 'House ' + money(w.house) + ' · Car ' + money(w.car) + (d.hasGas ? (rooms ? ' · Heating ' + money(rooms.heating) + ' · Hot water and cooking ' + money(rooms.hotWaterAndCooking) : ' · Gas ' + money(w.gas)) : '');
     var sources = ['your Octopus meter'];
     if (rooms) sources.push('Tado');
     if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
-    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(sources.length > 2 ? ', ' : ' and ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
+    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
     $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
     $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
 
-    var used = {}; w.days.forEach(function (x) { dayParts(x).forEach(function (p) { used[p[0]] = 1; }); });
-    $('eKey').innerHTML = ['h', 'g', 'w', 'c', 'f'].filter(function (k) { return used[k]; })
-      .map(function (k) { return '<i style="background:' + SEG[k][0] + '"></i>' + esc(k === 'g' && !used.w ? 'Gas' : SEG[k][1]); }).join('');
-
-    var max = Math.max.apply(null, w.days.map(dayTotal).concat([0.5])), area = 330;
+    // The chart: a £ scale with gridlines, one stacked bar a day.
+    var plot = $('ePlot'), area = 320 - 38;            // leave room above for the day totals
+    var max = Math.max.apply(null, w.days.map(dayTotal).concat([0.5]));
+    var step = niceStep(max), top = Math.ceil(max / step) * step;
+    [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
+    for (var v = 0; v <= top + 1e-9; v += step) {
+      var g = el('div', 'e-grid-line'); g.style.bottom = Math.round(v / top * area) + 'px';
+      g.innerHTML = '<span>£' + (step < 1 ? v.toFixed(2) : v) + '</span>';
+      plot.insertBefore(g, $('eBars'));
+    }
     var bars = $('eBars'); bars.innerHTML = '';
     w.days.forEach(function (x) {
       var b = el('button', 'eday focusable' + (x.odd ? ' odd' : '')); b.type = 'button';
       var html = '<span class="tot">' + money(dayTotal(x)) + '</span>';
       dayParts(x).forEach(function (p) {
-        var h = Math.max(3, Math.round(p[1] / max * area));
-        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 34 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
+        var h = Math.max(3, Math.round(p[1] / top * area));
+        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 30 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
       });
       b.innerHTML = html;
       b.addEventListener('focus', function () { showDay(x); });
       b.addEventListener('click', function () { showDay(x); });
       bars.appendChild(b);
     });
-    $('eDays').innerHTML = w.days.map(function (x) { return '<span>' + esc(x.day) + '</span>'; }).join('');
+    $('eDays').innerHTML = w.days.map(function (x) { return '<span><b>' + esc(x.day) + '</b> ' + Number(x.date.slice(8, 10)) + '</span>'; }).join('');
     var odd = (note.odd_days || [])[0];
     $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
     $('eDetail').textContent = odd ? odd.line : 'Select a day for its breakdown.';
 
-    var right = $('eRight'); right.innerHTML = '<div class="e-label">WORTH DOING</div>';
-    var actions = (note.actions || []).slice(0, 2);
-    if (!actions.length) right.appendChild(el('div', 'e-sub', 'Nothing worth changing this week.'));
-    actions.forEach(function (a) {
-      var c = el('div', 'e-card');
-      c.innerHTML = '<h4></h4><p></p><div class="how"></div><div class="e-verdicts"></div>';
-      c.querySelector('h4').innerHTML = esc(a.title) + (a.per_year_gbp ? '<span>£' + a.per_year_gbp + ' a year</span>' : '');
-      c.querySelector('p').textContent = a.detail;
-      c.querySelector('.how').textContent = 'How we know: ' + a.how_we_know;
+    // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
+    var cards = $('eCards'); cards.innerHTML = '';
+    var c1 = el('div', 'e-card');
+    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p></p>';
+    c1.querySelector('h4').textContent = note.headline || '';
+    c1.querySelector('p').textContent = note.summary || '';
+    cards.appendChild(c1);
+
+    var action = (note.actions || [])[0];
+    var c2 = el('div', 'e-card');
+    if (action) {
+      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p></p><div class="e-verdicts"></div>';
+      c2.querySelector('h4').innerHTML = esc(action.title) + (action.per_year_gbp ? '<span>£' + action.per_year_gbp + ' a year</span>' : '');
+      c2.querySelector('p').textContent = action.detail;
       [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
         var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
         b.addEventListener('click', function () {
-          N.energyFeedback(a.id, v[0]);
-          note.actions = note.actions.filter(function (x) { return x.id !== a.id; });
+          N.energyFeedback(action.id, v[0]);
+          note.actions = note.actions.filter(function (x) { return x.id !== action.id; });
           say('Thanks', 'We’ll leave that out for the next 90 days.');
           renderEnergy(); setFocus($('eBars').children[0]);
         });
-        c.querySelector('.e-verdicts').appendChild(b);
+        c2.querySelector('.e-verdicts').appendChild(b);
       });
-      right.appendChild(c);
-    });
-    if (!actions.length) {
-      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info'; }).slice(0, 2);
-      if (good.length) {
-        right.appendChild(el('div', 'e-label', 'GOOD TO KNOW')).style.marginTop = '24px';
-        good.forEach(function (g) {
-          var c = el('div', 'e-card'); c.innerHTML = '<p style="margin:0"></p><div class="how"></div>';
-          c.querySelector('p').textContent = g.facts; c.querySelector('.how').textContent = g.how_we_know;
-          right.appendChild(c);
-        });
-      }
+    } else {
+      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
+      c2.innerHTML = '<div class="e-label">Good to know</div><p></p><div class="how"></div>';
+      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing this week.';
+      c2.querySelector('.how').textContent = good ? good.how_we_know : '';
     }
+    cards.appendChild(c2);
+
     if (rooms && rooms.rooms.length) {
-      var rc = el('div', 'e-card'), rmax = Math.max.apply(null, rooms.rooms.map(function (r) { return r.cost; }).concat([0.01]));
-      var rows = rooms.rooms.slice(0, 4).map(function (r) {
-        return '<tr><td style="width:36%">' + esc(r.room) + '</td><td><div class="track"><i style="width:' + Math.round(r.cost / rmax * 100) + '%"></i></div></td><td class="n">' + r.hoursPerDay + ' h a day</td><td class="n" style="width:90px"><b>' + money(r.cost) + '</b></td></tr>';
-      }).join('');
-      rc.innerHTML = '<h4 style="font-size:28px">Heating by room</h4><table class="e-rooms" style="width:100%;margin-top:6px;border-collapse:collapse">' + rows + '</table><div class="how">An estimate from Tado: gas shared by when each room called for heat.</div>';
-      right.appendChild(rc);
+      var c3 = el('div', 'e-card'), list = rooms.rooms.slice(0, 4);
+      var rmax = Math.max.apply(null, list.map(function (r) { return r.cost; }).concat([sums.w || rooms.hotWaterAndCooking, 0.01]));
+      var row = function (name, cost, hours, colour) {
+        return '<tr><td style="width:40%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
+          + '<td class="n" style="width:20%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
+      };
+      c3.innerHTML = '<div class="e-label">Gas this week, by room</div><table class="e-rooms">'
+        + list.map(function (r) { return row(r.room, r.cost, r.hoursPerDay + ' h a day', SEG.g[0]); }).join('')
+        + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
+        + '<div class="how">An estimate: gas shared by when each room called for heat in Tado.</div>';
+      cards.appendChild(c3);
     }
   }
   function showDay(x) { $('eDetail').className = 'e-detail'; $('eDetail').textContent = dayLine(x); }
