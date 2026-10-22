@@ -626,6 +626,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       facts: `Last ${tariff.days} days of half-hourly electricity, re-priced: ${tariff.best.name} £${tariff.rows.find((r) => r.name === tariff.best.name).cost}, ${mine.name} £${mine.cost}. Standing charges included. Car is ${Math.round(carSummary.share * 100)}% of electricity, ${Math.round(carSummary.nightShare * 100)}% of it charged midnight to 5:30am.`
         + (tariff.agileWorstDay && tariff.best.name === "Agile" ? ` Agile's worst day in the period cost £${tariff.agileWorstDay.extra} more than the current tariff.` : ""),
       how_we_know: `Your own meter readings for the last ${tariff.days} days, priced at each tariff's published rates for those days.`,
+      card: { figure: `£${tariff.best.perYear} a year`, caption: `by switching to ${tariff.best.name}` },
     });
   }
   if (!tariff.best && tariff.rows.length > 1) {
@@ -633,6 +634,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "tariff-ok",
       per_year_gbp: 0,
+      card: { figure: `£${Math.round(next.cost - mine.cost)} less`, caption: `than ${next.name} over ${tariff.days} days. You're on the cheapest tariff.` },
       facts: `${mine.name} is already the cheapest for how you use electricity: £${Math.round(mine.cost)} over the last ${tariff.days} days, against £${Math.round(next.cost)} on ${next.name}. Nothing to switch.`,
       how_we_know: `Your own meter readings for the last ${tariff.days} days, priced at each tariff's published rates for those days.`,
     });
@@ -642,6 +644,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "baseline",
       per_year_gbp: Math.round(baseline.per100WPerYear * cut / 100),
+      card: { figure: `${baseline.watts} W`, caption: "always on, even at 4am" },
       facts: `The house never drops below ${baseline.watts} W, even between 1am and 5am (typical over ${baseline.nights} nights). That always-on use costs about £${baseline.perYear} a year at ${baseline.unitPence}p per kWh. Each 100 W less saves about £${baseline.per100WPerYear} a year.`,
       how_we_know: `The quietest half-hour between 1am and 5am on each of the last ${baseline.nights} nights, with car charging taken out.`,
     });
@@ -652,6 +655,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "peak-info",
       per_year_gbp: 0,
+      card: { figure: `${Math.round(peak.share * 100)}%`, caption: "of house electricity is used 4 to 7pm" },
       facts: `${Math.round(peak.share * 100)}% of house electricity is used 4 to 7pm (${peak.kwhPerDay} kWh a day), when your tariff is ${shift.perKwh}p per kWh dearer than ${shift.from} to ${shift.to}. Most of this is likely cooking and evening use that can't move; we can't see which appliances it is.`,
       how_we_know: "Your 4 to 7pm use over the last 28 days, and your tariff's prices for the same days.",
     });
@@ -661,6 +665,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "overnight-ok",
       per_year_gbp: 0,
+      card: { figure: `£${overnight.perYear} a year`, caption: "saved by running things overnight" },
       facts: `On ${overnight.nights} of the last 28 nights something drew about ${overnight.kw} kW for ${overnight.minutes} minutes between ${shift.from} and ${shift.to}, not the car: most likely an appliance on a timer. Run then rather than 4 to 7pm, that already saves about £${overnight.perYear} a year.`,
       how_we_know: "Overnight half-hours well above your always-on use but too small to be the car, over the last 28 nights.",
     });
@@ -678,6 +683,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "car-info",
       per_year_gbp: 0,
+      card: { figure: `${carSummary.pencePerMile}p`, caption: "a mile to charge the car" },
       facts: `Over the last 90 days the car charged ${carSummary.ohmeKwh} kWh on ${carSummary.charges} days and added about ${carSummary.miles} miles, costing £${carSummary.cost.toFixed(2)} at your tariff's rates: about ${carSummary.pencePerMile}p a mile.`
         + (carSummary.efficiency && Math.abs(carSummary.ohmeMiles - carSummary.miles) > carSummary.miles * 0.15 ? ` Ohme's own estimate was ${carSummary.ohmeMiles} miles, which is too generous for this car.` : "")
         + (carSummary.daytimeHours ? ` ${carSummary.daytimeHours} hours of charging were outside the usual cheap hours; where Octopus confirmed them, or Ohme priced them at the cheap rate, they're counted as Octopus smart-charging at the cheap rate.` : ""),

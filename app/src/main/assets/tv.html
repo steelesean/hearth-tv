@@ -208,6 +208,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
 .energy .e-card h4.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .energy .e-card p.one { -webkit-line-clamp: 1; }
+.energy .e-fact .e-fig-big { display: block; font: 400 72px/1 var(--font-display); margin-top: 18px; color: var(--ink); }
+.energy .e-fact .e-fig-big.save { color: var(--focus); }
+.energy .e-fact .e-cap { font-size: 24px; line-height: 1.35; color: var(--ink-2); margin-top: 10px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.energy .e-fact .e-verdicts { margin-top: auto; }
 .energy .e-card h4.big { font-size: 38px; line-height: 1.2; margin-top: 14px; -webkit-line-clamp: 4; }
 .energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
 .energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
@@ -1345,11 +1349,13 @@ body { color: var(--ink); font-family: var(--font-ui); }
     cards.appendChild(c1);
 
     var action = (note.actions || [])[0];
-    var c2 = el('div', 'e-card');
+    var c2 = el('div', 'e-card e-fact');
+    // One figure and a few words: the sums are in the figure, the explanation lives on the web dashboard.
     if (action) {
-      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p class="two"></p><div class="e-verdicts"></div>';
-      c2.querySelector('h4').innerHTML = esc(action.title) + (action.per_year_gbp ? '<span>£' + action.per_year_gbp + ' a year</span>' : '');
-      c2.querySelector('p').textContent = action.detail;
+      var fig = action.card ? action.card.figure : (action.per_year_gbp ? '£' + action.per_year_gbp + ' a year' : '');
+      c2.innerHTML = '<div class="e-label">Worth doing</div><b class="e-fig-big save"></b><div class="e-cap"></div><div class="e-verdicts"></div>';
+      c2.querySelector('b').textContent = fig;
+      c2.querySelector('.e-cap').textContent = action.title;
       [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
         var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
         b.addEventListener('click', function () {
@@ -1361,11 +1367,13 @@ body { color: var(--ink); font-family: var(--font-ui); }
         c2.querySelector('.e-verdicts').appendChild(b);
       });
     } else {
-      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
-      c2.innerHTML = '<div class="e-label">Good to know</div><h4 class="clamp big"></h4>';
-      // Claude's one-line version; failing that, the first sentence of the calculated fact.
-      var line = note.good_to_know || (good ? (good.facts.match(/^[^.]*\.?/) || [good.facts])[0] : '');
-      c2.querySelector('h4').textContent = line || 'Nothing worth changing at the moment.';
+      // Information that has a card form, a different one each day so it doesn't go stale.
+      var skip = { 'rooms-info': 1, 'insulation-info': 1 };
+      var facts = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.card && !skip[c.id] && c.id.indexOf('odd-') !== 0; });
+      var pick = facts.length ? facts[Math.floor(Date.parse(d.generatedAt || 0) / 864e5) % facts.length] : null;
+      c2.innerHTML = '<div class="e-label">Good to know</div><b class="e-fig-big"></b><div class="e-cap"></div>';
+      c2.querySelector('b').textContent = pick ? pick.card.figure : '';
+      c2.querySelector('.e-cap').textContent = pick ? pick.card.caption : 'Nothing worth changing at the moment.';
     }
     cards.appendChild(c2);
 

@@ -26,7 +26,6 @@ const SCHEMA = {
         additionalProperties: false,
       },
     },
-    good_to_know: { type: "string", description: "The single most useful information-only candidate (per_year_gbp 0; not odd days, rooms, insulation or tariff-fit, which are shown elsewhere), as one short sentence of at most 14 words using only its own figures. Empty if there is none." },
     odd_days: {
       type: "array",
       description: "One line for each odd-day candidate.",
@@ -41,7 +40,7 @@ const SCHEMA = {
       },
     },
   },
-  required: ["headline", "summary", "actions", "good_to_know", "odd_days"],
+  required: ["headline", "summary", "actions", "odd_days"],
   additionalProperties: false,
 };
 
@@ -85,7 +84,7 @@ export async function weeklyNote(facts) {
   // Attach the calculated money and evidence; drop anything Claude made up an id for.
   const byId = Object.fromEntries(facts.candidates.map((c) => [c.id, c]));
   note.actions = (note.actions || []).filter((a) => byId[a.id]?.per_year_gbp > 0).slice(0, 3)
-    .map((a) => ({ ...a, per_year_gbp: byId[a.id].per_year_gbp, how_we_know: byId[a.id].how_we_know }));
+    .map((a) => ({ ...a, per_year_gbp: byId[a.id].per_year_gbp, how_we_know: byId[a.id].how_we_know, card: byId[a.id].card }));
   note.odd_days = (note.odd_days || []).filter((o) => byId[o.id])
     .map((o) => ({ ...o, how_we_know: byId[o.id].how_we_know }));
   return note;
@@ -97,9 +96,8 @@ export function plainNote(facts) {
   return {
     headline: "The last 7 days: £" + facts.week.total.toFixed(2),
     summary: facts.week.usualElec ? "Electricity £" + facts.week.elec.toFixed(2) + ", against a usual £" + facts.week.usualElec.toFixed(2) + "." : "",
-    actions: money.map((c) => ({ id: c.id, title: { tariff: "Look at " + (facts.tariff.best?.name || "another tariff"), baseline: "Find what's always on", peak: "Run big appliances on a delay timer" }[c.id], detail: c.facts, per_year_gbp: c.per_year_gbp, how_we_know: c.how_we_know })),
+    actions: money.map((c) => ({ id: c.id, title: { tariff: "Look at " + (facts.tariff.best?.name || "another tariff"), baseline: "Find what's always on", peak: "Run big appliances on a delay timer" }[c.id], detail: c.facts, per_year_gbp: c.per_year_gbp, how_we_know: c.how_we_know, card: c.card })),
     odd_days: facts.candidates.filter((c) => c.id.startsWith("odd-")).map((c) => ({ id: c.id, line: c.facts, how_we_know: c.how_we_know })),
-    good_to_know: "",
     plain: true,
   };
 }
