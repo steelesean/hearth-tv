@@ -10,10 +10,10 @@
    bar up top; then Watching, a compact Apps row and the children's row. Ten-foot UI: big
    targets, one obvious focus. From 8pm to 7am the evening palette takes over.
    Kept deliberately light for older Fire TV sticks: no blur, no :has(), no color-mix(). */
-.stage { --sheet-bg: #1F2321; --sheet-ink: #F7F6F3; --glow: #F5F4F0; --ink-2: #3A3F3C; --hint: #9A9E99; --card: #FFFFFF; --dim: rgba(236,235,231,0.94); --carry-soft: #B9BDB8; --carry-accent: #A9C7B6; }
+.stage { --prompt-line: #C9CBC5; --sheet-bg: #1F2321; --sheet-ink: #F7F6F3; --glow: #F5F4F0; --ink-2: #3A3F3C; --hint: #9A9E99; --card: #FFFFFF; --dim: rgba(236,235,231,0.94); --carry-soft: #B9BDB8; --carry-accent: #A9C7B6; }
 .stage.evening {
   --ground: #252723; --surface: #2E312C; --ink: #E7E5DF; --ink-soft: #A2A69E; --line: #43473F;
-  --focus: #A9C7B6; --focus-glow: rgba(169,199,182,0.2); --glow: #2C2F2A; --ink-2: #CFCDC6; --hint: #7E827A;
+  --prompt-line: #4F534B; --focus: #A9C7B6; --focus-glow: rgba(169,199,182,0.2); --glow: #2C2F2A; --ink-2: #CFCDC6; --hint: #7E827A;
   --card: #333630; --dim: rgba(37,39,35,0.94); --sheet-bg: #3B3F38; --sheet-ink: #E7E5DF; --carry-soft: #5F625C; --carry-accent: #2F4A3F;
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); }
@@ -27,8 +27,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
 .top-left, .top-right { display: flex; align-items: center; }
 .top-left > * + *, .top-right > * + * { margin-left: 16px; }
-.time { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.meta { font-size: 24px; color: var(--ink-soft); }
+.time { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.meta { font-size: 21px; color: var(--ink-soft); }
 .pill {
   font: 500 24px var(--font-ui); color: var(--ink); background: transparent;
   border: 2px solid var(--line); border-radius: 999px; height: 60px; padding: 0 28px;
@@ -40,23 +40,20 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .pill .dot.ok { background: var(--ok); }
 .pill svg { width: 26px; height: 26px; }
 
-.hero { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.hero { display: flex; flex-direction: column; align-items: center; margin-top: 34px; }
 .greeting { font-family: var(--font-display); font-weight: 400; font-size: 88px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
-.nowline { margin-top: 14px; font: 400 28px var(--font-ui); color: var(--ink-2); display: inline-flex; align-items: center; background: transparent; border: 2px solid transparent; border-radius: 999px; padding: 6px 20px; min-height: 52px; box-sizing: border-box; }
+/* The question in the greeting, answered by up to three buttons; then one quiet line. The
+   question keeps to 1500px and steps its type down rather than wrapping, so the space stays. */
+.greeting { max-width: 1500px; white-space: nowrap; }
+.prompts { display: flex; margin-top: 40px; max-width: 1500px; }
+.prompts > * + * { margin-left: 30px; }
+.prompt { height: 72px; padding: 0 32px; border-radius: 999px; border: 2px solid var(--prompt-line); background: transparent; font: 500 27px var(--font-ui); color: var(--ink-2); white-space: nowrap; }
+.prompt.is-focus { transform: none; background: var(--surface); color: var(--focus); font-weight: 600; }
+.nowline { margin-top: 14px; font: 400 21px var(--font-ui); color: var(--ink-soft); display: inline-flex; align-items: center; background: transparent; border: 2px solid transparent; border-radius: 999px; padding: 6px 20px; min-height: 52px; box-sizing: border-box; }
 .nowline .seg + .seg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--hint); margin: 0 16px; vertical-align: middle; }
 .nowline b { color: var(--focus); font-weight: 600; }
 .nowline.focusable.is-focus { transform: none; }
 
-.command {
-  margin-top: 26px; width: 1100px; height: 104px; box-sizing: border-box;
-  background: var(--surface); border: 2px solid var(--line); border-radius: 60px;
-  display: flex; align-items: center; padding: 0 44px;
-  box-shadow: 0 10px 30px rgba(31,35,33,0.06); transition: border-color .2s, box-shadow .2s;
-}
-.command.on { border-color: var(--focus); box-shadow: 0 0 0 10px var(--focus-glow), 0 10px 30px rgba(31,35,33,0.08); }
-.command svg { flex: none; width: 34px; height: 34px; color: var(--focus); margin-right: 20px; }
-#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 34px var(--font-ui); color: var(--ink); }
-#ask::placeholder { color: var(--hint); }
 
 .rows { margin-top: auto; }
 .row + .row { margin-top: 28px; }
@@ -96,7 +93,6 @@ body { color: var(--ink); font-family: var(--font-ui); }
   box-shadow: 0 0 0 6px var(--ground), 0 0 0 12px var(--focus), 0 18px 40px rgba(31,35,33,0.18);
   border-color: transparent; position: relative; z-index: 2;
 }
-#ask.is-focus { transform: none; box-shadow: none; }
 
 /* Message sheet */
 .sheet {
@@ -160,7 +156,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
 
 /* Kids mode */
-.stage.kids-mode .apps-row, .stage.kids-mode .watch-row, .stage.kids-mode .nowline { display: none; }
+.stage.kids-mode .apps-row, .stage.kids-mode .watch-row, .stage.kids-mode .nowline, .stage.kids-mode .prompts { display: none; }
 .stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
 .stage.kids-mode .kid { height: 250px; }
 .stage.kids-mode #modeBtn .dot { background: var(--focus); }
@@ -247,11 +243,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
   <section class="hero">
     <h1 class="greeting" id="greeting">Hello</h1>
+    <div class="prompts" id="prompts"></div>
     <button class="nowline" id="nowline" type="button"></button>
-    <form class="command" id="commandForm" autocomplete="off">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.5 4.8 2.7 7.4 8 8-5.3.6-7.5 3.2-8 8-.5-4.8-2.7-7.4-8-8 5.3-.6 7.5-3.2 8-8z"/></svg>
-      <input id="ask" class="focusable" type="text" placeholder="Ask for something, or try “suggest a film”" aria-label="Ask for something to watch">
-    </form>
   </section>
 
   <section class="rows">
@@ -398,7 +391,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
 // kids:     "url" plays the programme straight away (tested on the stick, October 2026).
 //           iPlayer programme IDs: The Gruffalo b00pk64x, Room on the Broom p0102qfj,
 //           Zog b0bwdw8y, Stick Man b06t09rk. If one leaves iPlayer, the tile will open
-//           iPlayer instead. Bluey (series m000vbrk) has no working series link yet.
+//           iPlayer instead. Bluey and Cars on the Road open their Disney+ series pages
+//           (Disney+ ids 1xy9TAOQ0M3r and 1xLouZmjyMHu), not yet tested on the stick.
 window.HEARTH_CONFIG = {
   "tvName": "Living room TV",
   "apps": [
@@ -435,8 +429,8 @@ window.HEARTH_CONFIG = {
   "kids": [
     { "key": "gruffalo", "title": "The Gruffalo", "app": "iplayer", "src": "iPlayer", "art": "k-gruffalo", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b00pk64x&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["gruffalo"], "bedtime": false },
     { "key": "broom", "title": "Room on the Broom", "app": "iplayer", "src": "iPlayer", "art": "k-broom", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/p0102qfj&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["room on the broom", "broom"], "bedtime": true },
-    { "key": "bluey", "title": "Bluey", "app": "iplayer", "src": "iPlayer", "art": "k-bluey", "url": "", "aliases": ["bluey"], "bedtime": false },
-    { "key": "cars", "title": "Cars", "app": "disney", "src": "Disney+", "art": "k-cars", "url": "", "aliases": ["cars", "lightning mcqueen", "mcqueen"], "bedtime": false },
+    { "key": "bluey", "title": "Bluey", "app": "disney", "src": "Disney+", "art": "k-bluey", "url": "https://www.disneyplus.com/series/bluey/1xy9TAOQ0M3r", "aliases": ["bluey"], "bedtime": false },
+    { "key": "cars", "title": "Cars", "app": "disney", "src": "On the Road · Disney+", "art": "k-cars", "url": "https://www.disneyplus.com/series/cars-on-the-road/1xLouZmjyMHu", "aliases": ["cars on the road", "cars", "lightning mcqueen", "mcqueen"], "bedtime": false },
     { "key": "zog", "title": "Zog", "app": "iplayer", "src": "iPlayer", "art": "k-zog", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b0bwdw8y&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["zog"], "bedtime": true },
     { "key": "stickman", "title": "Stick Man", "app": "iplayer", "src": "iPlayer", "art": "k-stickman", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b06t09rk&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["stick man", "stickman"], "bedtime": true }
   ]
@@ -2747,7 +2741,7 @@ var qrcode = function() {
 (function () {
   var C = window.HEARTH_CONFIG;
   var $ = function (id) { return document.getElementById(id); };
-  var stage = $('stage'), ask = $('ask');
+  var stage = $('stage');
 
   // Native bridge. In a desktop browser there's no TV, so pretend everything opens.
   var N = window.HearthNative || {
@@ -2811,13 +2805,14 @@ var qrcode = function() {
   }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; }
 
-  C.apps.forEach(function (a) {
+  C.apps.filter(function (a) { return !a.live; }).forEach(function (a) {
     var b = el('button', 'app focusable' + (a.live ? ' live' : ''),
       '<span class="swatch" style="background:' + a.swatch + '"></span><span class="name"></span>');
     b.type = 'button'; b.querySelector('.name').textContent = a.label;
     b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
     $('apps').appendChild(b);
   });
+  $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
 
   var kidButtons = [];
   C.kids.forEach(function (k) {
@@ -2851,14 +2846,15 @@ var qrcode = function() {
   function tick() {
     var d = new Date();
     $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    var w = weatherNow();
+    var w = weatherNow(), h = d.getHours();
     stage.classList.toggle('evening', N.evening ? N.evening() : (d.getHours() >= 20 || d.getHours() < 7));
-    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      + (w ? '  ·  ' + w.now + '°, ' + w.desc.toLowerCase() + (w.frost && h >= 16 ? ', frost later' : '') : '');
     renderNow(w);
     if (!$('saver').hidden) paintSaver(d, w);
-    var h = d.getHours();
-    $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
-      : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    var ctx = moment(d);
+    setGreeting(kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two') : ctx.headline);
+    if (!kidsMode) renderPrompts(ctx);
   }
   function weatherNow() { try { var j = N.weather ? N.weather() : ''; return j ? JSON.parse(j) : null; } catch (e) { return null; } }
   tick(); setInterval(tick, 15000);
@@ -2904,10 +2900,11 @@ var qrcode = function() {
     if (w) out.push({ html: esc(w.now + '° and ' + w.desc.toLowerCase()) + (w.frost && (new Date().getHours() >= 16) ? ', frost tonight' : '') });
     return out.slice(0, 2);
   }
-  function renderNow(w) {
-    var segs = nowSegments(w, false), line = $('nowline');
-    line.innerHTML = segs.map(function (x) { return '<span class="seg">' + x.html + '</span>'; }).join('');
-    line.hidden = !segs.length;
+  function renderNow() {
+    var line = $('nowline');
+    line.innerHTML = updateWaiting ? '<b>An update is ready</b>. Press OK here to install'
+      : paired ? 'Or ask anything from your phone' : 'Connect your phone to ask anything';
+    line.hidden = false;
     line.classList.toggle('focusable', updateWaiting);   // only selectable when there's something to do
   }
   function dayWord(days, date) {
@@ -2916,6 +2913,79 @@ var qrcode = function() {
     var d = new Date(date + 'T12:00:00');
     return days < 7 ? 'on ' + d.toLocaleDateString('en-GB', { weekday: 'long' }) : 'on ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   }
+
+  // ---------- The greeting asks, the buttons answer ----------
+  // One short question for the time and day. Answers either ask the assistant (which knows the
+  // household's taste), carry on, open a followed show with a new episode today, or open the
+  // children's things. Kept short: the space around the question is part of the calm.
+  function moment(d) {
+    var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    var JD = ['gruffalo', 'broom', 'zog', 'stickman'];
+    var h = d.getHours() + d.getMinutes() / 60, day = d.getDay(), weekend = day === 0 || day === 6;
+    var last = lastGrownUp(), carry = last && last.kind !== 'app' ? { label: 'Carry on with ' + last.title, carry: true } : null;
+    var newToday = watchingShows().filter(function (x) { return x.days === 0 && !x.usDate; })[0];
+    var fresh = newToday ? { label: newToday.title + ': new today', show: newToday } : null;
+    var story = JD.filter(kidAvailable)[d.getDate() % 4] || JD.filter(kidAvailable)[0];
+    var m;
+    if (h < 5 || h >= 21.5) m = { headline: 'Getting late. Something short?', prompts: [
+      { label: 'One episode, under an hour', ask: 'Suggest one episode of something under an hour for tonight' }, carry,
+      { label: 'Something gentle', ask: 'Suggest something gentle and calm to watch before bed' }] };
+    else if (h < 12) m = { headline: 'Good morning', prompts: [
+      { label: 'Something for the children', kids: true },
+      story ? { label: 'A Julia Donaldson story', kid: story } : null] };
+    else if (h < 16) m = { headline: 'Good afternoon', prompts: [
+      { label: 'Something for the children', kids: true },
+      { label: 'A film for later', ask: 'Suggest a film for us tonight' }] };
+    else if (h < 18.5) m = { headline: 'Teatime. One for the children?', prompts: [
+      story ? { label: 'A Julia Donaldson story', kid: story } : null,
+      { label: 'Something calm', calm: true },
+      { label: 'Something for us later', ask: 'Suggest something for the two of us to watch tonight' }] };
+    else if (day === 5 || day === 6) m = { headline: 'It’s ' + DAYS[day] + '. Film night?', prompts: [
+      { label: 'Pick us a film', ask: 'Suggest a film for tonight' },
+      { label: 'One the children can watch too', ask: 'Suggest a family film the children can watch with us tonight' }, carry] };
+    else m = { headline: DAYS[day] + ' night. Something new?', prompts: [
+      { label: 'A series to start', ask: 'Suggest a series we could start tonight' },
+      { label: 'Something lighter', ask: 'Suggest something lighter to watch tonight' }, carry] };
+    // A followed show out today takes the middle place in the evening.
+    if (fresh && h >= 18.5 && h < 21.5) m.prompts.splice(1, 1, fresh);
+    m.prompts = m.prompts.filter(Boolean).slice(0, 3);
+    return m;
+  }
+  // The question steps its type down rather than wrapping or crowding the edges.
+  function setGreeting(text) {
+    var g = $('greeting');
+    if (g.textContent === text && g._fitted) return;
+    g.textContent = text; g.style.fontSize = '';
+    for (var size = 88; size > 60 && g.scrollWidth > 1500; size -= 4) g.style.fontSize = size - 4 + 'px';
+    g._fitted = true;
+  }
+  var promptKey = '';
+  function renderPrompts(m) {
+    var key = m.prompts.map(function (p) { return p.label; }).join('|');
+    if (key === promptKey) return;                     // unchanged: keep the remote's place
+    var box = $('prompts'), hadFocus = cur && cur.parentNode === box, at = hadFocus ? [].indexOf.call(box.children, cur) : -1;
+    promptKey = key; box.innerHTML = '';
+    m.prompts.forEach(function (p) {
+      var b = el('button', 'prompt focusable'); b.type = 'button'; b.textContent = p.label;
+      b.addEventListener('click', function () { answer(p); });
+      box.appendChild(b);
+    });
+    // Too wide for calm spacing? Drop answers from the end rather than squeeze.
+    while (box.children.length > 1 && box.scrollWidth > 1500) box.removeChild(box.lastChild);
+    if (hadFocus) setFocus(box.children[Math.min(at, box.children.length - 1)] || homeTarget());
+  }
+  function answer(p) {
+    if (p.carry) return carryOn();
+    if (p.show) return openShow(p.show.title, p.show.app);
+    if (p.kid) return openKid(p.kid);
+    if (p.kids) return setMode(true);
+    if (p.calm) return setMode(true, true);
+    if (p.ask) {
+      if (N.assistantReady && N.assistantReady()) return askAssistant(p.ask);
+      return say('The assistant isn’t set up yet', 'Add it in the phone remote’s settings, under Assistant.', true);
+    }
+  }
+  function homeTarget() { return $('prompts').children[0] || $('apps').children[0]; }
 
   // ---------- Watching: carry on, then our top series and when the next episode is out ----------
   // A show counts as ours if we follow it, loved it, or asked Hearth for it on two or more days.
@@ -3051,12 +3121,11 @@ var qrcode = function() {
   function setFocus(e) {
     if (cur) cur.classList.remove('is-focus');
     cur = e; e.classList.add('is-focus');
-    $('commandForm').classList.toggle('on', e === ask);
-    if (e !== ask) { if (document.activeElement === ask) ask.blur(); e.focus({ preventScroll: true }); }
+    e.focus({ preventScroll: true });
   }
   function move(dir) {
     var list = items();
-    if (!cur || list.indexOf(cur) < 0) { setFocus(list[0] === $('phoneBtn') && layer() === stage ? ask : list[0]); return; }
+    if (!cur || list.indexOf(cur) < 0) { setFocus(layer() === stage ? homeTarget() : list[0]); return; }
     var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
     var best = null, bestScore = Infinity;
     list.forEach(function (e) {
@@ -3073,7 +3142,6 @@ var qrcode = function() {
   }
   function select() {
     if (!cur || !visible(cur)) { move('down'); return; }
-    if (cur === ask) { ask.focus(); N.showKeyboard(); return; }
     cur.click();
   }
 
@@ -3120,7 +3188,7 @@ var qrcode = function() {
     setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
   }
   function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
-  function closeOverlays() { $('energyPanel').hidden = true; $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
+  function closeOverlays() { $('energyPanel').hidden = true; $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(homeTarget()); }
 
   // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
   var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
@@ -3346,13 +3414,13 @@ var qrcode = function() {
     if (N.assistantReady && N.assistantReady()) return askAssistant(q.trim());
     say('Sorry, I didn’t catch that', 'Try “Channel 4 live”, “open Netflix” or “put on The Gruffalo”.', true);
   }
-  $('commandForm').addEventListener('submit', function (e) { e.preventDefault(); var q = ask.value; ask.value = ''; ask.blur(); interpret(q); });
 
   // ---------- Pairing ----------
   var paired = false;
   function setPaired(on) {
     paired = on;
     $('phoneIcon').hidden = on; $('phoneDot').hidden = !on;
+    renderNow();
     $('phoneLabel').textContent = on ? 'Phone connected' : 'Connect phone';
   }
   function openPairing() {
@@ -3381,7 +3449,7 @@ var qrcode = function() {
     if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
     if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden || !$('energyPanel').hidden) { closeOverlays(); return; }
     if (kidsMode) { setMode(false); return; }
-    setFocus(ask);
+    setFocus(homeTarget());
   }
   window.hearthBack = back;
 
@@ -3397,7 +3465,7 @@ var qrcode = function() {
     }
     if (cmd.type === 'updateFailed') return say('The update didn’t install', cmd.message || 'Try again later.', true);
     if (cmd.type === 'key') return window.hearthKey(cmd.value);
-    if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
+    if (cmd.type === 'ask') { closeOverlays(); return interpret(cmd.value); }
     if (cmd.type === 'app') { closeOverlays(); return cmd.value === 'live' ? openLive() : openApp(cmd.value); }
     if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
@@ -3418,9 +3486,8 @@ var qrcode = function() {
     if (window.HearthNative) return;   // on the TV, the Android side sends keys
     if (e.target && e.target.closest && e.target.closest('#previewKeyBox')) return;
     var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
-    if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
-    else if (e.key === 'Enter' && document.activeElement !== ask) { e.preventDefault(); select(); }
+    else if (e.key === 'Enter') { e.preventDefault(); select(); }
   });
 
   // ---------- Energy: the week from the energy service, kept on the stick ----------
@@ -3611,7 +3678,7 @@ var qrcode = function() {
   var seen = false;
   try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
   var preview = !window.HearthNative && /[?&]energy/.test(location.search);
-  if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(ask);
+  if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(homeTarget());
 })();
 </script>
 </body>
