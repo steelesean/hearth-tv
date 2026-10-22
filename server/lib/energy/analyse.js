@@ -113,11 +113,9 @@ function splitCar(elec) {
 }
 
 /** Each half-hour of a day, house and car, for the dashboard's day view (kWh, 0 to 47). */
-function dayProfile(house, car, date) {
-  const h = new Array(48).fill(0), c = new Array(48).fill(0);
-  for (const r of house) { const l = local(r.t); if (l.date === date) h[l.slot] += r.v; }
-  for (const r of car) { const l = local(r.t); if (l.date === date) c[l.slot] += r.v; }
-  return { house: h.map((x) => round(x, 2)), car: c.map((x) => round(x, 2)) };
+function dayProfile(house, car, gas, date) {
+  const on = (rows) => { const a = new Array(48).fill(0); for (const r of rows) { const l = local(r.t); if (l.date === date) a[l.slot] += r.v; } return a.map((x) => round(x, 2)); };
+  return { house: on(house), car: on(car), gas: on(gas) };
 }
 
 /** Gas meters report m³ or kWh. A day over 15 can only be kWh. GAS_UNITS overrides. */
@@ -321,7 +319,7 @@ export function analyse(input) {
       house: round(sum(week.map((d) => d.house))),
       car: round(sum(week.map((d) => d.car))),
       gas: round(sum(week.map((d) => d.gas))),
-      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, d.date) })),
+      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, gas.readings, d.date) })),
     },
     odd, baseline, peak, shift, overnight, car: carSummary, tariff, forecast,
     gasUnits: gas.unit,

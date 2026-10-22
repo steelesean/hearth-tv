@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hearth Energy</title>
 <style>
-  :root { --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; } }
-  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; }
+  :root { --gas:#6F7FA8; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; } }
+  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
@@ -22,7 +22,10 @@
   .bar { cursor: pointer; } .bar.picked i { outline: 2px solid var(--ink); outline-offset: 2px; }
   .bar { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; font-weight:600; color:var(--ink2); }
   .bar i { display:block; width:100%; border-radius: 6px 6px 2px 2px; background: var(--bar); }
-  .bar.odd { color: var(--odd); } .bar.odd i { background: var(--oddbar); }
+  .bar.odd { color: var(--odd); } .bar.odd i.h { background: var(--oddbar); }
+  .bar i.c { background: var(--car); border-radius: 6px 6px 0 0; } .bar i.c + i.h { border-radius: 0 0 2px 2px; }
+  .bar i.g { background: var(--gas); }
+  .key { font-size: 12px; color: var(--muted); } .key b { font-weight: 400; }
   .days { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; text-align:center; font-size:12px; color:var(--muted); margin-top:6px; }
   .action { margin-top: 12px; }
   .action h3 { display:flex; justify-content:space-between; gap: 12px; margin:0; font: 500 19px/1.25 Georgia, serif; }
@@ -66,12 +69,20 @@
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
         <div class="card" style="margin-top: 18px;">
-          <strong>Each day</strong>
+          <div class="row" style="justify-content:space-between;"><strong>Electricity each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car</span></div>
           <div class="bars" id="bars"></div>
           <div class="days" id="daynames"></div>
+          <div id="gasblock">
+            <div class="row" style="justify-content:space-between;margin-top:18px;"><strong>Gas each day</strong><span class="key">Heating and hot water together, for now</span></div>
+            <div class="bars" id="gasbars" style="height:110px;"></div>
+            <div class="days" id="gasnames"></div>
+          </div>
           <div id="dayview" hidden style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-            <div class="row" style="justify-content:space-between;"><strong id="dayname"></strong><span class="how" style="margin:0;"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car</span></div>
-            <div id="halfhours" style="display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:1px;align-items:end;height:110px;margin-top:8px;"></div>
+            <div class="row" style="justify-content:space-between;"><strong id="dayname"></strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car <span style="color:var(--gas)">■</span> Gas</span></div>
+            <div class="key" style="margin-top:8px;">Electricity</div>
+            <div id="halfhours" style="display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:1px;align-items:end;height:100px;margin-top:4px;"></div>
+            <div id="gasview"><div class="key" style="margin-top:10px;">Gas</div>
+            <div id="gashours" style="display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:1px;align-items:end;height:70px;margin-top:4px;"></div></div>
             <div class="days" style="grid-template-columns:repeat(4,minmax(0,1fr));text-align:left;"><span>midnight</span><span>6am</span><span>noon</span><span>6pm</span></div>
             <div class="how" id="daysum"></div>
           </div>
@@ -133,9 +144,15 @@ function render(d) {
   $("total").textContent = money(w.total);
   $("vs").textContent = w.usualElec ? "Electricity " + money(w.elec) + ", " + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? " under" : " over") + " your usual week" : "";
   $("split").textContent = "House " + money(w.house) + " · Car " + money(w.car) + (d.hasGas ? " · Gas " + money(w.gas) : "");
-  const max = Math.max(...w.days.map((x) => x.total), 1);
-  $("bars").innerHTML = w.days.map((x, i) => `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)} in detail"><span>${money(x.total)}</span><i style="height:${Math.round((x.total / max) * 110)}px"></i></div>`).join("");
+  const emax = Math.max(...w.days.map((x) => x.houseElec + x.car), 0.5);
+  $("bars").innerHTML = w.days.map((x, i) => `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)} in detail"><span>${money(x.houseElec + x.car)}</span>`
+    + (x.car > 0 ? `<i class="c" style="height:${Math.round((x.car / emax) * 110)}px"></i>` : "")
+    + `<i class="h" style="height:${Math.max(2, Math.round((x.houseElec / emax) * 110))}px"></i></div>`).join("");
   $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
+  $("gasblock").hidden = !d.hasGas;
+  const gmax = Math.max(...w.days.map((x) => x.gas), 0.5);
+  $("gasbars").innerHTML = w.days.map((x, i) => `<div class="bar" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)} in detail"><span>${money(x.gas)}</span><i class="g" style="height:${Math.max(2, Math.round((x.gas / gmax) * 75))}px"></i></div>`).join("");
+  $("gasnames").innerHTML = w.days.map((x) => `<span>${esc(x.day)}</span>`).join("");
   $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>${tell(o.id, "We know why")}`).join("");
   window.__days = w.days;
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
@@ -179,6 +196,10 @@ function showDay(i) {
       + (car[k] ? `<i style="display:block;height:${(car[k] / max) * 100}%;background:var(--car);border-radius:2px 2px 0 0;"></i>` : "")
       + `<i style="display:block;height:${(h / max) * 100}%;background:var(--bar);"></i></div>`;
   }).join("");
+  const g = x.profile.gas || [];
+  $("gasview").hidden = !g.some((v) => v > 0);
+  const gm = Math.max(...g, 0.5);
+  $("gashours").innerHTML = g.map((v, k) => `<div title="${String(Math.floor(k / 2)).padStart(2, "0") + ":" + (k % 2 ? "30" : "00")}: gas ${v} kWh" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;"><i style="display:block;height:${(v / gm) * 100}%;background:var(--gas);"></i></div>`).join("");
   $("dayname").textContent = new Date(x.date + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   $("daysum").textContent = "House " + x.houseKwh + " kWh (" + money(x.houseElec) + "), car " + x.carKwh + " kWh (" + money(x.car) + ")" + (x.gasKwh ? ", gas " + x.gasKwh + " kWh (" + money(x.gas) + ")" : "") + ". Hover a bar for its time.";
   $("dayview").hidden = false;
