@@ -1,0 +1,10 @@
+{
+  "name": "hearth-energy",
+  "private": true,
+  "type": "module",
+  "description": "Hearth Energy: weekly energy facts from Octopus, explained by Claude.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
+    "@vercel/blob": "2.8.0"
+  }
+}

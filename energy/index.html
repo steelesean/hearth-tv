@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hearth Energy</title>
+<style>
+  :root { --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; } }
+  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font: 500 22px/1.2 inherit; margin: 0; }
+  .muted { color: var(--muted); }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+  .grid { display: grid; gap: 20px; grid-template-columns: minmax(0,1.05fr) minmax(0,1fr); margin-top: 22px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: minmax(0,1fr); } }
+  .big { font: 400 56px/1 Georgia, serif; letter-spacing: -.02em; }
+  .bars { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 10px; align-items: end; height: 150px; margin-top: 10px; }
+  .bar { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; font-weight:600; color:var(--ink2); }
+  .bar i { display:block; width:100%; border-radius: 6px 6px 2px 2px; background: var(--bar); }
+  .bar.odd { color: var(--odd); } .bar.odd i { background: var(--oddbar); }
+  .days { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; text-align:center; font-size:12px; color:var(--muted); margin-top:6px; }
+  .action { margin-top: 12px; }
+  .action h3 { display:flex; justify-content:space-between; gap: 12px; margin:0; font: 500 19px/1.25 Georgia, serif; }
+  .action h3 span { font: 600 16px system-ui, sans-serif; color: var(--green); white-space: nowrap; }
+  .action p { margin: 6px 0 0; color: var(--ink2); }
+  .how { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  table { width:100%; border-collapse: collapse; margin-top: 8px; }
+  td { padding: 6px 0; border-top: 1px solid var(--line); } td:last-child { text-align:right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  tr.yours td { font-weight: 600; }
+  button, input { font: inherit; }
+  button { background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 10px 18px; cursor: pointer; }
+  button.quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .row { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+  .error { color: var(--odd); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row" style="justify-content: space-between;">
+    <div><h1>Energy</h1><div class="muted" id="range"></div></div>
+    <div class="row"><button class="quiet" id="refresh" hidden>Work it out again</button></div>
+  </div>
+
+  <section id="signin" class="card" style="margin-top:22px; max-width: 460px;" hidden>
+    <p style="margin-top:0;">Enter the Hearth password (the same one the TV's assistant uses). It's kept in this browser only.</p>
+    <form id="form" class="row"><input id="key" type="password" autocomplete="current-password" aria-label="Hearth password"><button>Show</button></form>
+  </section>
+
+  <p id="status" class="muted"></p>
+
+  <div id="view" hidden>
+    <div class="grid">
+      <div>
+        <div class="label">This week</div>
+        <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
+        <div class="muted" id="split" style="margin-top:6px;"></div>
+        <div class="card" style="margin-top: 18px;">
+          <strong>Each day</strong>
+          <div class="bars" id="bars"></div>
+          <div class="days" id="daynames"></div>
+          <div id="oddlines"></div>
+        </div>
+        <div class="card" style="margin-top: 18px;">
+          <strong>Tariff fit</strong> <span class="muted" id="fitdays"></span>
+          <table id="tariffs"></table>
+          <div class="how">Your actual half-hourly use, priced on each tariff at the rates that applied each day. Standing charges included.</div>
+        </div>
+      </div>
+      <div>
+        <div class="label">Worth doing</div>
+        <div id="actions"></div>
+        <div class="card" style="margin-top: 18px;">
+          <div class="label">Note</div>
+          <p style="margin: 6px 0 0;"><strong id="headline"></strong> <span id="summary"></span></p>
+          <div class="how" id="forecast"></div>
+          <div class="how" id="made"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = { get() { try { return localStorage.getItem("hearthKey") || ""; } catch { return ""; } }, set(v) { try { localStorage.setItem("hearthKey", v); } catch {} } };
+let key = store.get();
+const money = (x) => "£" + Number(x).toFixed(2);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function load() {
+  if (!key) { $("signin").hidden = false; return; }
+  $("status").textContent = "Loading…";
+  const r = await fetch("/api/week", { headers: { "x-hearth-key": key } });
+  if (r.status === 401) { key = ""; store.set(""); $("signin").hidden = false; $("status").textContent = "That password didn't work."; return; }
+  $("refresh").hidden = false;
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "Couldn't load.") + "</span>"; return; }
+  $("status").textContent = "";
+  render(d);
+}
+
+function render(d) {
+  const w = d.week, note = d.note || {};
+  $("view").hidden = false; $("signin").hidden = true;
+  $("range").textContent = w.label;
+  $("total").textContent = money(w.total);
+  $("vs").textContent = w.usual ? money(Math.abs(w.total - w.usual)) + (w.total <= w.usual ? " under" : " over") + " your usual week" : "";
+  $("split").textContent = "House " + money(w.house) + " · Car " + money(w.car) + (d.hasGas ? " · Gas " + money(w.gas) : "");
+  const max = Math.max(...w.days.map((x) => x.total), 1);
+  $("bars").innerHTML = w.days.map((x) => `<div class="bar${x.odd ? " odd" : ""}"><span>${money(x.total)}</span><i style="height:${Math.round((x.total / max) * 110)}px"></i></div>`).join("");
+  $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
+  $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>`).join("");
+  $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
+  $("tariffs").innerHTML = d.tariff.rows.map((t) => `<tr class="${t.yours ? "yours" : ""}"><td>${esc(t.name)}</td><td>£${Math.round(t.cost)}</td></tr>`).join("");
+  $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div></div>`).join("") || '<p class="muted">Nothing worth changing this week.</p>';
+  $("headline").textContent = note.headline || "";
+  $("summary").textContent = note.summary || "";
+  $("forecast").textContent = d.forecast ? d.forecast.month + " so far " + money(d.forecast.soFar) + ", heading for about " + money(d.forecast.projected) + "." : "";
+  $("made").textContent = "Worked out " + new Date(d.generatedAt).toLocaleString("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + (note.plain ? ". Claude wasn't available, so this is the plain version." : ". Figures calculated from your Octopus meter, then explained by Claude.");
+}
+
+$("form").addEventListener("submit", (e) => { e.preventDefault(); key = $("key").value.trim(); store.set(key); load(); });
+$("refresh").addEventListener("click", async () => {
+  $("status").textContent = "Reading Octopus and working it out. About half a minute…";
+  const r = await fetch("/api/refresh", { headers: { "x-hearth-key": key } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "That didn't work.") + "</span>"; return; }
+  load();
+});
+load();
+</script>
+</body>
+</html>
