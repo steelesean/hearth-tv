@@ -1,0 +1,1143 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920">
+<title>Hearth</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Layout: one 1920×1080 canvas scaled to the screen. Greeting, one "now" line and the command
+   bar up top; then Watching, a compact Apps row and the children's row. Ten-foot UI: big
+   targets, one obvious focus. From 8pm to 7am the evening palette takes over.
+   Kept deliberately light for older Fire TV sticks: no blur, no :has(), no color-mix(). */
+.stage { --sheet-bg: #1F2321; --sheet-ink: #F7F6F3; --glow: #F5F4F0; --ink-2: #3A3F3C; --hint: #9A9E99; --card: #FFFFFF; --dim: rgba(236,235,231,0.94); --carry-soft: #B9BDB8; --carry-accent: #A9C7B6; }
+.stage.evening {
+  --ground: #252723; --surface: #2E312C; --ink: #E7E5DF; --ink-soft: #A2A69E; --line: #43473F;
+  --focus: #A9C7B6; --focus-glow: rgba(169,199,182,0.2); --glow: #2C2F2A; --ink-2: #CFCDC6; --hint: #7E827A;
+  --card: #333630; --dim: rgba(37,39,35,0.94); --sheet-bg: #3B3F38; --sheet-ink: #E7E5DF; --carry-soft: #5F625C; --carry-accent: #2F4A3F;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); }
+body { color: var(--ink); font-family: var(--font-ui); }
+.stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: top left;
+  background: radial-gradient(1200px 600px at 50% 16%, var(--glow) 0%, transparent 70%), var(--ground);
+  color: var(--ink); padding: 56px 96px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.top-left, .top-right { display: flex; align-items: center; }
+.top-left > * + *, .top-right > * + * { margin-left: 16px; }
+.time { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.meta { font-size: 24px; color: var(--ink-soft); }
+.pill {
+  font: 500 24px var(--font-ui); color: var(--ink); background: transparent;
+  border: 2px solid var(--line); border-radius: 999px; height: 60px; padding: 0 28px;
+  display: inline-flex; align-items: center; white-space: nowrap;
+}
+.pill > * + * { margin-left: 12px; }
+.pill .dot { width: 14px; height: 14px; border-radius: 50%; background: #E4A853; }
+.pill { height: 56px; font-size: 22px; padding: 0 24px; }
+.pill .dot.ok { background: var(--ok); }
+.pill svg { width: 26px; height: 26px; }
+
+.hero { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.greeting { font-family: var(--font-display); font-weight: 400; font-size: 88px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+.nowline { margin-top: 14px; font: 400 28px var(--font-ui); color: var(--ink-2); display: inline-flex; align-items: center; background: transparent; border: 2px solid transparent; border-radius: 999px; padding: 6px 20px; min-height: 52px; box-sizing: border-box; }
+.nowline .seg + .seg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--hint); margin: 0 16px; vertical-align: middle; }
+.nowline b { color: var(--focus); font-weight: 600; }
+.nowline.focusable.is-focus { transform: none; }
+
+.command {
+  margin-top: 26px; width: 1100px; height: 104px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 60px;
+  display: flex; align-items: center; padding: 0 44px;
+  box-shadow: 0 10px 30px rgba(31,35,33,0.06); transition: border-color .2s, box-shadow .2s;
+}
+.command.on { border-color: var(--focus); box-shadow: 0 0 0 10px var(--focus-glow), 0 10px 30px rgba(31,35,33,0.08); }
+.command svg { flex: none; width: 34px; height: 34px; color: var(--focus); margin-right: 20px; }
+#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 34px var(--font-ui); color: var(--ink); }
+#ask::placeholder { color: var(--hint); }
+
+.rows { margin-top: auto; }
+.row + .row { margin-top: 28px; }
+.row-label { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 14px 4px; }
+.upnext { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; grid-gap: 22px; }
+.ep { height: 150px; border-radius: 24px; background: var(--surface); border: 2px solid var(--line); padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; font-family: var(--font-ui); color: var(--ink); }
+.ep .t { font: 500 32px/1.05 var(--font-display); }
+.ep .m { font-size: 20px; color: var(--ink-soft); }
+.ep .d { font-size: 20px; font-weight: 600; color: var(--focus); }
+.ep.carry { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.ep.carry .m { color: var(--carry-soft); }
+.ep.carry .d { color: var(--carry-accent); }
+.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 18px; }
+.app {
+  height: 84px; border-radius: 20px; border: 2px solid var(--line); background: var(--surface);
+  display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
+}
+.app .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; margin-right: 14px; }
+.app .name { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
+.app.live { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.app.live .swatch { border-radius: 50%; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+
+.kids { display: grid; grid-template-columns: repeat(6, 1fr); grid-gap: 18px; }
+.kid {
+  height: 150px; border-radius: 26px; border: 0; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: 22px 24px; box-sizing: border-box; text-align: left; color: #fff; font-family: var(--font-ui);
+}
+.kid .title { font-family: var(--font-display); font-size: 32px; line-height: 1.05; font-weight: 500; position: relative; }
+.kid .src { font-size: 17px; font-weight: 500; opacity: .85; margin-top: 6px; position: relative; }
+
+/* Focus: the single loudest thing on screen */
+.focusable { outline: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
+.focusable.is-focus {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 6px var(--ground), 0 0 0 12px var(--focus), 0 18px 40px rgba(31,35,33,0.18);
+  border-color: transparent; position: relative; z-index: 2;
+}
+#ask.is-focus { transform: none; box-shadow: none; }
+
+/* Message sheet */
+.sheet {
+  position: absolute; left: 50%; bottom: 72px; width: 1100px; margin-left: -550px; box-sizing: border-box;
+  background: var(--sheet-bg); color: var(--sheet-ink); border-radius: 32px; padding: 34px 44px;
+  display: flex; align-items: center; opacity: 0; transform: translateY(30px);
+  transition: opacity .25s, transform .25s; z-index: 9; pointer-events: none;
+}
+.sheet.show { opacity: 1; transform: none; }
+.sheet .glyph { flex: none; width: 76px; height: 76px; border-radius: 22px; background: var(--focus); display: flex; align-items: center; justify-content: center; margin-right: 30px; }
+.sheet .glyph svg { width: 34px; height: 34px; color: #fff; }
+.sheet.warn .glyph { background: #8A5A2B; }
+.sheet h2 { margin: 0; font: 500 36px var(--font-display); }
+.sheet p { margin: 6px 0 0; font-size: 24px; color: #B9BDB8; }
+
+/* Overlays: pairing and Live TV */
+.overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--dim); display: flex; align-items: center; justify-content: center; }
+.card { color: var(--ink); background: var(--surface); border-radius: 40px; border: 2px solid var(--line); box-shadow: 0 40px 100px rgba(31,35,33,0.16); padding: 64px; box-sizing: border-box; }
+.pair-card { display: flex; align-items: center; width: 1360px; }
+.qr { flex: none; width: 360px; height: 360px; padding: 24px; box-sizing: border-box; background: #fff; border-radius: 28px; border: 2px solid var(--line); margin-right: 64px; }
+.qr svg, .qr img { width: 100%; height: 100%; display: block; }
+.pair-copy h2, .live-card h2 { font: 400 64px/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0 0 18px; }
+.pair-copy p { font-size: 28px; color: var(--ink-soft); margin: 0 0 18px; line-height: 1.4; }
+.code { font: 500 80px var(--font-ui); letter-spacing: 0.22em; font-variant-numeric: tabular-nums; margin: 0 0 18px; }
+.pair-actions { margin-top: 12px; }
+.pair-note { display: block; font-size: 22px; color: var(--ink-soft); margin-top: 18px; }
+.live-card { width: 1500px; }
+.channels { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 24px; margin-top: 40px; }
+.picks { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 28px; margin-top: 40px; }
+.pick { height: 300px; border-radius: 28px; border: 2px solid var(--line); background: var(--card); color: var(--ink); text-align: left; padding: 34px; box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.pick .pick-title { font: 500 44px/1.05 var(--font-display); letter-spacing: -0.01em; }
+.pick .pick-meta { font-size: 22px; color: var(--ink-soft); margin-top: 12px; }
+.pick .pick-why { font-size: 26px; line-height: 1.35; margin-top: auto; }
+.pick-col { display: flex; flex-direction: column; }
+.pick-col .verdicts { display: flex; margin-top: 18px; }
+.pick-col .verdicts > * + * { margin-left: 14px; }
+.verdict.follow { border-color: var(--focus); color: var(--focus); }
+.verdict { font: 500 22px var(--font-ui); color: var(--ink); background: transparent; border: 2px solid var(--line); border-radius: 999px; height: 54px; padding: 0 22px; white-space: nowrap; }
+.pick-col.done .pick:not(.is-focus) { opacity: .45; }
+.pick-col .noted { font-size: 22px; color: var(--ink-soft); height: 54px; display: flex; align-items: center; margin-top: 18px; }
+.how-card { width: 1300px; }
+.how-card h2 { margin-bottom: 10px; }
+.how-actions { display: flex; margin-top: 36px; }
+.how-actions > * + * { margin-left: 20px; }
+.live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
+.channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: var(--card); font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
+
+/* Screensaver: big quiet time and weather, drifting slowly so nothing burns in */
+.saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--ground); }
+/* At night the screensaver goes darker still, so it barely lights the room */
+.stage.evening .saver { background: #161715; }
+.stage.evening .saver-time { color: #8E918A; }
+.stage.evening .saver-date { color: #5F625C; }
+.stage.evening .saver-weather { color: #7E8179; }
+.saver-weather b { color: var(--focus); font-weight: 600; }
+.saver-inner { position: absolute; left: 200px; top: 220px; transition: left 3s ease, top 3s ease; }
+.saver-time { font: 400 280px/1 var(--font-display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.saver-date { font-size: 40px; color: var(--ink-soft); margin-top: 24px; }
+.saver-weather { font-size: 40px; color: var(--ink); margin-top: 14px; }
+.kid .gone { position: absolute; left: 24px; top: 22px; font-size: 18px; font-weight: 600; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; }
+.picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
+
+/* Kids mode */
+.stage.kids-mode .apps-row, .stage.kids-mode .watch-row, .stage.kids-mode .nowline { display: none; }
+.stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
+.stage.kids-mode .kid { height: 250px; }
+.stage.kids-mode #modeBtn .dot { background: var(--focus); }
+/* Energy: a full screen of its own, opened from the Energy tile */
+.energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 56px 96px 40px; box-sizing: border-box; display: flex; flex-direction: column; }
+.energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
+.energy .e-title { font-size: 30px; font-weight: 500; }
+.energy .e-title span { color: var(--ink-soft); font-size: 24px; margin-left: 20px; font-weight: 400; }
+.energy .e-made { font-size: 20px; color: var(--ink-soft); }
+.energy .e-grid { display: flex; margin-top: 26px; flex: 1; min-height: 0; }
+.energy .e-left { flex: 1.1; min-width: 0; margin-right: 56px; display: flex; flex-direction: column; }
+.energy .e-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.energy .e-label { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); }
+.energy .e-total { font: 400 104px/1 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; }
+.energy .e-sub { font-size: 26px; color: var(--ink-2); margin-top: 10px; }
+.energy .e-split { font-size: 22px; color: var(--ink-soft); margin-top: 8px; }
+.energy .e-chart { margin-top: 22px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 22px 28px 18px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.energy .e-key { font-size: 18px; color: var(--ink-soft); }
+.energy .e-key i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin: 0 6px 0 16px; vertical-align: -1px; }
+.energy .e-bars { flex: 1; display: flex; align-items: flex-end; margin-top: 10px; min-height: 0; }
+.energy .eday { flex: 1; margin: 0 9px; background: transparent; border: 0; border-radius: 14px; padding: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; font-family: var(--font-ui); color: var(--ink); }
+.energy .eday .tot { font-size: 21px; font-weight: 600; text-align: center; margin-bottom: 6px; }
+.energy .eday.odd .tot { color: #B5542D; }
+.energy .eday .seg { display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; color: #1F2321; overflow: hidden; margin-top: 2px; }
+.energy .eday .seg:first-of-type { border-radius: 10px 10px 0 0; }
+.energy .eday .seg:last-child { border-radius: 0 0 4px 4px; }
+.energy .eday.is-focus { transform: none; box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px var(--focus); }
+.energy .e-days { display: flex; margin-top: 10px; }
+.energy .e-days span { flex: 1; margin: 0 9px; text-align: center; font-size: 20px; color: var(--ink-soft); }
+.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 58px; line-height: 1.35; }
+.energy .e-detail.odd { color: #B5542D; }
+.energy .e-card { background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 22px 28px; margin-top: 16px; text-align: left; font-family: var(--font-ui); color: var(--ink); }
+.energy .e-card h4 { display: flex; justify-content: space-between; margin: 0; font: 500 32px/1.15 var(--font-display); }
+.energy .e-card h4 span { font: 600 26px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 16px; }
+.energy .e-card p { margin: 8px 0 0; font-size: 22px; line-height: 1.4; color: var(--ink-2); }
+.energy .e-card .how { font-size: 18px; color: var(--ink-soft); margin-top: 8px; }
+.energy .e-verdicts { display: flex; margin-top: 12px; }
+.energy .e-verdicts > * + * { margin-left: 14px; }
+.energy .e-rooms td { padding: 6px 0; font-size: 22px; }
+.energy .e-rooms td.n { text-align: right; white-space: nowrap; }
+.energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 18px; }
+.energy .e-rooms .track i { display: block; height: 100%; background: #6F7FA8; border-radius: 6px; }
+.energy .e-foot { font-size: 18px; color: var(--ink-soft); margin-top: 16px; }
+.energy .e-warn { color: #B5542D; font-size: 22px; margin-top: 8px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="top">
+    <div class="top-left">
+      <span class="time" id="clock"></span>
+      <span class="meta" id="date"></span>
+    </div>
+    <div class="top-right">
+      <button class="pill focusable" id="phoneBtn" type="button">
+        <svg id="phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6v-2"/></svg>
+        <span class="dot ok" id="phoneDot" hidden></span>
+        <span id="phoneLabel">Connect phone</span>
+      </button>
+      <button class="pill focusable" id="modeBtn" type="button"><span class="dot"></span><span id="modeLabel">Family</span></button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 class="greeting" id="greeting">Hello</h1>
+    <button class="nowline" id="nowline" type="button"></button>
+    <form class="command" id="commandForm" autocomplete="off">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.5 4.8 2.7 7.4 8 8-5.3.6-7.5 3.2-8 8-.5-4.8-2.7-7.4-8-8 5.3-.6 7.5-3.2 8-8z"/></svg>
+      <input id="ask" class="focusable" type="text" placeholder="Ask for something, or try “suggest a film”" aria-label="Ask for something to watch">
+    </form>
+  </section>
+
+  <section class="rows">
+    <div class="row watch-row" id="watchRow" hidden>
+      <h3 class="row-label">Watching</h3>
+      <div class="upnext" id="upnext"></div>
+    </div>
+    <div class="row apps-row">
+      <h3 class="row-label">Apps</h3>
+      <div class="apps" id="apps"></div>
+    </div>
+    <div class="row">
+      <h3 class="row-label" id="kidsLabel">For the children</h3>
+      <div class="kids" id="kids"></div>
+    </div>
+  </section>
+
+  <div class="sheet" id="sheet" role="status" aria-live="polite">
+    <div class="glyph"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg></div>
+    <div><h2 id="sheetTitle"></h2><p id="sheetBody"></p></div>
+  </div>
+
+  <div class="saver" id="saver" hidden>
+    <div class="saver-inner" id="saverInner">
+      <div class="saver-time" id="saverTime"></div>
+      <div class="saver-date" id="saverDate"></div>
+      <div class="saver-weather" id="saverWeather"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="pairModal" hidden>
+    <div class="card pair-card">
+      <div class="qr" id="qr"></div>
+      <div class="pair-copy">
+        <h2>Use your phone as the remote</h2>
+        <p>Point your phone's camera at the code, then enter this number when asked.</p>
+        <div class="code" id="pairCode">····</div>
+        <p id="pairAddress">Or go to the address below on any phone on this Wi-Fi.</p>
+        <div class="pair-actions">
+          <button class="pill focusable" id="useRemote" type="button">Use the remote instead</button>
+          <span class="pair-note">You can find this again under “Connect phone”.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="picksPanel" hidden>
+    <div class="card live-card">
+      <h2 id="picksTitle">A few ideas</h2>
+      <p class="lede" id="picksLede"></p>
+      <div class="picks" id="picks"></div>
+      <p class="picks-note" id="picksNote" hidden></p>
+    </div>
+  </div>
+
+  <div class="overlay" id="howPanel" hidden>
+    <div class="card live-card how-card">
+      <h2 id="howTitle">How was it?</h2>
+      <p class="lede" id="howLede">Your answer helps Hearth suggest better things.</p>
+      <div class="how-actions" id="howActions"></div>
+    </div>
+  </div>
+
+  <div class="energy" id="energyPanel" hidden>
+    <div class="e-top">
+      <div class="e-title">Energy<span id="eRange"></span></div>
+      <div class="e-made" id="eMade"></div>
+    </div>
+    <div class="e-grid">
+      <div class="e-left">
+        <div class="e-label">THIS WEEK</div>
+        <div class="e-total" id="eTotal"></div>
+        <div class="e-sub" id="eSub"></div>
+        <div class="e-split" id="eSplit"></div>
+        <div class="e-warn" id="eWarn" hidden></div>
+        <div class="e-chart">
+          <div class="e-key" id="eKey"></div>
+          <div class="e-bars" id="eBars"></div>
+          <div class="e-days" id="eDays"></div>
+          <div class="e-detail" id="eDetail"></div>
+        </div>
+      </div>
+      <div class="e-right" id="eRight"></div>
+    </div>
+    <div class="e-foot" id="eFoot"></div>
+  </div>
+
+  <div class="overlay" id="livePanel" hidden>
+    <div class="card live-card">
+      <h2>Live TV</h2>
+      <div class="channels" id="channels"></div>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="qrcode.js"></script>
+<script>
+(function () {
+  var C = window.HEARTH_CONFIG;
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), ask = $('ask');
+
+  // Native bridge. In a desktop browser there's no TV, so pretend everything opens.
+  var N = window.HearthNative || {
+    pairing: function () { return JSON.stringify({ address: '192.168.1.42:8080', code: '4817', paired: false }); },
+    openApp: function () { return 'ok'; },
+    openLink: function () { return 'ok'; },
+    showKeyboard: function () {},
+    installed: function () { return JSON.stringify(C.apps.map(function (a) { return a.key; })); },
+    assistantReady: function () { return true; },
+    update: function () { return ''; },
+    installUpdate: function () {},
+    weather: function () { return JSON.stringify({ town: 'Edinburgh', now: 9, desc: 'Cloudy', high: 12, low: 4, tonightLow: -1, frost: true, rain: 20 }); },
+    kidStatus: function () { return JSON.stringify({ gruffalo: false }); },
+    follows: function () { try { return localStorage.getItem('dev.follows') || '[{"title":"Slow Horses","app":"appletv"}]'; } catch (e) { return '[]'; } },
+    setFollows: function (j) { try { localStorage.setItem('dev.follows', j); } catch (e) {} },
+    saveWatching: function () {},
+    upnext: function () {
+      var d = function (n) { var x = new Date(Date.now() + n * 86400000); return x.toISOString().slice(0, 10); };
+      setTimeout(function () { window.hearthUpnext({ shows: [
+        { title: 'Slow Horses', app: 'appletv', found: true, season: 5, next: { date: d(2), season: 5, episode: 4 }, status: 'Returning Series' },
+        { title: 'The Gentlemen', app: 'netflix', found: true, season: 1, next: null, status: 'Returning Series' },
+        { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
+      ] }); }, 300);
+    },
+    // In a browser preview served by the energy service, fetch the real week with the Hearth password.
+    energy: function () {
+      if (!/^https?:/.test(location.protocol)) return;
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (!key) { key = prompt('Hearth password (the same one the TV’s assistant uses)') || ''; try { localStorage.setItem('hearthKey', key); } catch (e) {} }
+      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json(); })
+        .then(function (d) { if (d.error) { try { localStorage.removeItem('hearthKey'); } catch (e) {} alert(d.error); } else window.hearthEnergy(d); });
+    },
+    energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
+    energyFeedback: function (id, verdict) {
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (/^https?:/.test(location.protocol)) fetch('/api/energy/feedback', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, verdict: verdict }) });
+    },
+    learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
+    ask: function (id, payload) {
+      setTimeout(function () {
+        window.hearthAnswer(id, { reply: 'Three you might like tonight.', action: { type: 'suggest', key: '' }, suggestions: [
+          { title: 'The Diplomat', kind: 'series', year: '2023', app: 'netflix', reason: 'Sharp political drama, like Slow Horses.' },
+          { title: 'Paddington 2', kind: 'film', year: '2017', app: 'netflix', reason: 'Warm, funny and safe for everyone.' },
+          { title: 'Mr Bates vs The Post Office', kind: 'series', year: '2024', app: 'itvx', reason: 'Gripping true story, four episodes.' }
+        ] });
+      }, 900);
+    }
+  };
+
+  // ---------- Build the screen from config ----------
+  function appByKey(k) {
+    var all = C.apps.concat(C.extraApps);
+    for (var i = 0; i < all.length; i++) if (all[i].key === k) return all[i];
+    return { key: k, name: k };
+  }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; }
+
+  C.apps.forEach(function (a) {
+    var b = el('button', 'app focusable' + (a.live ? ' live' : ''),
+      '<span class="swatch" style="background:' + a.swatch + '"></span><span class="name"></span>');
+    b.type = 'button'; b.querySelector('.name').textContent = a.label;
+    b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
+    $('apps').appendChild(b);
+  });
+
+  var kidButtons = [];
+  C.kids.forEach(function (k) {
+    var b = el('button', 'kid focusable ' + k.art, '<span class="art"></span><span class="title"></span><span class="src"></span>');
+    b.type = 'button';
+    b.querySelector('.title').textContent = k.title;
+    b.querySelector('.src').textContent = k.src;
+    b.addEventListener('click', function () { openKid(k.key); });
+    b._kid = k; kidButtons.push(b);
+    var gone = el('span', 'gone'); gone.textContent = 'Not on iPlayer now'; gone.hidden = true; b.appendChild(gone); b._gone = gone;
+    $('kids').appendChild(b);
+  });
+
+  C.channels.forEach(function (ch) {
+    var b = el('button', 'channel focusable'); b.type = 'button'; b.textContent = ch.name;
+    b.addEventListener('click', function () { closeOverlays(); openChannel(ch.key); });
+    $('channels').appendChild(b);
+  });
+
+  // ---------- Fit and clock ----------
+  // On the TV the WebView itself lays the page out at 1920 wide (see MainActivity), so this
+  // is normally 1. In a desktop browser it shrinks the canvas to fit the window.
+  function fit() {
+    var w = document.documentElement.clientWidth || innerWidth, h = document.documentElement.clientHeight || innerHeight;
+    var k = (w && h) ? Math.min(w / 1920, h / 1080) : 1;
+    stage.style.webkitTransform = stage.style.transform = 'scale(' + k + ')';
+  }
+  addEventListener('resize', fit); addEventListener('load', fit); fit(); setTimeout(fit, 500);
+
+  var kidsMode = false, bedtime = false;
+  function tick() {
+    var d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var w = weatherNow();
+    stage.classList.toggle('evening', N.evening ? N.evening() : (d.getHours() >= 20 || d.getHours() < 7));
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    renderNow(w);
+    if (!$('saver').hidden) paintSaver(d, w);
+    var h = d.getHours();
+    $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
+      : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  }
+  function weatherNow() { try { var j = N.weather ? N.weather() : ''; return j ? JSON.parse(j) : null; } catch (e) { return null; } }
+  tick(); setInterval(tick, 15000);
+
+  // ---------- Screensaver after five quiet minutes ----------
+  var lastActive = Date.now();
+  function paintSaver(d, w) {
+    $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('saverWeather').innerHTML = nowSegments(w, true).map(function (x) { return x.html; }).join(' · ');
+    $('saverInner').style.left = (120 + Math.round(Math.random() * 700)) + 'px';
+    $('saverInner').style.top = (100 + Math.round(Math.random() * 380)) + 'px';
+  }
+  function wake() { lastActive = Date.now(); if (!$('saver').hidden) { $('saver').hidden = true; return true; } return false; }
+  setInterval(function () {
+    var busy = asking || !$('pairModal').hidden || !$('howPanel').hidden;
+    if ($('saver').hidden && !busy && Date.now() - lastActive > 5 * 60 * 1000) { $('saver').hidden = false; paintSaver(new Date(), weatherNow()); }
+    else if (!$('saver').hidden && new Date().getSeconds() < 15) paintSaver(new Date(), weatherNow());
+  }, 15000);
+
+  // ---------- Updates ----------
+  var updateWaiting = false;
+  function checkUpdate() {
+    var u = null; try { u = N.update && N.update() ? JSON.parse(N.update()) : null; } catch (e) {}
+    updateWaiting = !!u;
+    renderNow(weatherNow());
+  }
+  $('nowline').addEventListener('click', function () {
+    if (!updateWaiting) return;
+    $('sheetTitle').textContent = 'Downloading the update…'; $('sheetBody').textContent = 'Fire TV will ask you to confirm. Choose Install.';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, 20000);
+    N.installUpdate();
+  });
+
+  // ---------- The "now" line: at most two things worth knowing, most useful first ----------
+  function esc(t) { var e = document.createElement('span'); e.textContent = t; return e.innerHTML; }
+  function nowSegments(w, forSaver) {
+    var out = [];
+    if (updateWaiting && !forSaver) out.push({ html: '<b>An update is ready</b>. Press OK here to install' });
+    var soon = watchingShows().filter(function (x) { return x.days !== null && x.days >= 0 && x.days <= 3; })[0];
+    if (soon) out.push({ html: '<b>' + esc(soon.title) + '</b> ' + (soon.usDate ? 'is out in the US ' : 'has a new episode ') + dayWord(soon.days, soon.date) });
+    if (w) out.push({ html: esc(w.now + '° and ' + w.desc.toLowerCase()) + (w.frost && (new Date().getHours() >= 16) ? ', frost tonight' : '') });
+    return out.slice(0, 2);
+  }
+  function renderNow(w) {
+    var segs = nowSegments(w, false), line = $('nowline');
+    line.innerHTML = segs.map(function (x) { return '<span class="seg">' + x.html + '</span>'; }).join('');
+    line.hidden = !segs.length;
+    line.classList.toggle('focusable', updateWaiting);   // only selectable when there's something to do
+  }
+  function dayWord(days, date) {
+    if (days === 0) return 'today';
+    if (days === 1) return 'tomorrow';
+    var d = new Date(date + 'T12:00:00');
+    return days < 7 ? 'on ' + d.toLocaleDateString('en-GB', { weekday: 'long' }) : 'on ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+
+  // ---------- Watching: carry on, then our top series and when the next episode is out ----------
+  // A show counts as ours if we follow it, loved it, or asked Hearth for it on two or more days.
+  function showsLog() { try { return JSON.parse(localStorage.getItem('hearth.shows') || '[]'); } catch (e) { return []; } }
+  function rememberShow(title, kind, app) {
+    if (!title) return;
+    var log = showsLog(); log.unshift({ title: title, kind: kind || '', app: app || '', at: new Date().toISOString() });
+    try { localStorage.setItem('hearth.shows', JSON.stringify(log.slice(0, 200))); } catch (e) {}
+    mirror();
+  }
+  function follows() { try { return JSON.parse(N.follows ? N.follows() : '[]'); } catch (e) { return []; } }
+  function isFollowed(title) { return follows().some(function (f) { return f.title.toLowerCase() === title.toLowerCase(); }); }
+  function follow(title, app) {
+    if (isFollowed(title)) return;
+    var f = follows(); f.unshift({ title: title, app: app || '' });
+    N.setFollows(JSON.stringify(f.slice(0, 12)));
+    fetchUpnext(true);
+  }
+  function topShows() {
+    var score = {}, add = function (title, app, n) {
+      var k = title.toLowerCase(); score[k] = score[k] || { title: title, app: app, n: 0, days: {} }; score[k].n += n;
+      if (app && !score[k].app) score[k].app = app; return score[k];
+    };
+    follows().forEach(function (f) { add(f.title, f.app, 3); });
+    var cutoff = Date.now() - 21 * 86400000;
+    showsLog().forEach(function (x) {
+      if (x.kind === 'film' || new Date(x.at) < cutoff) return;
+      var e = add(x.title, x.app, 0), day = x.at.slice(0, 10);
+      if (!e.days[day]) { e.days[day] = 1; e.n += 1; }
+    });
+    feedback().forEach(function (x) {
+      if (x.kind !== 'series') return;
+      if (x.verdict === 'loved') add(x.title, x.app, 2);
+      if (x.verdict === 'no') add(x.title, x.app, -100);
+    });
+    return Object.keys(score).map(function (k) { return score[k]; })
+      .filter(function (x) { return x.n >= 2; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
+  }
+  function upnextCache() { try { return JSON.parse(localStorage.getItem('hearth.upnext') || '{}'); } catch (e) { return {}; } }
+  function watchingShows() {
+    var cache = upnextCache().shows || {}, today = new Date(new Date().toDateString());
+    return topShows().map(function (t) {
+      var u = cache[t.title.toLowerCase()] || {}, days = null;
+      if (u.next && u.next.date) days = Math.round((new Date(u.next.date + 'T00:00:00') - today) / 86400000);
+      return { title: u.title || t.title, app: u.app || t.app, season: u.season, next: u.next, status: u.status, usDate: u.usDate, days: days, date: u.next ? u.next.date : '' };
+    }).sort(function (a, b) { return (a.days === null ? 99 : a.days) - (b.days === null ? 99 : b.days); });
+  }
+  function showLine(x) {
+    if (x.days !== null && x.days >= 0) return (x.usDate ? 'In the US ' : 'New ') + dayWord(x.days, x.date);
+    if (/ended|canceled/i.test(x.status || '')) return 'Finished';
+    if (x.status) return 'All episodes out';
+    return '';
+  }
+  function fetchUpnext(force) {
+    var shows = topShows(); if (!shows.length || !N.upnext || !(N.assistantReady && N.assistantReady())) return;
+    var c = upnextCache(), key = shows.map(function (x) { return x.title.toLowerCase(); }).sort().join('|');
+    if (!force && c.key === key && Date.now() - (c.at || 0) < 6 * 3600 * 1000) return;
+    upnextKey = key; upnextSent = shows.map(function (x) { return x.title; });
+    N.upnext(JSON.stringify({ shows: shows.map(function (x) { return { title: x.title, app: x.app }; }),
+      apps: installedApps().map(function (a) { return a.key; }) }));
+  }
+  var upnextKey = '', upnextSent = [];
+  window.hearthUpnext = function (a) {
+    if (!a || !a.shows) return;
+    // Key each answer by the title we asked about (TMDB may spell it differently), in order.
+    var map = {}, sent = upnextSent;
+    a.shows.forEach(function (x, i) { if (x.found && sent[i]) map[sent[i].toLowerCase()] = x; });
+    try { localStorage.setItem('hearth.upnext', JSON.stringify({ at: Date.now(), key: upnextKey, shows: map })); } catch (e) {}
+    renderWatching(); renderNow(weatherNow());
+  };
+  // The last grown-up thing we opened, or the last app you were in if that's more recent
+  // (you may have moved on from inside an app).
+  function lastGrownUp() {
+    var h = history().filter(function (x) { return x.kind !== 'kid'; })[0], a = null;
+    try { a = N.lastApp && N.lastApp() ? JSON.parse(N.lastApp()) : null; } catch (e) {}
+    if (a && a.key && (!h || a.at > new Date(h.at).getTime() + 60000) && (!h || h.app !== a.key)) {
+      return { kind: 'app', key: a.key, title: appByKey(a.key).name, app: a.key, at: new Date(a.at).toISOString() };
+    }
+    return h;
+  }
+  function renderWatching() {
+    var box = $('upnext'); box.innerHTML = '';
+    var last = lastGrownUp(), shows = watchingShows(), saved = { carry: null, shows: [] };
+    if (last) {
+      var c = el('button', 'ep carry focusable', '<span class="m">Carry on from ' + (when(last.at).indexOf('yesterday') === 0 ? 'last night' : when(last.at)) + '</span><span class="t"></span><span class="d"></span>');
+      c.type = 'button'; c.querySelector('.t').textContent = last.title; c.querySelector('.d').textContent = appByKey(last.app).name || '';
+      c.addEventListener('click', carryOn); box.appendChild(c);
+      saved.carry = { title: last.title, app: last.app, when: when(last.at) };
+    }
+    shows.forEach(function (x) {
+      var app = appByKey(x.app), b = el('button', 'ep focusable', '<span class="t"></span><span class="m"></span><span class="d"></span>');
+      b.type = 'button';
+      b.querySelector('.t').textContent = x.title;
+      b.querySelector('.m').textContent = [x.season ? 'Series ' + x.season : '', app.name && app.key ? app.name : ''].filter(Boolean).join(' · ');
+      b.querySelector('.d').textContent = showLine(x);
+      b.addEventListener('click', function () { openShow(x.title, x.app); });
+      box.appendChild(b);
+      saved.shows.push({ title: x.title, app: x.app, line: showLine(x), date: x.date, usDate: !!x.usDate });
+    });
+    $('watchRow').hidden = !box.children.length;
+    if (N.saveWatching) N.saveWatching(JSON.stringify(saved));
+  }
+  // Opens a specific show: straight to the app's search where we know how, otherwise the app.
+  function openShow(title, appKey) {
+    rememberShow(title, 'series', appKey);
+    remember({ kind: 'pick', key: appKey, title: title, app: appKey, pickKind: 'series' });
+    openPick({ title: title, app: appKey });
+    setTimeout(renderWatching, 1000);
+  }
+
+  // ---------- Focus (class-based so the remote and phone share it) ----------
+  var cur = null;
+  function visible(e) { return e.offsetParent !== null; }
+  function layer() {
+    if (!$('pairModal').hidden) return $('pairModal');
+    if (!$('livePanel').hidden) return $('livePanel');
+    if (!$('picksPanel').hidden) return $('picksPanel');
+    if (!$('howPanel').hidden) return $('howPanel');
+    if (!$('energyPanel').hidden) return $('energyPanel');
+    return stage;
+  }
+  function items() {
+    var root = layer(), list = root.querySelectorAll('.focusable'), out = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!visible(e)) continue;
+      if (root === stage && (e.closest('.overlay') || e.closest('.energy'))) continue;
+      out.push(e);
+    }
+    return out;
+  }
+  function setFocus(e) {
+    if (cur) cur.classList.remove('is-focus');
+    cur = e; e.classList.add('is-focus');
+    $('commandForm').classList.toggle('on', e === ask);
+    if (e !== ask) { if (document.activeElement === ask) ask.blur(); e.focus({ preventScroll: true }); }
+  }
+  function move(dir) {
+    var list = items();
+    if (!cur || list.indexOf(cur) < 0) { setFocus(list[0] === $('phoneBtn') && layer() === stage ? ask : list[0]); return; }
+    var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    var best = null, bestScore = Infinity;
+    list.forEach(function (e) {
+      if (e === cur) return;
+      var b = e.getBoundingClientRect(), dx = b.left + b.width / 2 - ax, dy = b.top + b.height / 2 - ay, main, cross;
+      if (dir === 'left')  { if (b.right > a.left + 2) return; main = -dx; cross = Math.abs(dy); }
+      if (dir === 'right') { if (b.left < a.right - 2) return; main = dx;  cross = Math.abs(dy); }
+      if (dir === 'up')    { if (b.bottom > a.top + 2) return; main = -dy; cross = Math.abs(dx); }
+      if (dir === 'down')  { if (b.top < a.bottom - 2) return; main = dy;  cross = Math.abs(dx); }
+      var s = main + cross * 2.2;
+      if (s < bestScore) { bestScore = s; best = e; }
+    });
+    if (best) setFocus(best);
+  }
+  function select() {
+    if (!cur || !visible(cur)) { move('down'); return; }
+    if (cur === ask) { ask.focus(); N.showKeyboard(); return; }
+    cur.click();
+  }
+
+  // ---------- Messages ----------
+  var sheet = $('sheet'), sheetTimer;
+  function say(title, body, warn) {
+    $('sheetTitle').textContent = title; $('sheetBody').textContent = body || '';
+    sheet.classList.toggle('warn', !!warn);
+    sheet.classList.add('show');
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, warn ? 5000 : 3000);
+  }
+
+  // ---------- Actions ----------
+  function missing(app) { say('Can’t find ' + app.name + ' on this TV', 'Install it from the Amazon store, then try again.', true); }
+  function openApp(key, quiet) {
+    var app = appByKey(key);
+    if (!quiet) say('Opening ' + app.name, '');
+    remember({ kind: 'app', key: key, title: app.name, app: key });
+    setTimeout(renderWatching, 50);
+    setTimeout(function () { if (N.openApp(key) === 'missing') missing(app); }, 700);
+  }
+  function openChannel(key) {
+    var ch = C.channels.filter(function (c) { return c.key === key; })[0]; if (!ch) return;
+    var app = appByKey(ch.app);
+    say(ch.name, 'Opening ' + app.name);
+    remember({ kind: 'channel', key: key, title: ch.name + ' live', app: ch.app });
+    setTimeout(function () { if (N.openLink(ch.app, ch.url || '') === 'missing') missing(app); }, 700);
+  }
+  function kidAvailable(key) {
+    try { return JSON.parse(N.kidStatus ? N.kidStatus() : '{}')[key] !== false; } catch (e) { return true; }
+  }
+  function markKids() { kidButtons.forEach(function (b) { b._gone.hidden = kidAvailable(b._kid.key); }); }
+  function openKid(key) {
+    var k = C.kids.filter(function (x) { return x.key === key; })[0]; if (!k) return;
+    var app = appByKey(k.app);
+    if (!kidAvailable(key)) {
+      say(k.title + ' isn’t on iPlayer at the moment', 'Opening iPlayer instead.', true);
+      setTimeout(function () { if (N.openApp(k.app) === 'missing') missing(app); }, 1500);
+      return;
+    }
+    say(k.title, 'Opening ' + app.name);
+    remember({ kind: 'kid', key: key, title: k.title, app: k.app });
+    setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
+  }
+  function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
+  function closeOverlays() { $('energyPanel').hidden = true; $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
+
+  // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
+  var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
+  function mirror() {
+    if (!N.savePage) return;
+    var out = {};
+    try { PAGE_KEYS.forEach(function (k) { var v = localStorage.getItem(k); if (v !== null) out[k] = v; }); } catch (e) {}
+    N.savePage(JSON.stringify(out));
+  }
+  setInterval(mirror, 5 * 60 * 1000);
+
+  // ---------- What we've opened (kept on the stick, sent to the assistant) ----------
+  function history() { try { return JSON.parse(localStorage.getItem('hearth.history') || '[]'); } catch (e) { return []; } }
+  function remember(item) {
+    item.at = new Date().toISOString();
+    var h = history().filter(function (x) { return !(x.kind === item.kind && x.key === item.key && x.title === item.title); });
+    h.unshift(item);
+    try { localStorage.setItem('hearth.history', JSON.stringify(h.slice(0, 30))); } catch (e) {}
+    mirror();
+  }
+  function when(iso) {
+    var d = new Date(iso), now = new Date(), t = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+    return days === 0 ? 'earlier today at ' + t : days === 1 ? 'yesterday at ' + t : d.toLocaleDateString('en-GB', { weekday: 'long' }) + ' at ' + t;
+  }
+  // "Carry on from last night": reopen the last grown-up thing we opened. The app itself
+  // remembers the episode, so its Continue Watching row is one press away.
+  function carryOn() {
+    var last = lastGrownUp();
+    if (!last) { say('Nothing to carry on with yet', 'Once you’ve watched something through Hearth, I’ll remember it.', true); return; }
+    var title = 'Carrying on: ' + last.title, body = 'Last opened ' + when(last.at);
+    if (last.kind === 'channel') openChannel(last.key);
+    else if (last.kind === 'pick') openPick(last);
+    else openApp(last.key, true);
+    setTimeout(function () { say(title, body); renderWatching(); }, 50);
+  }
+
+  // ---------- The assistant (Claude), for anything the rules above don't cover ----------
+  var asking = null;
+  function installedApps() {
+    var keys = []; try { keys = JSON.parse(N.installed()); } catch (e) {}
+    return C.apps.concat(C.extraApps).filter(function (a) { return !a.live && keys.indexOf(a.key) >= 0; })
+      .map(function (a) { return { key: a.key, name: a.name }; });
+  }
+  function askAssistant(q) {
+    var id = String(Date.now());
+    asking = id;
+    $('sheetTitle').textContent = 'Thinking…'; $('sheetBody').textContent = '“' + q + '”';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { if (asking === id) { asking = null; say('That took too long', 'Try again in a moment.', true); } }, 30000);
+    var d = new Date();
+    N.ask(id, JSON.stringify({
+      request: q,
+      now: d.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      catalogue: {
+        apps: installedApps(),
+        channels: C.channels.map(function (c) { return { key: c.key, name: c.name }; }),
+        kids: C.kids.map(function (k) { return { key: k.key, title: k.title }; })
+      },
+      history: history().slice(0, 15).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; }),
+      feedback: feedbackForAssistant()
+    }));
+  }
+  window.hearthAnswer = function (id, a) {
+    if (id !== asking) return;   // an older question, or it already timed out
+    asking = null; clearTimeout(sheetTimer); sheet.classList.remove('show');
+    if (!a || a.error || !a.action) { say('The assistant couldn’t help', (a && a.error) || 'Try asking another way.', true); return; }
+    var t = a.action.type, key = a.action.key;
+    if (t === 'open_app' && key && a.action.show) {
+      rememberShow(a.action.show, a.action.showKind, key);
+      remember({ kind: 'pick', key: key, title: a.action.show, app: key, pickKind: a.action.showKind });
+      openPick({ title: a.action.show, app: key });
+      return setTimeout(renderWatching, 1000);
+    }
+    if (t === 'open_app' && key) return openApp(key);
+    if (t === 'open_channel' && key) return openChannel(key);
+    if (t === 'open_kid' && key) return openKid(key);
+    if (t === 'suggest' && a.suggestions && a.suggestions.length) {
+      $('picksNote').hidden = !a.attribution; $('picksNote').textContent = a.attribution || '';
+      return showPicks(a.reply, a.suggestions);
+    }
+    say(a.reply || 'Sorry, I’m not sure', '', true);
+  };
+
+  function showPicks(reply, picks) {
+    $('picksLede').textContent = reply || '';
+    var box = $('picks'); box.innerHTML = '';
+    picks.slice(0, 3).forEach(function (p) {
+      var app = appByKey(p.app);
+      var b = el('button', 'pick focusable', '<span class="pick-title"></span><span class="pick-meta"></span><span class="pick-why"></span>');
+      b.type = 'button';
+      b.querySelector('.pick-title').textContent = p.title;
+      b.querySelector('.pick-meta').textContent = [p.kind === 'series' ? 'Series' : 'Film', p.year, app.name].filter(Boolean).join(' · ');
+      b.querySelector('.pick-why').textContent = p.reason;
+      b.addEventListener('click', function () {
+        closeOverlays();
+        var item = { kind: 'pick', key: p.app, title: p.title, app: p.app, pickKind: p.kind };
+        remember(item);
+        rememberShow(p.title, p.kind, p.app);
+        openPick(item);
+      });
+      var col = el('div', 'pick-col'), row = el('div', 'verdicts');
+      col.appendChild(b);
+      var options = (p.kind === 'series' && !isFollowed(p.title) ? [['follow', 'Follow']] : []).concat([['seen', 'Seen it'], ['no', 'Not for us']]);
+      options.forEach(function (v) {
+        var vb = el('button', 'verdict focusable' + (v[0] === 'follow' ? ' follow' : '')); vb.type = 'button'; vb.textContent = v[1];
+        vb.addEventListener('click', function () {
+          if (v[0] === 'follow') {
+            follow(p.title, p.app);
+            var noted0 = el('div', 'noted'); noted0.textContent = 'Following. It’ll appear in Watching';
+            col.replaceChild(noted0, row); setFocus(b); return;
+          }
+          giveFeedback(p.title, p.kind, p.app, v[0]);
+          col.classList.add('done');
+          var noted = el('div', 'noted'); noted.textContent = 'Got it, I’ll remember that';
+          col.replaceChild(noted, row);
+          setFocus(b);
+        });
+        row.appendChild(vb);
+      });
+      col.appendChild(row);
+      box.appendChild(col);
+    });
+    $('picksPanel').hidden = false; setFocus(items()[0]);
+  }
+  // Opens a suggestion: straight to search where the app supports it, otherwise the app itself.
+  function openPick(p) {
+    var app = appByKey(p.app);
+    if (app.searchUrl) {
+      say(p.title, 'Searching ' + app.name);
+      setTimeout(function () { if (N.openLink(p.app, app.searchUrl.replace('{q}', encodeURIComponent(p.title))) === 'missing') missing(app); }, 700);
+    } else {
+      say('Opening ' + app.name, 'Search for “' + p.title + '”');
+      setTimeout(function () { if (N.openApp(p.app) === 'missing') missing(app); }, 1500);
+    }
+  }
+
+  // ---------- Learning: feedback on suggestions shapes a taste profile over time ----------
+  function feedback() { try { return JSON.parse(localStorage.getItem('hearth.feedback') || '[]'); } catch (e) { return []; } }
+  var VERDICTS = { loved: 'loved it', fine: 'it was fine', no: 'not for us', seen: 'already seen', skipped: 'didn’t watch it' };
+  function giveFeedback(title, kind, app, verdict) {
+    var f = feedback().filter(function (x) { return x.title !== title; });
+    f.unshift({ title: title, kind: kind || '', app: app || '', verdict: verdict, at: new Date().toISOString() });
+    try {
+      localStorage.setItem('hearth.feedback', JSON.stringify(f.slice(0, 100)));
+      var n = Number(localStorage.getItem('hearth.sinceLearn') || 0) + 1;
+      localStorage.setItem('hearth.sinceLearn', String(n));
+      if (n >= 3) learnNow();
+    } catch (e) {}
+    mirror();
+  }
+  function feedbackForAssistant() {
+    return feedback().slice(0, 40).map(function (x) { return { title: x.title, kind: x.kind, verdict: VERDICTS[x.verdict] || x.verdict }; });
+  }
+  // After a few answers, ask Claude to fold them into the profile (kept on the stick).
+  function learnNow() {
+    if (!(N.assistantReady && N.assistantReady() && N.learn)) return;
+    N.learn(JSON.stringify({
+      feedback: feedbackForAssistant(),
+      history: history().slice(0, 20).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; })
+    }));
+  }
+  window.hearthLearned = function (a) {
+    if (a && a.profile && !a.error) { try { localStorage.setItem('hearth.sinceLearn', '0'); } catch (e) {} }
+  };
+
+  // Back from watching a suggestion? Ask once how it was.
+  window.hearthResumed = function () {
+    renderWatching(); fetchUpnext(false);
+    if (asking || !$('pairModal').hidden) return;
+    var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
+    var rated = feedback().map(function (x) { return x.title; });
+    var mins = function (x) { return (Date.now() - new Date(x.at)) / 60000; };
+    var p = history().filter(function (x) {
+      return x.kind === 'pick' && mins(x) > 40 && mins(x) < 3 * 24 * 60 && asked.indexOf(x.title) < 0 && rated.indexOf(x.title) < 0;
+    })[0];
+    if (!p) return;
+    asked.unshift(p.title);
+    try { localStorage.setItem('hearth.asked', JSON.stringify(asked.slice(0, 50))); } catch (e) {}
+    $('howTitle').textContent = 'How was ' + p.title + '?';
+    var box = $('howActions'); box.innerHTML = '';
+    [['loved', 'Loved it'], ['fine', 'It was fine'], ['no', 'Not for us'], ['skipped', 'Didn’t watch it']].forEach(function (v) {
+      var b = el('button', 'pill focusable'); b.type = 'button'; b.textContent = v[1];
+      b.addEventListener('click', function () {
+        giveFeedback(p.title, p.pickKind, p.app, v[0]);
+        closeOverlays();
+        if (v[0] !== 'skipped') say('Thanks, noted', 'Suggestions will take that into account.');
+      });
+      box.appendChild(b);
+    });
+    $('livePanel').hidden = true; $('picksPanel').hidden = true;
+    $('howPanel').hidden = false; setFocus(box.firstChild);
+  };
+
+  function setMode(on, isBedtime) {
+    kidsMode = on; bedtime = on && !!isBedtime;
+    stage.classList.toggle('kids-mode', on);
+    $('modeLabel').textContent = on ? 'Kids' : 'Family';
+    $('kidsLabel').textContent = bedtime ? 'Calm ones for bedtime' : on ? 'Stories' : 'For the children';
+    kidButtons.forEach(function (b) { b.hidden = bedtime && !b._kid.bedtime; });
+    tick();
+  }
+  $('modeBtn').addEventListener('click', function () { setMode(!kidsMode); });
+
+  // Simple understanding of typed or spoken requests. Claude can take over the vague ones later.
+  function has(s, words) { for (var i = 0; i < words.length; i++) if (s.indexOf(words[i]) >= 0) return true; return false; }
+  function interpret(q) {
+    var s = ' ' + q.toLowerCase().replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    if (!s.trim()) return;
+    if (/\b(carry on|keep watching|continue|last night|where we left|what we were watching)\b/.test(s)) return carryOn();
+    var k = C.kids.filter(function (x) { return has(s, x.aliases.map(function (a) { return a + ' '; })); })[0];
+    if (k) return openKid(k.key);
+    var ready = N.assistantReady && N.assistantReady();
+    if (ready && /\b(suggest|recommend|ideas?|what should|in the mood)\b/.test(s)) return askAssistant(q.trim());
+    var ch = C.channels.filter(function (x) { return has(s, x.aliases.map(function (a) { return ' ' + a + ' '; })); })[0];
+    var wantsApp = /\b(open|app|launch)\b/.test(s);
+    var app = C.apps.concat(C.extraApps).filter(function (a) { return a.match && has(s, a.match); })[0];
+    if (ch && !(wantsApp && app)) return openChannel(ch.key);
+    if (app) return openApp(app.key);
+    if (/\blive\b/.test(s)) return openLive();
+    if (/\b(bedtime|calm|sleep)\b/.test(s)) return setMode(true, true);
+    if (/\b(kids|children|cartoon)\b/.test(s)) return setMode(true);
+    if (N.assistantReady && N.assistantReady()) return askAssistant(q.trim());
+    say('Sorry, I didn’t catch that', 'Try “Channel 4 live”, “open Netflix” or “put on The Gruffalo”.', true);
+  }
+  $('commandForm').addEventListener('submit', function (e) { e.preventDefault(); var q = ask.value; ask.value = ''; ask.blur(); interpret(q); });
+
+  // ---------- Pairing ----------
+  var paired = false;
+  function setPaired(on) {
+    paired = on;
+    $('phoneIcon').hidden = on; $('phoneDot').hidden = !on;
+    $('phoneLabel').textContent = on ? 'Phone connected' : 'Connect phone';
+  }
+  function openPairing() {
+    var p = JSON.parse(N.pairing());
+    if (!p.address) { say('Connect the TV to Wi-Fi first', 'Your phone and the TV need to be on the same network.', true); return; }
+    var url = 'http://' + p.address + '/';
+    $('pairCode').textContent = p.code;
+    $('pairAddress').textContent = 'Or go to ' + p.address + ' on any phone on this Wi-Fi.';
+    try { var qr = qrcode(0, 'M'); qr.addData(url); qr.make(); $('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 0, scalable: true }); } catch (e) { $('qr').textContent = url; }
+    $('pairModal').hidden = false; setFocus($('useRemote'));
+  }
+  $('useRemote').addEventListener('click', closeOverlays);
+  $('phoneBtn').addEventListener('click', function () {
+    if (paired) say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); else openPairing();
+  });
+
+  // ---------- Keys: from the Android side (remote) and from the phone ----------
+  window.hearthKey = function (k) {
+    if (wake()) return;   // the first press just wakes the screen
+    if (k === 'back') return back();
+    if (k === 'ok') return select();
+    if (k === 'home') { closeOverlays(); if (kidsMode) setMode(false); return; }
+    move(k);
+  };
+  function back() {
+    if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden || !$('energyPanel').hidden) { closeOverlays(); return; }
+    if (kidsMode) { setMode(false); return; }
+    setFocus(ask);
+  }
+  window.hearthBack = back;
+
+  window.hearthRemote = function (cmd) {
+    if (['refresh', 'updateReady', 'heating', 'key', 'refreshShows'].indexOf(cmd.type) < 0) wake();
+    if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); fetchUpnext(false); return; }
+    if (cmd.type === 'refreshShows') { fetchUpnext(true); renderWatching(); return; }
+    if (cmd.type === 'watch') {
+      closeOverlays();
+      if (cmd.value === 'carry') return carryOn();
+      var w0 = watchingShows().filter(function (x) { return x.title === cmd.value; })[0];
+      return w0 ? openShow(w0.title, w0.app) : interpret('put on ' + cmd.value);
+    }
+    if (cmd.type === 'updateFailed') return say('The update didn’t install', cmd.message || 'Try again later.', true);
+    if (cmd.type === 'key') return window.hearthKey(cmd.value);
+    if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
+    if (cmd.type === 'app') { closeOverlays(); return cmd.value === 'live' ? openLive() : openApp(cmd.value); }
+    if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
+    if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
+    if (cmd.type === 'mode') return setMode(!kidsMode);
+    if (cmd.type === 'energy') { closeOverlays(); return openEnergy(); }
+    if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'restorePage') {
+      try { var data = JSON.parse(cmd.value || '{}'); PAGE_KEYS.forEach(function (k) { if (data[k] !== undefined) localStorage.setItem(k, data[k]); }); } catch (e) {}
+      return location.reload();
+    }
+    if (cmd.type === 'heating') return say(cmd.title, cmd.body);
+    if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
+    if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
+  };
+
+  // Desktop testing: arrow keys and Enter behave like the remote
+  document.addEventListener('keydown', function (e) {
+    if (window.HearthNative) return;   // on the TV, the Android side sends keys
+    var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
+    if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
+    else if (e.key === 'Enter' && document.activeElement !== ask) { e.preventDefault(); select(); }
+  });
+
+  // ---------- Energy: the week from the energy service, kept on the stick ----------
+  // The service does every sum; this only lays it out. Nothing shows if pricing was incomplete.
+  var energy = null, energyTile = null;
+  function money(x) { return '£' + Number(x).toFixed(2); }
+  function shortMoney(x) { return x < 1 ? Math.round(x * 100) + 'p' : money(x); }
+  function setEnergy(d) {
+    if (!d || !d.week || !d.week.days) return;
+    energy = d;
+    if (!energyTile) {
+      energyTile = el('button', 'app focusable', '<span class="swatch" style="background:#2F4A3F"></span><span class="name">Energy</span>');
+      energyTile.type = 'button';
+      energyTile.addEventListener('click', openEnergy);
+      $('apps').appendChild(energyTile);
+      $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
+    }
+    if (!$('energyPanel').hidden) renderEnergy();
+  }
+  window.hearthEnergy = function (d) { if (d && !d.error) setEnergy(d); };
+  try { var ec = N.energyCached ? N.energyCached() : ''; if (ec) setEnergy(JSON.parse(ec)); } catch (e) {}
+  function fetchEnergy() { if (N.energy) N.energy(); }
+  setTimeout(fetchEnergy, window.HearthNative ? 4000 : 0); setInterval(fetchEnergy, 3 * 3600 * 1000);
+  // Browser preview: tv.html?energy opens the Energy screen as soon as the week arrives.
+  if (!window.HearthNative && /[?&]energy/.test(location.search)) {
+    var opener = setInterval(function () { if (energy) { clearInterval(opener); openEnergy(); } }, 300);
+  }
+
+  var SEG = { f: ['#B9BDB8', 'Standing charges'], h: ['#7C9488', 'House'], g: ['#6F7FA8', 'Heating'], w: ['#A9B7D6', 'Hot water and cooking'], c: ['#C9A227', 'Car'] };
+  function dayParts(x) {
+    var split = x.gasHeating !== undefined && x.gasHeating !== null;
+    var parts = [['c', x.car]];
+    if (split) { parts.push(['w', x.gasOther]); parts.push(['g', x.gasHeating]); } else parts.push(['g', x.gas]);
+    parts.push(['h', x.houseUse !== undefined ? x.houseUse : x.houseElec]);
+    if (x.standing !== undefined) parts.push(['f', x.standing]);
+    return parts.filter(function (p) { return p[1] > 0; });
+  }
+  function dayTotal(x) { return dayParts(x).reduce(function (a, p) { return a + p[1]; }, 0); }
+  function dayLine(x) {
+    var name = new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    return name + ': ' + dayParts(x).map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+  }
+  function openEnergy() {
+    if (!energy) { say('Energy isn’t ready yet', 'It’s worked out each morning. Try again later.', true); return; }
+    renderEnergy();
+    $('energyPanel').hidden = false;
+    setFocus($('eBars').children[$('eBars').children.length - 1] || items()[0]);
+    fetchEnergy();
+  }
+  function renderEnergy() {
+    var d = energy, w = d.week, note = d.note || {};
+    $('eRange').textContent = w.label;
+    $('eMade').textContent = 'Worked out ' + new Date(d.generatedAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('eTotal').textContent = money(w.total);
+    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(w.elec) + ', ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' under' : ' over') + ' your usual week' : '';
+    var rooms = d.heating && d.heating.week;
+    $('eSplit').textContent = 'House ' + money(w.house) + ' · Car ' + money(w.car) + (d.hasGas ? (rooms ? ' · Heating ' + money(rooms.heating) + ' · Hot water and cooking ' + money(rooms.hotWaterAndCooking) : ' · Gas ' + money(w.gas)) : '');
+    var sources = ['your Octopus meter'];
+    if (rooms) sources.push('Tado');
+    if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
+    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(sources.length > 2 ? ', ' : ' and ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
+    $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
+    $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
+
+    var used = {}; w.days.forEach(function (x) { dayParts(x).forEach(function (p) { used[p[0]] = 1; }); });
+    $('eKey').innerHTML = ['h', 'g', 'w', 'c', 'f'].filter(function (k) { return used[k]; })
+      .map(function (k) { return '<i style="background:' + SEG[k][0] + '"></i>' + esc(k === 'g' && !used.w ? 'Gas' : SEG[k][1]); }).join('');
+
+    var max = Math.max.apply(null, w.days.map(dayTotal).concat([0.5])), area = 330;
+    var bars = $('eBars'); bars.innerHTML = '';
+    w.days.forEach(function (x) {
+      var b = el('button', 'eday focusable' + (x.odd ? ' odd' : '')); b.type = 'button';
+      var html = '<span class="tot">' + money(dayTotal(x)) + '</span>';
+      dayParts(x).forEach(function (p) {
+        var h = Math.max(3, Math.round(p[1] / max * area));
+        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 34 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
+      });
+      b.innerHTML = html;
+      b.addEventListener('focus', function () { showDay(x); });
+      b.addEventListener('click', function () { showDay(x); });
+      bars.appendChild(b);
+    });
+    $('eDays').innerHTML = w.days.map(function (x) { return '<span>' + esc(x.day) + '</span>'; }).join('');
+    var odd = (note.odd_days || [])[0];
+    $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
+    $('eDetail').textContent = odd ? odd.line : 'Select a day for its breakdown.';
+
+    var right = $('eRight'); right.innerHTML = '<div class="e-label">WORTH DOING</div>';
+    var actions = (note.actions || []).slice(0, 2);
+    if (!actions.length) right.appendChild(el('div', 'e-sub', 'Nothing worth changing this week.'));
+    actions.forEach(function (a) {
+      var c = el('div', 'e-card');
+      c.innerHTML = '<h4></h4><p></p><div class="how"></div><div class="e-verdicts"></div>';
+      c.querySelector('h4').innerHTML = esc(a.title) + (a.per_year_gbp ? '<span>£' + a.per_year_gbp + ' a year</span>' : '');
+      c.querySelector('p').textContent = a.detail;
+      c.querySelector('.how').textContent = 'How we know: ' + a.how_we_know;
+      [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
+        var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
+        b.addEventListener('click', function () {
+          N.energyFeedback(a.id, v[0]);
+          note.actions = note.actions.filter(function (x) { return x.id !== a.id; });
+          say('Thanks', 'We’ll leave that out for the next 90 days.');
+          renderEnergy(); setFocus($('eBars').children[0]);
+        });
+        c.querySelector('.e-verdicts').appendChild(b);
+      });
+      right.appendChild(c);
+    });
+    if (!actions.length) {
+      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info'; }).slice(0, 2);
+      if (good.length) {
+        right.appendChild(el('div', 'e-label', 'GOOD TO KNOW')).style.marginTop = '24px';
+        good.forEach(function (g) {
+          var c = el('div', 'e-card'); c.innerHTML = '<p style="margin:0"></p><div class="how"></div>';
+          c.querySelector('p').textContent = g.facts; c.querySelector('.how').textContent = g.how_we_know;
+          right.appendChild(c);
+        });
+      }
+    }
+    if (rooms && rooms.rooms.length) {
+      var rc = el('div', 'e-card'), rmax = Math.max.apply(null, rooms.rooms.map(function (r) { return r.cost; }).concat([0.01]));
+      var rows = rooms.rooms.slice(0, 4).map(function (r) {
+        return '<tr><td style="width:36%">' + esc(r.room) + '</td><td><div class="track"><i style="width:' + Math.round(r.cost / rmax * 100) + '%"></i></div></td><td class="n">' + r.hoursPerDay + ' h a day</td><td class="n" style="width:90px"><b>' + money(r.cost) + '</b></td></tr>';
+      }).join('');
+      rc.innerHTML = '<h4 style="font-size:28px">Heating by room</h4><table class="e-rooms" style="width:100%;margin-top:6px;border-collapse:collapse">' + rows + '</table><div class="how">An estimate from Tado: gas shared by when each room called for heat.</div>';
+      right.appendChild(rc);
+    }
+  }
+  function showDay(x) { $('eDetail').className = 'e-detail'; $('eDetail').textContent = dayLine(x); }
+
+  // ---------- Start ----------
+  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick(); mirror();
+  var p0 = JSON.parse(N.pairing());
+  setPaired(!!p0.paired);
+  var seen = false;
+  try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
+  if (!seen && !p0.paired && p0.address) openPairing(); else setFocus(ask);
+})();
+</script>
+</body>
+</html>

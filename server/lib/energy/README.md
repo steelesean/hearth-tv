@@ -14,3 +14,7 @@ Set in Vercel, never in code: `OCTOPUS_API_KEY` and `OCTOPUS_ACCOUNT` (Octopus a
 Personal details > API access). It reuses the assistant's `ANTHROPIC_API_KEY` and
 `HEARTH_ASSISTANT_KEY`. Connecting a private Blob store to the project adds `BLOB_STORE_ID`, which the storage library uses to sign in.
 Optional: `GAS_UNITS` (`kwh` or `m3`) if the gas figures look ten times out.
+
+`/tv/tv.html?energy` previews the TV's Energy screen in a browser with the real figures (arrow
+keys and Enter act as the remote, Escape as Back). It's a copy of the TV files: run
+`tools/sync-tv-preview.sh` after changing them.

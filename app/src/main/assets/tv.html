@@ -358,9 +358,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
         { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
       ] }); }, 300);
     },
-    energy: function () {},
+    // In a browser preview served by the energy service, fetch the real week with the Hearth password.
+    energy: function () {
+      if (!/^https?:/.test(location.protocol)) return;
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (!key) { key = prompt('Hearth password (the same one the TV’s assistant uses)') || ''; try { localStorage.setItem('hearthKey', key); } catch (e) {} }
+      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json(); })
+        .then(function (d) { if (d.error) { try { localStorage.removeItem('hearthKey'); } catch (e) {} alert(d.error); } else window.hearthEnergy(d); });
+    },
     energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
-    energyFeedback: function () {},
+    energyFeedback: function (id, verdict) {
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (/^https?:/.test(location.protocol)) fetch('/api/energy/feedback', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, verdict: verdict }) });
+    },
     learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
     ask: function (id, payload) {
       setTimeout(function () {
@@ -1012,7 +1022,11 @@ body { color: var(--ink); font-family: var(--font-ui); }
   window.hearthEnergy = function (d) { if (d && !d.error) setEnergy(d); };
   try { var ec = N.energyCached ? N.energyCached() : ''; if (ec) setEnergy(JSON.parse(ec)); } catch (e) {}
   function fetchEnergy() { if (N.energy) N.energy(); }
-  setTimeout(fetchEnergy, 4000); setInterval(fetchEnergy, 3 * 3600 * 1000);
+  setTimeout(fetchEnergy, window.HearthNative ? 4000 : 0); setInterval(fetchEnergy, 3 * 3600 * 1000);
+  // Browser preview: tv.html?energy opens the Energy screen as soon as the week arrives.
+  if (!window.HearthNative && /[?&]energy/.test(location.search)) {
+    var opener = setInterval(function () { if (energy) { clearInterval(opener); openEnergy(); } }, 300);
+  }
 
   var SEG = { f: ['#B9BDB8', 'Standing charges'], h: ['#7C9488', 'House'], g: ['#6F7FA8', 'Heating'], w: ['#A9B7D6', 'Hot water and cooking'], c: ['#C9A227', 'Car'] };
   function dayParts(x) {
