@@ -208,6 +208,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
 .energy .e-card h4.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .energy .e-card p.one { -webkit-line-clamp: 1; }
+.energy .e-card h4.big { font-size: 38px; line-height: 1.2; margin-top: 14px; -webkit-line-clamp: 4; }
 .energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
 .energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .energy .e-card .how { font-size: 17px; color: var(--ink-soft); margin-top: auto; padding-top: 8px; }
@@ -215,7 +216,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-verdicts > * + * { margin-left: 12px; }
 .energy .e-verdicts .verdict { height: 48px; font-size: 20px; }
 .energy .e-rooms { width: 100%; border-collapse: collapse; margin-top: 6px; }
-.energy .e-rooms td { padding: 4px 0; font-size: 20px; white-space: nowrap; }
+.energy .e-rooms td { padding: 6px 0; font-size: 21px; white-space: nowrap; }
 .energy .e-rooms td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 14px; }
 .energy .e-rooms .track i { display: block; height: 100%; border-radius: 6px; }
@@ -229,7 +230,6 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
 .energy .e-card p.four { -webkit-line-clamp: 4; }
 .energy .e-card p.two { -webkit-line-clamp: 2; }
-.energy .e-rooms td.cold { color: var(--ink); font-weight: 600; }   /* below target; not red, which is heating here */
 .energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
 .energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .energy .e-foot .e-eff { font-size: 20px; font-weight: 600; color: var(--ink-2); margin-right: 10px; }
@@ -3688,7 +3688,7 @@ var qrcode = function() {
     $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
     $('eUsualKey').hidden = !w.days.some(function (x) { return x.usual; });
     if (odd) $('eDetail').textContent = odd.line;
-    else $('eDetail').textContent = 'Select a day for its breakdown. A usual day is that weekday over the last four weeks, without the car.';
+    else $('eDetail').textContent = 'Select a day for its breakdown.';
 
     // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
     var cards = $('eCards'); cards.innerHTML = '';
@@ -3715,7 +3715,7 @@ var qrcode = function() {
     var action = (note.actions || [])[0];
     var c2 = el('div', 'e-card');
     if (action) {
-      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p></p><div class="e-verdicts"></div>';
+      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p class="two"></p><div class="e-verdicts"></div>';
       c2.querySelector('h4').innerHTML = esc(action.title) + (action.per_year_gbp ? '<span>£' + action.per_year_gbp + ' a year</span>' : '');
       c2.querySelector('p').textContent = action.detail;
       [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
@@ -3730,28 +3730,24 @@ var qrcode = function() {
       });
     } else {
       var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
-      c2.innerHTML = '<div class="e-label">Good to know</div><p class="four"></p><div class="how"></div>';
-      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing at the moment.';
-      c2.querySelector('.how').textContent = good ? good.how_we_know : '';
+      c2.innerHTML = '<div class="e-label">Good to know</div><h4 class="clamp big"></h4>';
+      // Claude's one-line version; failing that, the first sentence of the calculated fact.
+      var line = note.good_to_know || (good ? (good.facts.match(/^[^.]*\.?/) || [good.facts])[0] : '');
+      c2.querySelector('h4').textContent = line || 'Nothing worth changing at the moment.';
     }
     cards.appendChild(c2);
 
     if (rooms && rooms.rooms.length) {
       var c3 = el('div', 'e-card'), list = rooms.rooms.slice(0, 4);
       var rmax = Math.max.apply(null, list.map(function (r) { return r.cost; }).concat([sums.w || rooms.hotWaterAndCooking, 0.01]));
-      var row = function (name, cost, hours, colour, cold) {
-        return '<tr><td style="width:34%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
-          + '<td class="n' + (cold ? ' cold' : '') + '" style="width:26%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
-      };
-      var roomNote = function (r) {
-        var t = r.hoursPerDay + ' h';
-        if (r.temp != null) t += ' · ' + r.temp.toFixed(1) + '°' + (r.target != null ? '/' + Math.round(r.target) + '°' : '');
-        return t;
+      // Just the room, its share and its cost: the hours and temperatures are on the web dashboard.
+      var row = function (name, cost, colour) {
+        return '<tr><td style="width:40%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
+          + '<td class="n" style="width:18%"><b>' + money(cost) + '</b></td></tr>';
       };
       c3.innerHTML = '<div class="e-label">Gas by room · last 7 days</div><table class="e-rooms">'
-        + list.map(function (r) { return row(r.room, r.cost, roomNote(r), SEG.g[0], r.temp != null && r.target != null && r.temp < r.target - 1); }).join('')
-        + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
-        + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
+        + list.map(function (r) { return row(r.room, r.cost, SEG.g[0]); }).join('')
+        + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, SEG.w[0]) + '</table>';
       cards.appendChild(c3);
     }
     fitCards();

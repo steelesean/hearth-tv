@@ -20,12 +20,13 @@ const SCHEMA = {
         properties: {
           id: { type: "string", description: "The candidate id." },
           title: { type: "string", description: "One action, as an instruction, at most 7 words. E.g. 'Try Agile for a quarter'." },
-          detail: { type: "string", description: "One or two sentences with the figures that back it up." },
+          detail: { type: "string", description: "One short sentence, at most 18 words, with the figure that backs it up. It goes on a TV card, so keep it plain." },
         },
         required: ["id", "title", "detail"],
         additionalProperties: false,
       },
     },
+    good_to_know: { type: "string", description: "The single most useful information-only candidate (per_year_gbp 0; not odd days, rooms, insulation or tariff-fit, which are shown elsewhere), as one short sentence of at most 14 words using only its own figures. Empty if there is none." },
     odd_days: {
       type: "array",
       description: "One line for each odd-day candidate.",
@@ -40,7 +41,7 @@ const SCHEMA = {
       },
     },
   },
-  required: ["headline", "summary", "actions", "odd_days"],
+  required: ["headline", "summary", "actions", "good_to_know", "odd_days"],
   additionalProperties: false,
 };
 
@@ -98,6 +99,7 @@ export function plainNote(facts) {
     summary: facts.week.usualElec ? "Electricity £" + facts.week.elec.toFixed(2) + ", against a usual £" + facts.week.usualElec.toFixed(2) + "." : "",
     actions: money.map((c) => ({ id: c.id, title: { tariff: "Look at " + (facts.tariff.best?.name || "another tariff"), baseline: "Find what's always on", peak: "Run big appliances on a delay timer" }[c.id], detail: c.facts, per_year_gbp: c.per_year_gbp, how_we_know: c.how_we_know })),
     odd_days: facts.candidates.filter((c) => c.id.startsWith("odd-")).map((c) => ({ id: c.id, line: c.facts, how_we_know: c.how_we_know })),
+    good_to_know: "",
     plain: true,
   };
 }
