@@ -10,8 +10,8 @@ const SUPPORTS_FALLBACKS = /^claude-(opus|sonnet)-5-5$/.test(MODEL);
 const SCHEMA = {
   type: "object",
   properties: {
-    headline: { type: "string", description: "The week in one short sentence, at most 10 words." },
-    summary: { type: "string", description: "Two sentences at most on how the week went." },
+    headline: { type: "string", description: "The last 7 days in one short sentence, at most 10 words." },
+    summary: { type: "string", description: "Two sentences at most on how the last 7 days went." },
     actions: {
       type: "array",
       description: "Up to 3 candidates worth doing, most valuable first. Only candidates with per_year_gbp above 0.",
@@ -47,6 +47,7 @@ const SCHEMA = {
 const SYSTEM = `You write the weekly energy note for Hearth, a UK family's TV home screen. You get facts that have already been calculated from their Octopus meter. Your job is to put them into plain, calm British English.
 
 Rules:
+- The facts cover the last 7 days, not a calendar week: say "the last 7 days", never "last week" or "this week".
 - Use only the numbers you are given. Never work out new figures, and never mention data you weren't given (no temperatures, door sensors, room-by-room use or comparisons with other homes).
 - Each action is one specific thing to do, worth doing, and checkable next week.
 - A candidate with per_year_gbp 0 is information, not an action: work it into the summary if it matters (for example, that they're already on the cheapest tariff).
@@ -93,7 +94,7 @@ export async function weeklyNote(facts) {
 export function plainNote(facts) {
   const money = facts.candidates.filter((c) => c.per_year_gbp > 0).sort((a, b) => b.per_year_gbp - a.per_year_gbp).slice(0, 3);
   return {
-    headline: "Energy last week: £" + facts.week.total.toFixed(2),
+    headline: "The last 7 days: £" + facts.week.total.toFixed(2),
     summary: facts.week.usualElec ? "Electricity £" + facts.week.elec.toFixed(2) + ", against a usual £" + facts.week.usualElec.toFixed(2) + "." : "",
     actions: money.map((c) => ({ id: c.id, title: { tariff: "Look at " + (facts.tariff.best?.name || "another tariff"), baseline: "Find what's always on", peak: "Run big appliances on a delay timer" }[c.id], detail: c.facts, per_year_gbp: c.per_year_gbp, how_we_know: c.how_we_know })),
     odd_days: facts.candidates.filter((c) => c.id.startsWith("odd-")).map((c) => ({ id: c.id, line: c.facts, how_we_know: c.how_we_know })),

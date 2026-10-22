@@ -165,21 +165,27 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
 .energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
 .energy .e-title { font-size: 30px; font-weight: 500; }
-.energy .e-title span { color: var(--ink-soft); font-size: 26px; margin-left: 18px; font-weight: 400; }
-.energy .e-made { font-size: 20px; color: var(--ink-soft); }
 .energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
-.energy .e-sum { display: flex; align-items: flex-end; margin-top: 18px; }
-.energy .e-total { width: 420px; flex: none; }
-.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; font-weight: 400; }
-.energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
-.energy .e-total small.e-month { color: var(--ink-soft); margin-top: 6px; line-height: 1.35; }
-.energy .e-figs { flex: 1; display: flex; }
-.energy .e-fig { flex: 1; border-left: 2px solid var(--line); padding: 2px 0 4px 22px; }
-.energy .e-fig .k { font-size: 19px; color: var(--ink-soft); white-space: nowrap; }
-.energy .e-fig .k i { display: inline-block; width: 16px; height: 16px; border-radius: 5px; margin-right: 10px; vertical-align: -2px; }
-.energy .e-fig .v { font: 500 40px/1.1 var(--font-ui); margin-top: 6px; font-variant-numeric: tabular-nums; }
-.energy .e-chart { margin-top: 20px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 20px 32px 14px 28px; display: flex; flex-direction: column; }
-.energy .e-plot { position: relative; height: 290px; margin-left: 64px; }
+/* The month is the headline: spent so far, where it's heading, last month for context. */
+.energy .e-head { display: flex; align-items: flex-end; margin-top: 18px; }
+.energy .e-now small { display: block; font: 500 21px var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
+.energy .e-now b { display: block; font: 400 112px/0.9 var(--font-display); letter-spacing: -0.02em; font-weight: 400; }
+.energy .e-to { margin-left: 52px; padding-bottom: 6px; }
+.energy .e-to b { display: block; font: 400 60px/1 var(--font-display); color: var(--focus); font-weight: 400; }
+.energy .e-to span { display: block; font-size: 21px; color: var(--ink-soft); margin-top: 8px; }
+.energy .e-prog { margin-top: 18px; height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.energy .e-prog i { display: block; height: 100%; background: var(--ink-2); border-radius: 5px; }
+.energy .e-prog-k { display: flex; justify-content: space-between; font-size: 19px; color: var(--ink-soft); margin-top: 8px; }
+/* The last 7 days: a ring by part, with its list beside it. */
+.energy .e-week { display: flex; align-items: center; margin-top: 10px; }
+.energy .e-week svg { flex: none; width: 184px; height: 184px; }
+.energy .e-legend { flex: 1; margin-left: 26px; min-width: 0; }
+.energy .e-legend div { display: flex; justify-content: space-between; font-size: 21px; padding: 4px 0; white-space: nowrap; }
+.energy .e-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 10px; vertical-align: -1px; }
+.energy .e-legend b { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 12px; }
+.energy .e-chart { margin-top: 20px; flex: 1; min-height: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 16px 32px 12px 28px; display: flex; flex-direction: column; }
+.energy .e-chart-k { display: flex; justify-content: space-between; align-items: center; font-size: 18px; color: var(--ink-soft); }
+.energy .e-plot { position: relative; height: 236px; margin: auto 0 0 64px; flex: none; }
 .energy .e-grid-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--line); }
 .energy .e-grid-line span { position: absolute; right: 100%; margin-right: 14px; top: -13px; font-size: 18px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .energy .e-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; }
@@ -193,9 +199,9 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-days { display: flex; margin-left: 64px; margin-top: 12px; }
 .energy .e-days span { flex: 1; margin: 0 30px; text-align: center; font-size: 21px; color: var(--ink-soft); }
 .energy .e-days span b { color: var(--ink); font-weight: 600; }
-.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line, so picking a day never moves the cards */
+.energy .e-detail { font-size: 21px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 10px; padding-top: 10px; min-height: 28px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line, so picking a day never moves the cards */
 .energy .e-detail.odd { color: #B5542D; }
-.energy .e-cards { display: flex; margin-top: 18px; flex: 1; min-height: 0; }
+.energy .e-cards { display: flex; margin-top: 22px; height: 284px; flex: none; }
 .energy .e-card { flex: 1; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 18px 24px; text-align: left; font-family: var(--font-ui); color: var(--ink); overflow: hidden; display: flex; flex-direction: column; }
 .energy .e-card + .e-card { margin-left: 24px; }
 .energy .e-card > * { flex-shrink: 0; }   /* overflow shows as the card overflowing, so fitCards() can trim it */
@@ -216,13 +222,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .eday .usual { position: absolute; left: -16px; right: -16px; height: 0; pointer-events: none; }
 .energy .eday .usual::before, .energy .eday .usual::after { content: ""; position: absolute; top: -2px; width: 12px; border-top: 4px solid var(--ink); }
 .energy .eday .usual::before { left: 0; } .energy .eday .usual::after { right: 0; }
-.energy .e-detail .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
+.energy .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
 .energy .e-trend { display: flex; align-items: flex-end; height: 44px; margin-top: 10px; }
 .energy .e-trend i { flex: 1; margin: 0 4px; background: var(--line); border-radius: 5px 5px 2px 2px; }
 .energy .e-trend i.now { background: var(--focus); }
 .energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
+.energy .e-card p.four { -webkit-line-clamp: 4; }
 .energy .e-card p.two { -webkit-line-clamp: 2; }
-.energy .e-rooms td.cold { color: #B5542D; }
+.energy .e-rooms td.cold { color: var(--ink); font-weight: 600; }   /* below target; not red, which is heating here */
 .energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
 .energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .energy .e-foot .e-eff { font-size: 20px; font-weight: 600; color: var(--ink-2); margin-right: 10px; }
@@ -314,21 +321,21 @@ body { color: var(--ink); font-family: var(--font-ui); }
   </div>
 
   <div class="energy" id="energyPanel" hidden>
-    <div class="e-top">
-      <div class="e-title">Energy<span id="eRange"></span></div>
-      <div class="e-made" id="eMade"></div>
+    <div class="e-top"><div class="e-title">Energy</div></div>
+    <div class="e-head">
+      <div class="e-now"><small id="eMonthName"></small><b id="eSoFar"></b></div>
+      <div class="e-to"><b id="eTo"></b><span id="eLast"></span></div>
     </div>
-    <div class="e-sum">
-      <div class="e-total"><b id="eTotal"></b><small id="eSub"></small><small id="eMonth" class="e-month"></small></div>
-      <div class="e-figs" id="eFigs"></div>
-    </div>
+    <div class="e-prog"><i id="eProg"></i></div>
+    <div class="e-prog-k"><span id="eProgDays"></span><span id="eProgNote"></span></div>
     <div class="e-warn" id="eWarn" hidden></div>
+    <div class="e-cards" id="eCards"></div>
     <div class="e-chart">
+      <div class="e-chart-k"><span class="e-label">Each day</span><span id="eUsualKey"><span class="dash"></span>A usual day for that weekday</span></div>
       <div class="e-plot" id="ePlot"><div class="e-bars" id="eBars"></div></div>
       <div class="e-days" id="eDays"></div>
       <div class="e-detail" id="eDetail"></div>
     </div>
-    <div class="e-cards" id="eCards"></div>
     <div class="e-foot" id="eFoot"></div>
   </div>
 
@@ -3588,12 +3595,14 @@ var qrcode = function() {
     var opener = setInterval(function () { if (energy) { clearInterval(opener); openEnergy(); } }, 300);
   }
 
-  var SEG = { f: ['#B9BDB8', 'Standing charges'], h: ['#7C9488', 'House'], g: ['#6F7FA8', 'Heating'], w: ['#A9B7D6', 'Hot water and cooking'], c: ['#C9A227', 'Car'] };
+  // Checked for contrast and colour blindness on the dark screen, in this stacking order: each
+  // colour only touches ones it's clearly different from (yellow never next to red, pink never next to red).
+  var SEG = { c: ['#C98500', 'Car'], h: ['#C4768F', 'House'], w: ['#3987E5', 'Hot water, cooking'], g: ['#E04A3A', 'Heating'], f: ['#8E918A', 'Standing charges'] };
   function dayParts(x) {
     var split = x.gasHeating !== undefined && x.gasHeating !== null;
-    var parts = [['c', x.car]];
+    // Top to bottom: car, house, hot water, heating, standing charges.
+    var parts = [['c', x.car], ['h', x.houseUse !== undefined ? x.houseUse : x.houseElec]];
     if (split) { parts.push(['w', x.gasOther]); parts.push(['g', x.gasHeating]); } else parts.push(['g', x.gas]);
-    parts.push(['h', x.houseUse !== undefined ? x.houseUse : x.houseElec]);
     if (x.standing !== undefined) parts.push(['f', x.standing]);
     return parts.filter(function (p) { return p[1] > 0; });
   }
@@ -3623,24 +3632,25 @@ var qrcode = function() {
   }
   function renderEnergy() {
     var d = energy, w = d.week, note = d.note || {};
-    $('eRange').textContent = w.label;
-    $('eMade').textContent = 'Worked out ' + new Date(d.generatedAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-
-    // The five figures: the same parts as the bars, so they add up to the total exactly.
-    var sums = {}, order = ['h', 'g', 'w', 'c', 'f'];
+    // The parts over the 7 days, in the same order as each bar (top to bottom), so the ring,
+    // its list and the bars read across. They add up to the 7-day total exactly.
+    var sums = {}, order = ['c', 'h', 'w', 'g', 'f'];
     w.days.forEach(function (x) { dayParts(x).forEach(function (p) { sums[p[0]] = (sums[p[0]] || 0) + p[1]; }); });
     var total = order.reduce(function (a, k) { return a + (sums[k] || 0); }, 0);
-    $('eTotal').textContent = money(total);
-    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' less' : ' more') + ' than a usual week' : '';
-    $('eFigs').innerHTML = order.filter(function (k) { return sums[k] > 0; }).map(function (k) {
-      var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
-      return '<div class="e-fig"><div class="k"><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</div><div class="v">' + money(sums[k]) + '</div></div>';
-    }).join('');
-    // The month: spent so far and where it's heading, with last month to compare.
-    var f = d.forecast;
-    $('eMonth').innerHTML = f && f.projected && !(d.tariff && d.tariff.incomplete)
-      ? esc(f.month) + ' so far £' + Math.round(f.soFar) + ' · heading for £' + Math.round(f.projected) + (f.lastMonth ? '<br>' + esc(f.lastMonth.month) + ' was £' + Math.round(f.lastMonth.total) : '')
-      : '';
+
+    // The headline is the month: spent so far and where it's heading, last month for context.
+    // Without a forecast (or with incomplete prices) it falls back to the 7 days.
+    var f = d.forecast, incomplete = d.tariff && d.tariff.incomplete, month = f && f.projected && f.daysInMonth && !incomplete;
+    $('eMonthName').textContent = month ? f.month + ' so far' : 'Last 7 days';
+    $('eSoFar').textContent = month ? '£' + Math.round(f.soFar) : money(total);
+    $('eTo').textContent = month ? 'heading for about £' + Math.round(f.projected) : '';
+    $('eLast').textContent = month && f.lastMonth ? f.lastMonth.month + ' was £' + Math.round(f.lastMonth.total) : '';
+    $('eProg').parentNode.hidden = $('eProgDays').parentNode.hidden = !month;
+    if (month) {
+      $('eProg').style.width = Math.round(f.daysWithData / f.daysInMonth * 100) + '%';
+      $('eProgDays').textContent = f.daysWithData + ' of ' + f.daysInMonth + ' days in';
+      $('eProgNote').textContent = /weather/.test(f.gasFrom || '') ? 'Gas for the rest of the month follows the weather forecast' : '';
+    }
     var rooms = d.heating && d.heating.week;
     var sources = ['your Octopus meter'];
     if (rooms) sources.push('Tado');
@@ -3650,7 +3660,7 @@ var qrcode = function() {
     $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
 
     // The chart: a £ scale with gridlines, one stacked bar a day.
-    var plot = $('ePlot'), area = 290 - 38;            // leave room above for the day totals
+    var plot = $('ePlot'), area = 236 - 34;            // leave room above for the day totals
     var max = Math.max.apply(null, w.days.map(dayTotal).concat(w.days.map(function (x) { return x.usual || 0; }), [0.5]));
     var step = niceStep(max), top = Math.ceil(max / step) * step;
     [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
@@ -3665,7 +3675,7 @@ var qrcode = function() {
       var html = '<span class="tot">' + money(dayTotal(x)) + '</span>';
       dayParts(x).forEach(function (p) {
         var h = Math.max(3, Math.round(p[1] / top * area));
-        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 30 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
+        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '"></span>';
       });
       if (x.usual) html += '<span class="usual" style="bottom:' + Math.round(x.usual / top * area) + 'px"></span>';
       b.innerHTML = html;
@@ -3676,30 +3686,30 @@ var qrcode = function() {
     $('eDays').innerHTML = w.days.map(function (x) { return '<span><b>' + esc(x.day) + '</b> ' + Number(x.date.slice(8, 10)) + '</span>'; }).join('');
     var odd = (note.odd_days || [])[0];
     $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
-    var hasUsual = w.days.some(function (x) { return x.usual; });
+    $('eUsualKey').hidden = !w.days.some(function (x) { return x.usual; });
     if (odd) $('eDetail').textContent = odd.line;
-    else $('eDetail').innerHTML = (hasUsual ? '<span class="dash"></span>A usual day for that weekday: the last four weeks, without the car. ' : '') + 'Select a day for its breakdown.';
+    else $('eDetail').textContent = 'Select a day for its breakdown. A usual day is that weekday over the last four weeks, without the car.';
 
     // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
     var cards = $('eCards'); cards.innerHTML = '';
     var c1 = el('div', 'e-card');
-    var tr = d.trend || [];
-    c1.innerHTML = '<div class="e-label">The week</div><h4 class="clamp"></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
-    c1.querySelector('h4').textContent = note.headline || '';
-    c1.querySelector('p').textContent = note.summary || '';
-    if (tr.length > 2) {
-      var tmax = Math.max.apply(null, tr.map(function (t) { return t.total; }));
-      var avg = tr.reduce(function (a, t) { return a + t.total; }, 0) / tr.length;
-      var strip = el('div', 'e-trend');
-      tr.forEach(function (t, i) {
-        var bar = el('i', i === tr.length - 1 ? 'now' : '');
-        bar.style.height = Math.max(4, Math.round(t.total / tmax * 44)) + 'px';
-        strip.appendChild(bar);
-      });
-      c1.appendChild(strip);
-      var first = new Date(tr[0].from + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      c1.appendChild(el('div', 'e-trend-k', '<span>' + tr.length + ' weeks from ' + esc(first) + '</span><span>Average ' + money(avg) + ' · this week ' + money(tr[tr.length - 1].total) + '</span>'));
-    }
+    var toD = new Date(w.to + 'T12:00:00'), to = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][toD.getDay()] + ' ' + toD.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][toD.getMonth()];
+    var ring = '', at = 25, r = 15.9155;                  // circumference 100, so each part's length is its share
+    order.forEach(function (k) {
+      if (!(sums[k] > 0)) return;
+      var share = sums[k] / total * 100;
+      ring += '<circle cx="21" cy="21" r="' + r + '" fill="none" stroke="' + SEG[k][0] + '" stroke-width="4.5" stroke-dasharray="' + Math.max(0.1, share - 0.6) + ' ' + (100 - share + 0.6) + '" stroke-dashoffset="' + at + '"></circle>';
+      at -= share;
+    });
+    var gap = w.usualElec ? Math.round(Math.abs(w.elec - w.usualElec)) : null;      // electricity only: gas follows the weather
+    var vs = gap == null ? '' : gap < 1 ? 'usual electricity' : 'electricity £' + gap + (w.elec < w.usualElec ? ' under' : ' over');
+    ring += '<text x="21" y="21.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="5.6" fill="currentColor">' + money(total) + '</text>'
+      + (vs ? '<text x="21" y="26.8" text-anchor="middle" font-size="2.7" fill="currentColor" opacity="0.65">' + esc(vs) + '</text>' : '');
+    c1.innerHTML = '<div class="e-label">Last 7 days · to ' + esc(to) + '</div><div class="e-week"><svg viewBox="0 0 42 42">' + ring + '</svg><div class="e-legend">'
+      + order.filter(function (k) { return sums[k] > 0; }).map(function (k) {
+          var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
+          return '<div><span><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</span><b>' + money(sums[k]) + '</b></div>';
+        }).join('') + '</div></div>';
     cards.appendChild(c1);
 
     var action = (note.actions || [])[0];
@@ -3720,8 +3730,8 @@ var qrcode = function() {
       });
     } else {
       var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
-      c2.innerHTML = '<div class="e-label">Good to know</div><p></p><div class="how"></div>';
-      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing this week.';
+      c2.innerHTML = '<div class="e-label">Good to know</div><p class="four"></p><div class="how"></div>';
+      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing at the moment.';
       c2.querySelector('.how').textContent = good ? good.how_we_know : '';
     }
     cards.appendChild(c2);
@@ -3738,7 +3748,7 @@ var qrcode = function() {
         if (r.temp != null) t += ' · ' + r.temp.toFixed(1) + '°' + (r.target != null ? '/' + Math.round(r.target) + '°' : '');
         return t;
       };
-      c3.innerHTML = '<div class="e-label">Gas this week, by room</div><table class="e-rooms">'
+      c3.innerHTML = '<div class="e-label">Gas by room · last 7 days</div><table class="e-rooms">'
         + list.map(function (r) { return row(r.room, r.cost, roomNote(r), SEG.g[0], r.temp != null && r.target != null && r.temp < r.target - 1); }).join('')
         + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
         + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';

@@ -280,11 +280,15 @@ export function analyse(input) {
 
   // The most recent Monday to Sunday with every day in.
   const today = local(now).date;
-  let monday = addDays(today, -((["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekdayOf(today)) + 7) % 7));
+  // The last 7 days with every reading in: usually up to yesterday, but Octopus can be a day or
+  // two behind, so it ends on the latest complete day. Any 7 days in a row hold each weekday
+  // once, so comparisons with earlier 7-day stretches stay fair. (Named monday for history: it's
+  // the first day of the seven.)
   const weekDates = (m) => [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(m, i));
-  for (let i = 0; i < 3; i++) {
-    monday = addDays(monday, -7);
+  let monday = addDays(today, -7);
+  for (let i = 0; i < 6; i++) {
     if (weekDates(monday).every((d) => daily.get(d)?.complete)) break;
+    monday = addDays(monday, -1);
   }
   const week = weekDates(monday).map((d) => daily.get(d)).filter(Boolean);
   const weekTotal = round(sum(week.map((d) => d.total)));
@@ -320,7 +324,7 @@ export function analyse(input) {
     return same.length >= 3 ? round(median(same.map((x) => x.house + x.gas))) : null;
   };
 
-  // The last eight Monday-to-Sunday weeks, for the trend.
+  // The last eight 7-day stretches, for the trend.
   const trend = [7, 6, 5, 4, 3, 2, 1, 0].map((n) => {
     const days = weekDates(addDays(monday, -7 * n)).map((x) => daily.get(x));
     if (!days.every((x) => x?.complete)) return null;
@@ -686,7 +690,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
     out.push({
       id: "rooms-info",
       per_year_gbp: 0,
-      facts: `Last week's gas: heating £${hw.heating.toFixed(2)}, hot water and cooking £${hw.hotWaterAndCooking.toFixed(2)}. Rooms that cost most to heat: ${top}.`,
+      facts: `Gas over the last 7 days: heating £${hw.heating.toFixed(2)}, hot water and cooking £${hw.hotWaterAndCooking.toFixed(2)}. Rooms that cost most to heat: ${top}.`,
       how_we_know: heating.note,
     });
   }
