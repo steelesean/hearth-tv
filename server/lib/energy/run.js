@@ -59,6 +59,15 @@ export async function refresh(now = Date.now()) {
   let note = null;
   try { note = await weeklyNote(facts); } catch (e) { console.error("Note failed:", e.message); }
   facts.note = note || plainNote(facts);
+  // What Octopus returned for the household's own tariff, so gaps can be diagnosed from the page.
+  const iso = (t) => (Number.isFinite(t) ? new Date(t).toISOString().slice(0, 16) : "open");
+  facts.source_pricing = elecPricing.map((a) => ({
+    code: a.code, from: iso(a.from), to: iso(a.to),
+    unitRates: a.rates.unit.length, standing: a.rates.standing.length,
+    first: a.rates.unit[0] && { from: iso(a.rates.unit[0].from), to: iso(a.rates.unit[0].to), p: a.rates.unit[0].p },
+    last: a.rates.unit.at(-1) && { from: iso(a.rates.unit.at(-1).from), to: iso(a.rates.unit.at(-1).to), p: a.rates.unit.at(-1).p },
+    distinctPrices: [...new Set(a.rates.unit.map((r) => r.p))].slice(0, 6),
+  }));
   facts.source = { elecDays: Math.round(elec.length / 48), gasDays: gas.length ? Math.round(gas.length / 48) : 0, alternativesPriced: alternatives.map((a) => a.label) };
   return facts;
 }

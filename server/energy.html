@@ -155,6 +155,9 @@ function render(d) {
     ["Gas meter units", d.hasGas ? d.gasUnits : "no gas"],
     ["Tariffs compared", [d.tariff.rows.find((r) => r.yours)?.name, ...(d.source?.alternativesPriced || [])].filter(Boolean).join(", ")],
   ];
+  for (const a of d.source_pricing || []) {
+    rows.push(["Octopus rates: " + a.code, a.from + " to " + a.to + " · " + a.unitRates + " unit rates (" + (a.distinctPrices || []).join("p, ") + "p) · first " + (a.first ? a.first.from + "→" + a.first.to : "none") + " · last " + (a.last ? a.last.from + "→" + a.last.to : "none")]);
+  }
   if (d.dismissed?.length) rows.push(["Left out at your request", d.dismissed.length + ""]);
   $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   $("headline").textContent = note.headline || "";

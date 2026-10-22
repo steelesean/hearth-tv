@@ -31,18 +31,26 @@ const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const round = (x, dp = 2) => Math.round(x * 10 ** dp) / 10 ** dp;
 const gbp = (pence) => round(pence / 100);
 
-/** A lookup from time to price (pence), for a sorted list of {from, to, p}. */
+/**
+ * A lookup from time to price (pence), for a list of {from, to, p} sorted by from. Octopus can
+ * return overlapping periods for time-of-use tariffs (an all-day rate plus cheap hours), so the
+ * shortest period that covers the time wins.
+ */
 function priceAt(list) {
+  const longest = list.reduce((m, r) => Math.max(m, r.to - r.from), 0);
   return (t) => {
-    let lo = 0, hi = list.length - 1;
-    while (lo <= hi) {
+    let lo = 0, hi = list.length - 1, last = -1;
+    while (lo <= hi) {                       // last entry starting at or before t
       const mid = (lo + hi) >> 1;
-      const r = list[mid];
-      if (t < r.from) hi = mid - 1;
-      else if (t >= r.to) lo = mid + 1;
-      else return r.p;
+      if (list[mid].from <= t) { last = mid; lo = mid + 1; } else hi = mid - 1;
     }
-    return undefined;
+    let best;
+    for (let i = last; i >= 0; i--) {
+      const r = list[i];
+      if (t - r.from > longest) break;       // nothing earlier can reach t
+      if (t < r.to && (!best || r.to - r.from < best.to - best.from)) best = r;
+    }
+    return best?.p;
   };
 }
 
@@ -332,12 +340,14 @@ function oddBlock(house, date, compareDates) {
     if (cur > best.sum) best = { sum: cur, from: start, to: s + 1 };
   });
   if (!best.to || best.sum < 0.5) return null;
+  const spread = () => ({ spread: true, extraKwh: round(sum(excess.filter((x) => x > 0)), 1) });
   // Trim quiet edges, so the block is when the extra load was actually running.
   const peak = Math.max(...excess.slice(best.from, best.to));
   while (best.from < best.to - 1 && excess[best.from] < 0.3 * peak) best.from++;
   while (best.to > best.from + 1 && excess[best.to - 1] < 0.3 * peak) best.to--;
   best.sum = sum(excess.slice(best.from, best.to));
   const hours = (best.to - best.from) / 2;
+  if (hours > 6 || best.sum / hours < 0.5) return spread();   // small and all day: no one culprit
   return { from: hhmm(best.from), to: hhmm(best.to % 48), extraKwh: round(best.sum, 1), extraKw: round(best.sum / hours, 1) };
 }
 
@@ -471,7 +481,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       id: "odd-" + o.date,
       per_year_gbp: 0,
       facts: `${o.day}: the house used ${o.kwh} kWh of electricity against a usual ${o.usualKwh} kWh for that weekday, £${o.extra} more.`
-        + (o.block ? ` Something used an extra ${o.block.extraKw} kW from ${o.block.from} to ${o.block.to}.` : ""),
+        + (o.block?.spread ? " The extra was spread thinly across the day, with no one stretch standing out." : o.block ? ` Something used an extra ${o.block.extraKw} kW from ${o.block.from} to ${o.block.to}.` : ""),
       how_we_know: "Electricity compared with the same weekday over the previous eight weeks, car charging taken out.",
     });
   }
