@@ -66,6 +66,11 @@ final class Assistant {
 
     // ---------- Energy (see server/api/energy) ----------
 
+    /** The home screen's question when something's on (see server/api/moment.js). Blocking. */
+    JSONObject moment(JSONObject payload) {
+        return request("POST", "/api/moment", payload);
+    }
+
     /** The latest energy week from the service, kept on the stick for the morning card. Blocking. */
     JSONObject energy() {
         JSONObject week = request("GET", "/api/energy/week", null);

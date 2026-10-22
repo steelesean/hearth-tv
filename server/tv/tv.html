@@ -2781,6 +2781,12 @@ var qrcode = function() {
         .catch(function () { window.previewKey('Couldn’t reach the energy service.'); });
     },
     energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
+    moment: function (payload) {
+      if (!/^https?:/.test(location.protocol)) return;
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      fetch('/api/moment', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: payload })
+        .then(function (r) { return r.json(); }).then(function (d) { window.hearthMoment(d); }).catch(function () {});
+    },
     energyFeedback: function (id, verdict) {
       var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
       if (/^https?:/.test(location.protocol)) fetch('/api/energy/feedback', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, verdict: verdict }) });
@@ -2948,9 +2954,41 @@ var qrcode = function() {
       { label: 'Something lighter', ask: 'Suggest something lighter to watch tonight' }, carry] };
     // A followed show out today takes the middle place in the evening.
     if (fresh && h >= 18.5 && h < 21.5) m.prompts.splice(1, 1, fresh);
+    // Every answer the service may choose from: these, plus any followed show out today or tomorrow.
+    var pool = m.prompts.filter(Boolean).concat(watchingShows().filter(function (x) { return x.days === 0 || x.days === 1; })
+      .map(function (x) { return { label: x.title + (x.days === 0 ? ': new today' : ': new tomorrow'), show: x }; }), carry ? [carry] : []);
+    var seen = {}; pool = pool.filter(function (p) { if (!p || seen[p.label]) return false; seen[p.label] = 1; return true; });
+    pool.forEach(function (p, i) { p.id = 'a' + i; });
     m.prompts = m.prompts.filter(Boolean).slice(0, 3);
+    m.pool = pool;
+    // When something's on, the service's question and answers take over until they expire.
+    if (onNow && onNow.use && onNow.until > Date.now() && h >= 7 && h < 23.5) {
+      var picked = (onNow.answers || []).map(function (id) { return pool.filter(function (p) { return p.id === id && p.label === onNow.labels[id]; })[0]; }).filter(Boolean);
+      if (onNow.headline && picked.length) { m.headline = onNow.headline; m.prompts = picked; }
+    }
     return m;
   }
+  // Ask the service what's on: a followed show out today, F1, PGA Tour golf. Every half hour.
+  var onNow = null, lastAsk = 0;
+  window.hearthMoment = function (d) {
+    if (!d || d.error || !d.use) { onNow = null; return; }
+    d.labels = window.__momentLabels || {};
+    onNow = d; tick();
+  };
+  function askMoment() {
+    if (!N.moment || !(N.assistantReady ? N.assistantReady() : true)) return;
+    var d = new Date(), m = moment(d);
+    lastAsk = Date.now();
+    var labels = {}; m.pool.forEach(function (p) { labels[p.id] = p.label; });
+    var payload = {
+      now: Date.now(), local: d.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      base: { headline: m.headline }, answers: m.pool.map(function (p) { return { id: p.id, label: p.label }; }),
+      shows: watchingShows().filter(function (x) { return x.days !== null && x.days >= 0 && x.days <= 1 && !x.usDate; }).map(function (x) { return { title: x.title, days: x.days }; })
+    };
+    window.__momentLabels = labels;
+    N.moment(JSON.stringify(payload));
+  }
+  setTimeout(askMoment, 6000); setInterval(askMoment, 30 * 60 * 1000);
   // The question steps its type down rather than wrapping or crowding the edges.
   function setGreeting(text) {
     var g = $('greeting');
