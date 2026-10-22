@@ -36,9 +36,12 @@ final class Updater {
         }
     }
 
-    /** The waiting update, or null. Checks GitHub at most every six hours. Blocking. */
+    /** The last check's answer, without checking again. */
+    static JSONObject waiting() { return available; }
+
+    /** The waiting update, or null. Checks GitHub at most about once an hour. Blocking. */
     static JSONObject check(Context context) {
-        if (System.currentTimeMillis() - checkedAt < 6 * 3600 * 1000L) return available;
+        if (System.currentTimeMillis() - checkedAt < 55 * 60 * 1000L) return available;
         checkedAt = System.currentTimeMillis();
         try {
             JSONObject release = new JSONObject(Net.get(LATEST));
