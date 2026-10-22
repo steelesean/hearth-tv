@@ -130,3 +130,74 @@ export async function status() {
   const s = await readState();
   return { connected: !!s.refresh, connectedAt: s.connectedAt || null, probe: s.probe || null };
 }
+
+// ---------- Heating history ----------
+// One day report per room per day says when that room called for heat, and how hard. Each day
+// is boiled down to 48 half-hour weights per room and kept, so it's only ever fetched once.
+
+const LEVEL = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
+const dayPath = (date) => "energy/tado/" + date + ".json";
+
+async function readDay(date) {
+  const r = await get(dayPath(date), { access: "private" }).catch(() => null);
+  if (!r || r.statusCode !== 200 || !r.stream) return null;
+  return new Response(r.stream).json().catch(() => null);
+}
+
+/** Half-hour weights (0–3, part-hours pro rata) for one room's day report. */
+function weights(report, slotOf, date) {
+  const w = new Array(48).fill(0);
+  for (const iv of report?.callForHeat?.dataIntervals || []) {
+    const level = LEVEL[iv.value] || 0;
+    if (!level) continue;
+    let t = Date.parse(iv.from);
+    const end = Date.parse(iv.to);
+    while (t < end) {
+      const slotStart = Math.floor(t / 1800000) * 1800000, slotEnd = slotStart + 1800000;
+      const until = Math.min(end, slotEnd);
+      const l = slotOf(slotStart);
+      if (l.date === date) w[l.slot] += (level * (until - t)) / 1800000;
+      t = until;
+    }
+  }
+  return w.map((x) => Math.round(x * 100) / 100);
+}
+
+/**
+ * Room weights for each date asked for: { date: { room: [48] } }. Stored days come from storage;
+ * missing ones are fetched newest first, up to `budget` requests, so a 90-day catch-up spreads
+ * over a few nights. Today is never stored, as it isn't finished.
+ */
+export async function heatHistory(dates, slotOf, budget = 100) {
+  const s = await readState();
+  if (!s.refresh || !s.homeId || !s.rooms?.length) return { days: {}, connected: !!s.refresh, missing: dates.length };
+  const out = {};
+  const todo = [];
+  for (const d of dates) {
+    const kept = await readDay(d);
+    if (kept) out[d] = kept;
+    else todo.push(d);
+  }
+  todo.sort().reverse();
+  const today = slotOf(Date.now()).date;
+  let token = null, used = 0, left = null;
+  for (const d of todo) {
+    if (used + s.rooms.length > budget) break;
+    if (left !== null && left < 300) break;                       // leave plenty for the TV
+    token = token || (await accessToken());
+    const day = {};
+    const replies = await Promise.all(s.rooms.map((room) => call(token, API + "homes/" + s.homeId + "/zones/" + room.id + "/dayReport?date=" + d).catch(() => null)));
+    used += s.rooms.length;
+    replies.forEach((r, i) => {
+      if (!r) return;
+      const m = /r=(\d+)/.exec(r.left || "");
+      if (m) left = left === null ? Number(m[1]) : Math.min(left, Number(m[1]));
+      if (r.status === 200) day[s.rooms[i].name] = weights(r.json, slotOf, d);
+    });
+    if (Object.keys(day).length) {
+      out[d] = day;
+      if (d < today) await put(dayPath(d), JSON.stringify(day), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+    }
+  }
+  return { days: out, connected: true, rooms: s.rooms.map((r) => r.name), fetched: used, missing: dates.filter((d) => !out[d]).length, requestsLeft: left };
+}

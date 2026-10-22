@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hearth Energy</title>
 <style>
-  :root { --gas:#6F7FA8; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; } }
-  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; }
+  :root { --gas:#6F7FA8; --water:#A9B7D6; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; } }
+  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
@@ -24,7 +24,11 @@
   .bar i { display:block; width:100%; border-radius: 6px 6px 2px 2px; background: var(--bar); }
   .bar.odd { color: var(--odd); } .bar > span { margin-bottom: 3px; }
   .bar i { border-radius: 0; } .bar i:first-of-type { border-radius: 6px 6px 0 0; } .bar i:last-of-type { border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; }
-  .bar i.c { background: var(--car); } .bar i.g { background: var(--gas); }
+  .bar i.c { background: var(--car); } .bar i.g { background: var(--gas); } .bar i.w { background: var(--water); }
+  .bar i { display:flex; align-items:center; justify-content:center; font-style: normal; font-size: 11px; font-weight: 600; color: #1F2321; overflow: hidden; }
+  .bar .small { font-size: 11px; font-weight: 600; line-height: 1.25; }
+  .bar .small.c { color: var(--car); } .bar .small.g, .bar .small.w { color: var(--gas); } .bar .small.h { color: var(--bar); }
+  .rooms td { padding: 7px 0; } .rooms td.n { text-align: right; font-variant-numeric: tabular-nums; } .rooms .track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; } .rooms .track i { display:block; height:100%; background: var(--gas); border-radius: 5px; }
   .key { font-size: 12px; color: var(--muted); } .key b { font-weight: 400; }
   .days { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; text-align:center; font-size:12px; color:var(--muted); margin-top:6px; }
   .action { margin-top: 12px; }
@@ -69,11 +73,11 @@
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
         <div class="card" style="margin-top: 18px;">
-          <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span> <span style="color:var(--car)">■</span> Car</span></div>
-          <div class="bars" id="bars" style="height:190px;"></div>
+          <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span><span id="waterkey" hidden> <span style="color:var(--water)">■</span> Hot water and cooking</span> <span style="color:var(--car)">■</span> Car</span></div>
+          <div class="bars" id="bars" style="height:300px;"></div>
           <div class="days" id="daynames"></div>
           <div id="dayview" hidden style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
-            <div class="row" style="justify-content:space-between;"><strong id="dayname"></strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car <span style="color:var(--gas)">■</span> Gas</span></div>
+            <div class="row" style="justify-content:space-between;"><strong id="dayname"></strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car <span style="color:var(--gas)">■</span> <span id="daygaskey">Gas</span></span></div>
             <div class="key" style="margin-top:8px;">Electricity</div>
             <div id="halfhours" style="display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:1px;align-items:end;height:100px;margin-top:4px;"></div>
             <div id="gasview"><div class="key" style="margin-top:10px;">Gas</div>
@@ -83,6 +87,11 @@
           </div>
           <div class="how" style="margin-top:8px;">Select a day to see each half-hour.</div>
           <div id="oddlines"></div>
+        </div>
+        <div class="card" style="margin-top: 18px;" id="heatcard" hidden>
+          <div class="row" style="justify-content:space-between;"><strong>Heating by room</strong><span class="muted" id="heatwhen" style="font-size:13px;"></span></div>
+          <table class="rooms" id="rooms"></table>
+          <div class="how" id="heatnote"></div>
         </div>
         <div class="card" style="margin-top: 18px;">
           <strong>Tariff fit</strong> <span class="muted" id="fitdays"></span>
@@ -150,11 +159,32 @@ function render(d) {
   // One bar a day, stacked by cost: house at the bottom, gas, then the car on top.
   const dayTotal = (x) => x.houseElec + x.gas + x.car;
   const tmax = Math.max(...w.days.map(dayTotal), 0.5);
-  const seg = (cls, v, what) => (v > 0 ? `<i class="${cls}" title="${what} ${money(v)}" style="height:${Math.max(2, Math.round((v / tmax) * 150))}px"></i>` : "");
-  $("bars").innerHTML = w.days.map((x, i) => `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)}: ${money(dayTotal(x))}. Select for detail"><span>${money(dayTotal(x))}</span>`
-    + seg("c", x.car, "Car") + seg("g", x.gas, "Gas") + seg("h", x.houseElec, "House") + `</div>`).join("");
+  // Each part's figure sits inside it when there's room (18px), otherwise above the bar in its colour.
+  const px = (v) => Math.max(2, Math.round((v / tmax) * 250));
+  const short = (v) => (v < 1 ? Math.round(v * 100) + "p" : money(v));
+  $("bars").innerHTML = w.days.map((x, i) => {
+    const gasParts = x.gasHeating != null ? [["g", x.gasHeating, "Heating"], ["w", x.gasOther, "Hot water and cooking"]] : [["g", x.gas, "Gas"]];
+    const parts = [["c", x.car, "Car"], ...gasParts, ["h", x.houseElec, "House"]].filter(([, v]) => v > 0);
+    const label = (what) => (what === "Hot water and cooking" ? "Water" : what);
+    const above = parts.filter(([, v]) => px(v) < 18).map(([c, v, what]) => `<span class="small ${c}" title="${what}">${label(what)} ${short(v)}</span>`).join("");
+    const segs = parts.map(([c, v, what]) => `<i class="${c}" title="${what} ${money(v)}" style="height:${px(v)}px">${px(v) >= 18 ? short(v) : ""}</i>`).join("");
+    return `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)}: ${money(dayTotal(x))}, ${parts.map(([, v, what]) => what + " " + money(v)).join(", ")}. Select for detail">${above}<span>${money(dayTotal(x))}</span>${segs}</div>`;
+  }).join("");
   $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
   $("gaskey").hidden = $("gaskeyword").hidden = !d.hasGas;
+  const split = w.days.some((x) => x.gasHeating != null);
+  $("gaskeyword").textContent = split ? " Heating" : " Gas";
+  $("waterkey").hidden = !split;
+  const hw = d.heating?.week;
+  $("heatcard").hidden = !hw;
+  if (hw) {
+    const total = hw.heating + hw.hotWaterAndCooking;
+    const rmax = Math.max(...hw.rooms.map((r) => r.cost), 0.01);
+    $("heatwhen").textContent = "This week, from Tado" + (hw.days < 7 ? " (" + hw.days + " of 7 days so far)" : "");
+    $("rooms").innerHTML = hw.rooms.map((r) => `<tr><td style="width:34%">${esc(r.room)}</td><td><div class="track"><i style="width:${Math.round((r.cost / rmax) * 100)}%"></i></div></td><td class="n" style="width:22%">${r.hoursPerDay} h a day</td><td class="n" style="width:16%"><strong>${money(r.cost)}</strong></td></tr>`).join("")
+      + `<tr><td>Hot water and cooking</td><td><div class="track"><i style="width:${Math.round((hw.hotWaterAndCooking / rmax) * 100)}%;background:var(--water)"></i></div></td><td class="n"></td><td class="n"><strong>${money(hw.hotWaterAndCooking)}</strong></td></tr>`;
+    $("heatnote").textContent = (d.heating.note || "") + " An estimate, not a meter in each room." + (d.tado?.missingDays ? " Still fetching earlier days from Tado: " + d.tado.missingDays + " to go." : "");
+  }
   $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>${tell(o.id, "We know why")}`).join("");
   window.__days = w.days;
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
@@ -202,7 +232,15 @@ function showDay(i) {
   const g = x.profile.gas || [];
   $("gasview").hidden = !g.some((v) => v > 0);
   const gm = Math.max(...g, 0.5);
-  $("gashours").innerHTML = g.map((v, k) => `<div title="${String(Math.floor(k / 2)).padStart(2, "0") + ":" + (k % 2 ? "30" : "00")}: gas ${v} kWh" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;"><i style="display:block;height:${(v / gm) * 100}%;background:var(--gas);"></i></div>`).join("");
+  const gh = x.profile.gasHeat, go = x.profile.gasOther;
+  $("daygaskey").innerHTML = gh ? 'Heating <span style="color:var(--water)">■</span> Hot water and cooking' : "Gas";
+  $("gashours").innerHTML = g.map((v, k) => {
+    const t = String(Math.floor(k / 2)).padStart(2, "0") + ":" + (k % 2 ? "30" : "00");
+    if (!gh) return `<div title="${t}: gas ${v} kWh" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;"><i style="display:block;height:${(v / gm) * 100}%;background:var(--gas);"></i></div>`;
+    return `<div title="${t}: heating ${gh[k]} kWh${go[k] ? ", hot water and cooking " + go[k] + " kWh" : ""}" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;">`
+      + (go[k] ? `<i style="display:block;height:${(go[k] / gm) * 100}%;background:var(--water);"></i>` : "")
+      + (gh[k] ? `<i style="display:block;height:${(gh[k] / gm) * 100}%;background:var(--gas);"></i>` : "") + `</div>`;
+  }).join("");
   $("dayname").textContent = new Date(x.date + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   $("daysum").textContent = "House " + x.houseKwh + " kWh (" + money(x.houseElec) + "), car " + x.carKwh + " kWh (" + money(x.car) + ")" + (x.gasKwh ? ", gas " + x.gasKwh + " kWh (" + money(x.gas) + ")" : "") + ". Hover a bar for its time.";
   $("dayview").hidden = false;

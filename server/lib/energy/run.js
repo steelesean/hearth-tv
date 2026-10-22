@@ -4,6 +4,8 @@ import * as octopus from "./octopus.js";
 import { analyse } from "./analyse.js";
 import { weeklyNote, plainNote } from "./note.js";
 import { loadFeedback } from "./store.js";
+import { heatHistory } from "./tado.js";
+import { local } from "./analyse.js";
 
 const QUIET_FOR = 90 * 24 * 60 * 60 * 1000;   // a dismissed suggestion stays away this long
 
@@ -63,8 +65,21 @@ export async function refresh(now = Date.now()) {
     catch { return null; }
   }))).filter(Boolean);
 
+  // Tado: which rooms called for heat, for each day of gas readings. Optional.
+  let heat = null, tadoInfo = { connected: false };
+  if (gas.length) {
+    const dates = [...new Set(gas.map((r) => local(r.t).date))];
+    try {
+      const h = await heatHistory(dates, local);
+      tadoInfo = { connected: h.connected, rooms: h.rooms, fetched: h.fetched, missingDays: h.missing, requestsLeft: h.requestsLeft };
+      if (Object.keys(h.days).length) heat = h.days;
+    } catch (e) {
+      tadoInfo = { connected: true, error: e.message };
+    }
+  }
+
   const facts = analyse({
-    elec, gas, elecPricing, gasPricing, alternatives, now,
+    elec, gas, elecPricing, gasPricing, alternatives, now, heat,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
   // Leave out anything the household said they already do, or that isn't for them.
@@ -83,6 +98,7 @@ export async function refresh(now = Date.now()) {
     last: a.rates.unit.at(-1) && { from: iso(a.rates.unit.at(-1).from), to: iso(a.rates.unit.at(-1).to), p: a.rates.unit.at(-1).p },
     distinctPrices: [...new Set(a.rates.unit.map((r) => r.p))].slice(0, 6),
   }));
+  facts.tado = tadoInfo;
   facts.source = { elecDays: Math.round(elec.length / 48), gasDays: gas.length ? Math.round(gas.length / 48) : 0, alternativesPriced: alternatives.map((a) => a.label) };
   return facts;
 }

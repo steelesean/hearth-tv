@@ -113,9 +113,11 @@ function splitCar(elec) {
 }
 
 /** Each half-hour of a day, house and car, for the dashboard's day view (kWh, 0 to 47). */
-function dayProfile(house, car, gas, date) {
+function dayProfile(house, car, gas, date, split) {
   const on = (rows) => { const a = new Array(48).fill(0); for (const r of rows) { const l = local(r.t); if (l.date === date) a[l.slot] += r.v; } return a.map((x) => round(x, 2)); };
-  return { house: on(house), car: on(car), gas: on(gas) };
+  const out = { house: on(house), car: on(car), gas: on(gas) };
+  if (split) { out.gasHeat = split.heat.map((x) => round(x, 2)); out.gasOther = split.other.map((x) => round(x, 2)); }
+  return out;
 }
 
 /** Gas meters report m³ or kWh. A day over 15 can only be kWh. GAS_UNITS overrides. */
@@ -139,6 +141,45 @@ const longDate = (date) => new Date(date + "T12:00:00Z").toLocaleDateString("en-
 const hhmm = (slot) => String(Math.floor(slot / 2)).padStart(2, "0") + ":" + (slot % 2 ? "30" : "00");
 
 /**
+ * Splits each half-hour of gas using Tado: if rooms were calling for heat, it goes to them by how
+ * hard each was calling; if none were, it's hot water and cooking (a combi with a gas hob can't
+ * tell those apart). Hot water drawn while the heating runs counts as heating. Days without Tado
+ * data are left out. Unit costs only; standing charges stay with the house.
+ */
+function splitGas(gasReadings, gasPricing, heatDays) {
+  const lookups = gasPricing.map((a) => ({ from: a.from, to: a.to, unit: priceAt(a.rates.unit) }));
+  const pence = (t, kwh) => { const a = lookups.find((x) => t >= x.from && t < x.to); const p = a && a.unit(t); return p === undefined ? 0 : kwh * p; };
+  const days = {};
+  for (const r of gasReadings) {
+    const l = local(r.t);
+    const heat = heatDays[l.date];
+    if (!heat) continue;
+    const d = days[l.date] || (days[l.date] = { heatingKwh: 0, heatingPence: 0, otherKwh: 0, otherPence: 0, rooms: {}, heat: new Array(48).fill(0), other: new Array(48).fill(0) });
+    const ws = Object.entries(heat).map(([room, w]) => [room, w[l.slot] || 0]).filter(([, w]) => w > 0);
+    const total = sum(ws.map(([, w]) => w));
+    const p = pence(r.t, r.v);
+    if (total > 0) {
+      d.heatingKwh += r.v; d.heatingPence += p; d.heat[l.slot] += r.v;
+      for (const [room, w] of ws) {
+        const x = d.rooms[room] || (d.rooms[room] = { kwh: 0, pence: 0 });
+        x.kwh += (r.v * w) / total; x.pence += (p * w) / total;
+      }
+    } else {
+      d.otherKwh += r.v; d.otherPence += p; d.other[l.slot] += r.v;
+    }
+  }
+  for (const [date, heat] of Object.entries(heatDays)) {
+    const d = days[date];
+    if (!d) continue;
+    for (const [room, w] of Object.entries(heat)) {
+      const x = d.rooms[room] || (d.rooms[room] = { kwh: 0, pence: 0 });
+      x.hours = w.filter((v) => v > 0).length / 2;
+    }
+  }
+  return days;
+}
+
+/**
  * input: {
  *   elec: [{t, v}], gas: [{t, v}],
  *   elecPricing, gasPricing: [{from, to, rates}],   the household's own agreements
@@ -152,6 +193,7 @@ export function analyse(input) {
   const { house, car } = splitCar(input.elec);
   const gas = gasToKwh(input.gas || []);
 
+  const gasSplit = input.heat ? splitGas(gas.readings, input.gasPricing || [], input.heat) : {};
   const housePriced = price(house, input.elecPricing);
   const carPriced = price(car, input.elecPricing);
   const gasPriced = gas.readings.length ? price(gas.readings, input.gasPricing || []) : { days: new Map() };
@@ -175,6 +217,11 @@ export function analyse(input) {
       houseKwh: round(houseKwh.get(d) || 0, 1),
       carKwh: round(carKwh.get(d) || 0, 1),
       gasKwh: round(gasKwh.get(d) || 0, 1),
+      ...(gasSplit[d] ? {
+        gasHeating: gbp(gasSplit[d].heatingPence), gasOther: gbp(gasSplit[d].otherPence),
+        gasHeatingKwh: round(gasSplit[d].heatingKwh, 1), gasOtherKwh: round(gasSplit[d].otherKwh, 1),
+        rooms: Object.fromEntries(Object.entries(gasSplit[d].rooms).map(([k, v]) => [k, { kwh: round(v.kwh, 1), cost: gbp(v.pence), hours: v.hours ?? 0 }])),
+      } : {}),
     });
   }
   for (const v of daily.values()) v.total = round(v.house + v.car + v.gas);
@@ -306,7 +353,31 @@ export function analyse(input) {
     : agileAlt ? { ...shiftSaving(agileAlt.pricing, now - 28 * DAY, now), tariff: "Agile", own: false } : null;
 
   const overnight = shift && shift.own ? overnightRuns(house, car, now, baseWatts, shift) : null;
-  const candidates = buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight });
+  const roomTotals = (dates) => {
+    const t = {};
+    let heat = 0, other = 0, n = 0;
+    for (const date of dates) {
+      const s = gasSplit[date];
+      if (!s) continue;
+      n++; heat += s.heatingPence; other += s.otherPence;
+      for (const [room, v] of Object.entries(s.rooms)) {
+        const x = t[room] || (t[room] = { kwh: 0, pence: 0, hours: 0 });
+        x.kwh += v.kwh; x.pence += v.pence; x.hours += v.hours || 0;
+      }
+    }
+    if (!n) return null;
+    return {
+      days: n, heating: gbp(heat), hotWaterAndCooking: gbp(other),
+      rooms: Object.entries(t).map(([room, v]) => ({ room, cost: gbp(v.pence), kwh: round(v.kwh, 1), hoursPerDay: round(v.hours / n, 1) })).sort((a, b) => b.cost - a.cost),
+    };
+  };
+  const heating = Object.keys(gasSplit).length ? {
+    week: roomTotals(week.map((d) => d.date)),
+    period: roomTotals(Object.keys(gasSplit)),
+    note: "Gas split by when each room called for heat in Tado, weighted by how hard. Gas with no room calling is hot water and cooking. Hot water used while the heating runs counts as heating.",
+  } : null;
+
+  const candidates = buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight, heating });
 
   return {
     generatedAt: new Date(now).toISOString(),
@@ -319,9 +390,9 @@ export function analyse(input) {
       house: round(sum(week.map((d) => d.house))),
       car: round(sum(week.map((d) => d.car))),
       gas: round(sum(week.map((d) => d.gas))),
-      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, gas.readings, d.date) })),
+      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, gas.readings, d.date, gasSplit[d.date]) })),
     },
-    odd, baseline, peak, shift, overnight, car: carSummary, tariff, forecast,
+    odd, baseline, peak, shift, overnight, heating, car: carSummary, tariff, forecast,
     gasUnits: gas.unit,
     hasGas: gas.readings.length > 0,
     candidates,
@@ -428,7 +499,7 @@ function overnightRuns(house, car, now, baseWatts, shift) {
 }
 
 /** Things worth doing, each already costed. Claude picks and words them; it can't change the sums. */
-function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight }) {
+function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight, heating }) {
   const out = [];
   if (tariff.best && tariff.best.perYear >= 20) {
     const mine = tariff.rows.find((r) => r.yours);
@@ -484,6 +555,16 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       facts: `${o.day}: the house used ${o.kwh} kWh of electricity against a usual ${o.usualKwh} kWh for that weekday, £${o.extra} more.`
         + (o.block?.spread ? " The extra was spread thinly across the day, with no one stretch standing out." : o.block ? ` Something used an extra ${o.block.extraKw} kW from ${o.block.from} to ${o.block.to}.` : ""),
       how_we_know: "Electricity compared with the same weekday over the previous eight weeks, car charging taken out.",
+    });
+  }
+  const hw = heating?.week;
+  if (hw && hw.rooms.length) {
+    const top = hw.rooms.slice(0, 3).map((r) => `${r.room} £${r.cost.toFixed(2)} (${r.hoursPerDay} hours a day)`).join(", ");
+    out.push({
+      id: "rooms-info",
+      per_year_gbp: 0,
+      facts: `Last week's gas: heating £${hw.heating.toFixed(2)}, hot water and cooking £${hw.hotWaterAndCooking.toFixed(2)}. Rooms that cost most to heat: ${top}.`,
+      how_we_know: heating.note,
     });
   }
   // Odd days are measured in kWh, so they stand; anything costed waits for complete prices.
