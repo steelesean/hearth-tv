@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   let step = "reading Octopus";
   try {
     const facts = await refresh();
-    console.log("Energy: worked out", facts.week.label, facts.source, "Tado:", JSON.stringify(facts.tado), "heating:", !!facts.heating);
+    console.log("Energy: worked out", facts.week.label, facts.source, "Tado:", JSON.stringify(facts.tado), "heating:", !!facts.heating, "Ohme:", JSON.stringify(facts.ohme), "car:", JSON.stringify({ source: facts.car.source, kwh: facts.car.ohmeKwh, miles: facts.car.miles, ppm: facts.car.pencePerMile }), "slots:", JSON.stringify(facts.dispatches), "baseline:", JSON.stringify(facts.heating?.baseline));
     step = "saving to storage";
     await save(facts);
     step = "reading it back from storage";
