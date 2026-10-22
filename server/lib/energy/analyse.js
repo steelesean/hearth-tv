@@ -364,9 +364,14 @@ export function analyse(input) {
   };
   if (ohme) {
     const inRange = ohme.filter((h) => h.t >= (input.elec[0]?.t || 0));
-    const miles = sum(inRange.map((h) => h.km)) * 0.621371;
+    const ohmeMiles = sum(inRange.map((h) => h.km)) * 0.621371;
     carSummary.ohmeKwh = Math.round(sum(inRange.map((h) => h.kwh)));
+    carSummary.ohmeMiles = Math.round(ohmeMiles);
+    const eff = carEfficiency(inRange, input.carReadings, input.tripMeter);
+    const miles = eff ? carSummary.ohmeKwh / eff.kwhPerMile : ohmeMiles;
     carSummary.miles = Math.round(miles);
+    carSummary.milesFrom = eff ? eff.from : "Ohme's estimate";
+    if (eff) carSummary.efficiency = eff;
     carSummary.pencePerMile = miles > 0 ? round((carSummary.cost * 100) / miles, 1) : null;
     carSummary.ohmeCost = round(sum(inRange.map((h) => h.ohmePence)) / 100);
     carSummary.charges = new Set(inRange.map((h) => local(h.t - 12 * 3600 * 1000).date)).size;
@@ -653,8 +658,9 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       id: "car-info",
       per_year_gbp: 0,
       facts: `Over the last 90 days the car charged ${carSummary.ohmeKwh} kWh on ${carSummary.charges} days and added about ${carSummary.miles} miles, costing £${carSummary.cost.toFixed(2)} at your tariff's rates: about ${carSummary.pencePerMile}p a mile.`
+        + (carSummary.efficiency && Math.abs(carSummary.ohmeMiles - carSummary.miles) > carSummary.miles * 0.15 ? ` Ohme's own estimate was ${carSummary.ohmeMiles} miles, which is too generous for this car.` : "")
         + (carSummary.daytimeHours ? ` ${carSummary.daytimeHours} hours of charging were outside the usual cheap hours; where Octopus confirmed them, or Ohme priced them at the cheap rate, they're counted as Octopus smart-charging at the cheap rate.` : ""),
-      how_we_know: "Ohme's own record of each hour's charging and range added, priced at your Octopus rates for those half-hours.",
+      how_we_know: "Ohme's own record of each hour's charging, priced at your Octopus rates for those half-hours. Miles from " + carSummary.milesFrom + ".",
     });
   }
   const hw = heating?.week;
@@ -675,4 +681,25 @@ function rangeLabel(from, to) {
   const f = new Date(from + "T12:00:00Z"), t = new Date(to + "T12:00:00Z");
   const fmt = (d, month) => d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", ...(month ? { month: "long" } : {}), timeZone: "UTC" });
   return fmt(f, f.getUTCMonth() !== t.getUTCMonth()) + " to " + fmt(t, true);
+}
+
+/**
+ * Wall kWh per mile for the car. Best: the car's own mileage over at least four weeks and 300 miles,
+ * against what Ohme put in over the same stretch. Next: the trip meter's average read off the car,
+ * plus about 10% lost while charging. Null leaves Ohme's own estimate of miles.
+ */
+const CHARGING_LOSS = 1.1;
+function carEfficiency(hours, readings, trip) {
+  const rs = (readings || []).filter((r) => r.t >= (hours[0]?.t ?? Infinity) - 3 * DAY);
+  if (rs.length >= 2) {
+    const a = rs[0], b = rs[rs.length - 1], driven = b.miles - a.miles;
+    const kwh = sum(hours.filter((h) => h.t >= a.t && h.t < b.t).map((h) => h.kwh));
+    if (b.t - a.t >= 28 * DAY && driven >= 300 && kwh > 0) {
+      return { kwhPerMile: round(kwh / driven, 3), from: `the car's own mileage, ${driven} miles since ${new Date(a.t).toISOString().slice(0, 10)}` };
+    }
+  }
+  if (trip?.kwhPer100mi) {
+    return { kwhPerMile: round((trip.kwhPer100mi / 100) * CHARGING_LOSS, 3), from: `the car's trip meter (${trip.kwhPer100mi} kWh per 100 miles over ${trip.overMiles} miles), plus about 10% lost while charging` };
+  }
+  return null;
 }

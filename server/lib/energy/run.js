@@ -5,6 +5,7 @@ import { analyse } from "./analyse.js";
 import { weeklyNote, plainNote } from "./note.js";
 import { loadFeedback, mergeDispatches } from "./store.js";
 import { chargingByHour } from "./ohme.js";
+import { mileage, TRIP_METER } from "./polestar.js";
 import { heatHistory } from "./tado.js";
 import { local } from "./analyse.js";
 
@@ -64,6 +65,15 @@ export async function refresh(now = Date.now()) {
     ohmeInfo = { connected: true, error: e.message };
   }
 
+  // Polestar: the car's own mileage, read once a day, if connected.
+  let carReadings = null, polestarInfo = { connected: false };
+  try {
+    carReadings = await mileage();
+    polestarInfo = carReadings ? { connected: true, readings: carReadings.length, latest: carReadings.at(-1) } : { connected: false };
+  } catch (e) {
+    polestarInfo = { connected: true, error: e.message };
+  }
+
   // Intelligent Octopus: smart-charge slots are billed at the cheap rate, house included.
   // Confirmed ones come from Octopus (it only lists recent ones, so they're kept). Older ones are
   // inferred where Ohme priced an hour at the cheap rate, which it does for Octopus-scheduled
@@ -106,7 +116,7 @@ export async function refresh(now = Date.now()) {
   }
 
   const facts = analyse({
-    elec, gas, elecPricing, gasPricing, alternatives, now, heat, roomTemps, ohme,
+    elec, gas, elecPricing, gasPricing, alternatives, now, heat, roomTemps, ohme, carReadings, tripMeter: TRIP_METER,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
   // Leave out anything the household said they already do, or that isn't for them.
@@ -127,6 +137,7 @@ export async function refresh(now = Date.now()) {
   }));
   facts.tado = tadoInfo;
   facts.ohme = ohmeInfo;
+  facts.polestar = polestarInfo;
   facts.dispatches = dispatchInfo;
   facts.source = { elecDays: Math.round(elec.length / 48), gasDays: gas.length ? Math.round(gas.length / 48) : 0, alternativesPriced: alternatives.map((a) => a.label) };
   return facts;
