@@ -72,21 +72,44 @@ function price(readings, pricing) {
   return { days, coverage: readings.length ? priced / readings.length : 0 };
 }
 
-/** Splits electricity into house and car. A car slot keeps that hour's typical house use. */
+/**
+ * Splits electricity into house and car. A half-hour over 5 kW is the car; so is a smaller one
+ * next to it that's still 2 kW above the house's usual for that time (the start and end of a
+ * charge, or a short smart-charging burst). A car half-hour keeps that time's typical house use.
+ */
 function splitCar(elec) {
   const typical = [];
   for (let s = 0; s < 48; s++) typical[s] = median(elec.filter((r) => r.v < EV_SLOT_KWH && local(r.t).slot === s).map((r) => r.v)) || 0;
+  const rows = [...elec].sort((a, b) => a.t - b.t);
+  const isCar = rows.map((r) => r.v >= EV_SLOT_KWH);
+  const above = (i) => rows[i].v - typical[local(rows[i].t).slot] >= 1.0;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (let i = 0; i < rows.length; i++) {
+      if (isCar[i] || !above(i)) continue;
+      const next = (j) => j >= 0 && j < rows.length && isCar[j] && Math.abs(rows[j].t - rows[i].t) === HALF_HOUR;
+      if (next(i - 1) || next(i + 1)) { isCar[i] = true; changed = true; }
+    }
+  }
   const house = [], car = [];
-  for (const r of elec) {
-    if (r.v >= EV_SLOT_KWH) {
+  rows.forEach((r, i) => {
+    if (isCar[i]) {
       const h = Math.min(r.v, typical[local(r.t).slot]);
       house.push({ t: r.t, v: h });
       car.push({ t: r.t, v: r.v - h });
     } else {
       house.push(r);
     }
-  }
+  });
   return { house, car };
+}
+
+/** Each half-hour of a day, house and car, for the dashboard's day view (kWh, 0 to 47). */
+function dayProfile(house, car, date) {
+  const h = new Array(48).fill(0), c = new Array(48).fill(0);
+  for (const r of house) { const l = local(r.t); if (l.date === date) h[l.slot] += r.v; }
+  for (const r of car) { const l = local(r.t); if (l.date === date) c[l.slot] += r.v; }
+  return { house: h.map((x) => round(x, 2)), car: c.map((x) => round(x, 2)) };
 }
 
 /** Gas meters report m³ or kWh. A day over 15 can only be kWh. GAS_UNITS overrides. */
@@ -229,6 +252,9 @@ export function analyse(input) {
     return { cost: round(sum([...p.days.values()].map((d) => d.pence + d.standing)) / 100), coverage: p.coverage, days: p.days };
   };
   const mine = tariffCost(input.elecPricing);
+  // Any half-hours Octopus had no price for are filled at the tariff's own average, as for the
+  // alternatives below; the workings show how much that was.
+  if (mine.coverage > 0 && mine.coverage < 1) mine.cost = round(mine.cost / mine.coverage);
   const rows = [{ name: input.currentName || "Your tariff", cost: mine.cost, yours: true }];
   let worstDay = null;
   for (const alt of input.alternatives || []) {
@@ -284,7 +310,7 @@ export function analyse(input) {
       house: round(sum(week.map((d) => d.house))),
       car: round(sum(week.map((d) => d.car))),
       gas: round(sum(week.map((d) => d.gas))),
-      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date) })),
+      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, d.date) })),
     },
     odd, baseline, peak, shift, overnight, car: carSummary, tariff, forecast,
     gasUnits: gas.unit,
