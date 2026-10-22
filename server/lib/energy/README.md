@@ -12,5 +12,5 @@ It lives in the assistant's Vercel project:
 
 Set in Vercel, never in code: `OCTOPUS_API_KEY` and `OCTOPUS_ACCOUNT` (Octopus account >
 Personal details > API access). It reuses the assistant's `ANTHROPIC_API_KEY` and
-`HEARTH_ASSISTANT_KEY`. Connecting a private Blob store to the project adds `BLOB_READ_WRITE_TOKEN`.
+`HEARTH_ASSISTANT_KEY`. Connecting a private Blob store to the project adds `BLOB_STORE_ID`, which the storage library uses to sign in.
 Optional: `GAS_UNITS` (`kwh` or `m3`) if the gas figures look ten times out.
