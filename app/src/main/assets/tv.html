@@ -336,6 +336,31 @@ body { color: var(--ink); font-family: var(--font-ui); }
     d.textContent += (e.message || 'Error') + (e.filename ? '  [' + e.filename.split('/').pop() + ':' + e.lineno + ']' : (e.target && e.target.src ? '  [could not load ' + e.target.src + ']' : '')) + '\n';
   }, true);
 </script>
+<div id="previewKeyBox" hidden style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:98;background:#F7F6F3;color:#1F2321;border:2px solid #D6D5CF;border-radius:20px;padding:28px;width:440px;font:18px/1.4 system-ui,sans-serif;box-shadow:0 30px 80px rgba(0,0,0,.2)">
+  <div style="font-weight:600;font-size:20px">Preview the Energy screen</div>
+  <p style="margin:8px 0 14px;color:#3A3F3C">Enter the Hearth password, the one the TV’s assistant uses. It’s kept in this browser only.</p>
+  <form id="previewKeyForm"><input id="previewKeyInput" type="password" autocomplete="current-password" aria-label="Hearth password" style="width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #D6D5CF">
+  <button style="margin-top:12px;font:inherit;font-weight:600;background:#1F2321;color:#F7F6F3;border:0;border-radius:999px;padding:10px 20px">Show my week</button></form>
+  <p id="previewKeyMsg" style="margin:10px 0 0;color:#B5542D"></p>
+</div>
+<script>
+  // Browser preview only: ask for the Hearth password on the page, then fetch the week.
+  window.previewKey = function (msg) {
+    var box = document.getElementById('previewKeyBox');
+    document.getElementById('previewKeyMsg').textContent = msg || '';
+    box.hidden = false;
+    setTimeout(function () { document.getElementById('previewKeyInput').focus(); }, 50);
+  };
+  document.getElementById('previewKeyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var key = document.getElementById('previewKeyInput').value.trim();
+    if (!key) return;
+    try { localStorage.setItem('hearthKey', key); } catch (err) {}
+    document.getElementById('previewKeyBox').hidden = true;
+    document.getElementById('previewKeyMsg').textContent = '';
+    window.HearthPreviewFetch && window.HearthPreviewFetch();
+  });
+</script>
 <script src="config.js"></script>
 <script src="qrcode.js"></script>
 <script>
@@ -367,13 +392,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
         { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
       ] }); }, 300);
     },
-    // In a browser preview served by the energy service, fetch the real week with the Hearth password.
+    // In a browser preview served by the energy service, fetch the real week with the Hearth
+    // password, asked for in a box on the page (see previewKey below).
     energy: function () {
       if (!/^https?:/.test(location.protocol)) return;
       var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
-      if (!key) { key = prompt('Hearth password (the same one the TV’s assistant uses)') || ''; try { localStorage.setItem('hearthKey', key); } catch (e) {} }
-      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json(); })
-        .then(function (d) { if (d.error) { try { localStorage.removeItem('hearthKey'); } catch (e) {} alert(d.error); } else window.hearthEnergy(d); });
+      if (!key) { window.previewKey(''); return; }
+      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+        .then(function (x) {
+          if (x.status === 401) { try { localStorage.removeItem('hearthKey'); } catch (e) {} window.previewKey('That password didn’t work. Check it in Vercel under HEARTH_ASSISTANT_KEY.'); }
+          else if (x.d.error) window.previewKey(x.d.error);
+          else window.hearthEnergy(x.d);
+        })
+        .catch(function () { window.previewKey('Couldn’t reach the energy service.'); });
     },
     energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
     energyFeedback: function (id, verdict) {
@@ -1005,6 +1036,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   // Desktop testing: arrow keys and Enter behave like the remote
   document.addEventListener('keydown', function (e) {
     if (window.HearthNative) return;   // on the TV, the Android side sends keys
+    if (e.target && e.target.closest && e.target.closest('#previewKeyBox')) return;
     var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
     if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
@@ -1031,6 +1063,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   window.hearthEnergy = function (d) { if (d && !d.error) setEnergy(d); };
   try { var ec = N.energyCached ? N.energyCached() : ''; if (ec) setEnergy(JSON.parse(ec)); } catch (e) {}
   function fetchEnergy() { if (N.energy) N.energy(); }
+  window.HearthPreviewFetch = fetchEnergy;
   setTimeout(fetchEnergy, window.HearthNative ? 4000 : 0); setInterval(fetchEnergy, 3 * 3600 * 1000);
   // Browser preview: tv.html?energy opens the Energy screen as soon as the week arrives.
   if (!window.HearthNative && /[?&]energy/.test(location.search)) {
