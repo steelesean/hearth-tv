@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hearth Energy</title>
 <style>
-  :root { --gas:#6F7FA8; --water:#A9B7D6; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
+  :root { --fixed:#B9BDB8; --gas:#6F7FA8; --water:#A9B7D6; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; } }
   :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; }
   * { box-sizing: border-box; }
@@ -24,6 +24,7 @@
   .bar i { display:block; width:100%; border-radius: 6px 6px 2px 2px; background: var(--bar); }
   .bar.odd { color: var(--odd); } .bar > span { margin-bottom: 3px; }
   .bar i { border-radius: 0; } .bar i:first-of-type { border-radius: 6px 6px 0 0; } .bar i:last-of-type { border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; }
+  .bar i.f { background: var(--fixed); } .bar .small.f { color: var(--muted); }
   .bar i.c { background: var(--car); } .bar i.g { background: var(--gas); } .bar i.w { background: var(--water); }
   .bar i { display:flex; align-items:center; justify-content:center; font-style: normal; font-size: 11px; font-weight: 600; color: #1F2321; overflow: hidden; }
   .bar .small { font-size: 11px; font-weight: 600; line-height: 1.25; }
@@ -75,7 +76,7 @@
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
         <div class="card" style="margin-top: 18px;">
-          <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span><span id="waterkey" hidden> <span style="color:var(--water)">■</span> Hot water and cooking</span> <span style="color:var(--car)">■</span> Car</span></div>
+          <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span><span id="waterkey" hidden> <span style="color:var(--water)">■</span> Hot water and cooking</span><span id="fixedkey" hidden> <span style="color:var(--fixed)">■</span> <span id="fixedword">Standing charges</span></span> <span style="color:var(--car)">■</span> Car</span></div>
           <div class="bars" id="bars" style="height:300px;"></div>
           <div class="days" id="daynames"></div>
           <div id="dayview" hidden style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
@@ -168,21 +169,26 @@ function render(d) {
   $("vs").textContent = w.usualElec ? "Electricity " + money(w.elec) + ", " + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? " under" : " over") + " your usual week" : "";
   $("split").textContent = "House " + money(w.house) + " · Car " + money(w.car) + (d.hasGas ? " · Gas " + money(w.gas) : "");
   // One bar a day, stacked by cost: house at the bottom, gas, then the car on top.
-  const dayTotal = (x) => x.houseElec + x.gas + x.car;
+  // House is electricity used; standing charges (electricity and gas) are their own part.
+  const hasFixed = w.days.some((x) => x.standing != null);
+  const houseOf = (x) => (hasFixed ? x.houseUse : x.houseElec);
+  const dayTotal = (x) => houseOf(x) + x.gas + x.car + (hasFixed ? x.standing : 0);
   const tmax = Math.max(...w.days.map(dayTotal), 0.5);
   // Each part's figure sits inside it when there's room (18px), otherwise above the bar in its colour.
   const px = (v) => Math.max(2, Math.round((v / tmax) * 250));
   const short = (v) => (v < 1 ? Math.round(v * 100) + "p" : money(v));
   $("bars").innerHTML = w.days.map((x, i) => {
     const gasParts = x.gasHeating != null ? [["g", x.gasHeating, "Heating"], ["w", x.gasOther, "Hot water and cooking"]] : [["g", x.gas, "Gas"]];
-    const parts = [["c", x.car, "Car"], ...gasParts, ["h", x.houseElec, "House"]].filter(([, v]) => v > 0);
+    const parts = [["c", x.car, "Car"], ...gasParts, ["h", houseOf(x), "House"], ...(hasFixed ? [["f", x.standing, "Standing"]] : [])].filter(([, v]) => v > 0);
     const label = (what) => (what === "Hot water and cooking" ? "Water" : what);
-    const above = parts.filter(([, v]) => px(v) < 18).map(([c, v, what]) => `<span class="small ${c}" title="${what}">${label(what)} ${short(v)}</span>`).join("");
+    const above = parts.filter(([c, v]) => px(v) < 18 && c !== "f").map(([c, v, what]) => `<span class="small ${c}" title="${what}">${label(what)} ${short(v)}</span>`).join("");
     const segs = parts.map(([c, v, what]) => `<i class="${c}" title="${what} ${money(v)}" style="height:${px(v)}px">${px(v) >= 18 ? short(v) : ""}</i>`).join("");
     return `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)}: ${money(dayTotal(x))}, ${parts.map(([, v, what]) => what + " " + money(v)).join(", ")}. Select for detail">${above}<span>${money(dayTotal(x))}</span>${segs}</div>`;
   }).join("");
   $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
   $("gaskey").hidden = $("gaskeyword").hidden = !d.hasGas;
+  $("fixedkey").hidden = !hasFixed;
+  if (hasFixed) $("fixedword").textContent = "Standing charges, " + short(median(w.days.map((x) => x.standing))) + " a day";
   const split = w.days.some((x) => x.gasHeating != null);
   $("gaskeyword").textContent = split ? " Heating" : " Gas";
   $("waterkey").hidden = !split;
@@ -234,6 +240,7 @@ function render(d) {
   $("made").textContent = "Worked out " + new Date(d.generatedAt).toLocaleString("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + (note.plain ? ". Claude wasn't available, so this is the plain version." : ". Figures calculated from your Octopus meter, then explained by Claude.");
 }
 
+function median(xs) { const a = [...xs].sort((p, q) => p - q); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
 function showDay(i) {
   const x = window.__days?.[i];
   if (!x?.profile) { $("dayview").hidden = true; return; }

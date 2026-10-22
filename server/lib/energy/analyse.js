@@ -262,6 +262,8 @@ export function analyse(input) {
       complete: slotsPerDay.get(d) >= 46,
       house: gbp(housePence),
       houseElec: gbp(h ? h.pence + h.standing : 0),
+      houseUse: gbp(h ? h.pence : 0),
+      standing: gbp((h ? h.standing : 0) + (g ? g.standing : 0)),
       car: gbp(c ? c.pence : 0),
       gas: gbp(g ? g.pence : 0),
       houseKwh: round(houseKwh.get(d) || 0, 1),
