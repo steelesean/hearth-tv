@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect your Polestar</title>
+<style>
+  :root { --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --odd:#B5542D; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --odd:#E39A76; } }
+  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --odd:#E39A76; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font: 500 24px/1.2 inherit; margin: 0 0 6px; }
+  p { color: var(--ink2); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  label { display:block; font-size: 14px; color: var(--muted); margin: 14px 0 6px; }
+  input { width: 100%; font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  button { margin-top: 18px; width: 100%; font: inherit; font-weight: 600; background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 14px; }
+  .small { font-size: 14px; color: var(--muted); }
+  .error { color: var(--odd); }
+  .done { color: var(--green); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect your Polestar</h1>
+  <p>Sign in with the email and password you use for the Polestar app. Hearth reads the car's mileage once a day, so the cost per mile uses miles you actually drove.</p>
+  <form class="card" id="form">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button id="go">Connect</button>
+    <p class="small" id="msg" role="status"></p>
+  </form>
+  <p class="small">Your password goes straight to Polestar's sign-in and isn't stored. Hearth keeps only the sign-in token Polestar gives back, as the Polestar app does. It only reads the mileage and battery; it can't unlock, start or change anything.</p>
+</main>
+<script>
+const pair = new URLSearchParams(location.search).get("pair") || "";
+const msg = document.getElementById("msg");
+if (!pair) { msg.className = "small error"; msg.textContent = "This link is missing its code. Scan the QR code on the dashboard again."; }
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const go = document.getElementById("go");
+  go.disabled = true; msg.className = "small"; msg.textContent = "Signing in…";
+  try {
+    const r = await fetch("/api/energy/polestar", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step: "login", pair, email: document.getElementById("email").value, password: document.getElementById("password").value }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "That didn't work.");
+    document.getElementById("password").value = "";
+    document.getElementById("form").innerHTML = '<p class="done">Your Polestar is connected.</p>'
+      + (d.car && d.car.miles ? '<p class="small">It reports ' + d.car.miles.toLocaleString("en-GB") + ' miles on the clock' + (d.car.batteryPercent != null ? ' and ' + d.car.batteryPercent + '% battery' : '') + '.</p>'
+        : '<p class="small">Signed in, but the car didn\'t report its mileage' + (d.car && d.car.error ? ': ' + d.car.error.replace(/[<>&]/g, '') : '') + '. Tell Claude what this says.</p>')
+      + '<p class="small">You can close this page.</p>';
+  } catch (err) {
+    msg.className = "small error"; msg.textContent = err.message; go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
