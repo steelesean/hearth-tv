@@ -629,7 +629,7 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       id: "car-info",
       per_year_gbp: 0,
       facts: `Over the last 90 days the car charged ${carSummary.ohmeKwh} kWh on ${carSummary.charges} days and added about ${carSummary.miles} miles, costing £${carSummary.cost.toFixed(2)} at your tariff's rates: about ${carSummary.pencePerMile}p a mile.`
-        + (carSummary.daytimeHours ? ` Ohme shows ${carSummary.daytimeHours} hours of charging outside the cheap hours; any that Octopus scheduled are billed cheap, but a manual boost is not.` : ""),
+        + (carSummary.daytimeHours ? ` ${carSummary.daytimeHours} hours of charging were outside the usual cheap hours; where Octopus confirmed them, or Ohme priced them at the cheap rate, they're counted as Octopus smart-charging at the cheap rate.` : ""),
       how_we_know: "Ohme's own record of each hour's charging and range added, priced at your Octopus rates for those half-hours.",
     });
   }

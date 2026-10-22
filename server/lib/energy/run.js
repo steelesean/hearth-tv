@@ -55,18 +55,6 @@ export async function refresh(now = Date.now()) {
     pricingFor("elec", meters.elec.agreements, from, to),
     meters.gas ? pricingFor("gas", meters.gas.agreements, from, to) : [],
   ]);
-  // Intelligent Octopus: confirmed smart-charge slots are billed at the cheap rate, house included.
-  let dispatchInfo = { available: false };
-  try {
-    const kept = await mergeDispatches(await octopus.completedDispatches());
-    const repriced = applyDispatches(elecPricing, kept);
-    dispatchInfo = { available: true, stored: kept.length, halfHoursRepriced: repriced, since: kept[0] ? new Date(kept[0].from).toISOString().slice(0, 10) : null };
-  } catch (e) {
-    const kept = await mergeDispatches([]).catch(() => []);
-    const repriced = kept.length ? applyDispatches(elecPricing, kept) : 0;
-    dispatchInfo = { available: false, error: e.message, stored: kept.length, halfHoursRepriced: repriced };
-  }
-
   // Ohme: its own hour-by-hour record of charging, if connected.
   let ohme = null, ohmeInfo = { connected: false };
   try {
@@ -75,6 +63,23 @@ export async function refresh(now = Date.now()) {
   } catch (e) {
     ohmeInfo = { connected: true, error: e.message };
   }
+
+  // Intelligent Octopus: smart-charge slots are billed at the cheap rate, house included.
+  // Confirmed ones come from Octopus (it only lists recent ones, so they're kept). Older ones are
+  // inferred where Ohme priced an hour at the cheap rate, which it does for Octopus-scheduled
+  // charging but not for a manual boost; those are labelled as assumed.
+  let dispatchInfo = { available: false };
+  let kept = [];
+  try {
+    kept = await mergeDispatches(await octopus.completedDispatches());
+    dispatchInfo = { available: true, stored: kept.length, since: kept[0] ? new Date(kept[0].from).toISOString().slice(0, 10) : null };
+  } catch (e) {
+    kept = await mergeDispatches([]).catch(() => []);
+    dispatchInfo = { available: false, error: e.message, stored: kept.length };
+  }
+  const inferred = ohme ? inferFromOhme(ohme, elecPricing, kept) : [];
+  dispatchInfo.halfHoursRepriced = applyDispatches(elecPricing, [...kept, ...inferred]);
+  dispatchInfo.inferredHours = inferred.length;
 
   const current = elecPricing[elecPricing.length - 1];
   const region = current.code.slice(-1);
@@ -158,4 +163,22 @@ function applyDispatches(pricing, dispatches) {
     }
   }
   return n;
+}
+
+/**
+ * Hours Ohme charged at about the cheap rate (within 1p a kWh of the lowest nearby rate) that
+ * Octopus hasn't confirmed: treated as smart-charge slots, marked as inferred.
+ */
+function inferFromOhme(ohme, pricing, confirmed) {
+  const out = [];
+  for (const h of ohme) {
+    if (!(h.kwh > 0.2) || !(h.ohmePence > 0)) continue;
+    if (confirmed.some((d) => h.t < d.to && h.t + 3600e3 > d.from)) continue;
+    const a = pricing.find((p) => h.t >= p.from && h.t < p.to);
+    if (!a) continue;
+    const near = a.rates.unit.filter((r) => r.from < h.t + 12 * 3600e3 && r.to > h.t - 12 * 3600e3).map((r) => r.p);
+    if (!near.length) continue;
+    if (h.ohmePence / h.kwh <= Math.min(...near) + 1) out.push({ from: h.t, to: h.t + 3600e3, source: "inferred-from-ohme" });
+  }
+  return out;
 }

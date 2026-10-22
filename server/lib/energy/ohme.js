@@ -93,7 +93,7 @@ export async function chargingByHour(from, to) {
         t: st.startTime,
         kwh: wh / 1000,
         km: st.batteryStats?.rangeAddedKm || 0,
-        ohmePence: Math.round(Number(st.costStats?.moneyCostTotal?.amount || 0) * 100),
+        ohmePence: Number(st.costStats?.moneyCostTotal?.amount || 0),   // Ohme reports pence
       });
     }
   }
