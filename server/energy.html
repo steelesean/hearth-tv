@@ -19,12 +19,12 @@
   @media (max-width: 760px) { .grid { grid-template-columns: minmax(0,1fr); } }
   .big { font: 400 56px/1 Georgia, serif; letter-spacing: -.02em; }
   .bars { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 10px; align-items: end; height: 150px; margin-top: 10px; }
-  .bar { cursor: pointer; } .bar.picked i { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .bar { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; font-weight:600; color:var(--ink2); }
+  .bar { cursor: pointer; } .bars.picking .bar:not(.picked) i { opacity: .4; }
+  .bar { display:flex; flex-direction:column; align-items:center; gap:1px; font-size:12px; font-weight:600; color:var(--ink2); }
   .bar i { display:block; width:100%; border-radius: 6px 6px 2px 2px; background: var(--bar); }
-  .bar.odd { color: var(--odd); } .bar.odd i.h { background: var(--oddbar); }
-  .bar i.c { background: var(--car); border-radius: 6px 6px 0 0; } .bar i.c + i.h { border-radius: 0 0 2px 2px; }
-  .bar i.g { background: var(--gas); }
+  .bar.odd { color: var(--odd); } .bar > span { margin-bottom: 3px; }
+  .bar i { border-radius: 0; } .bar i:first-of-type { border-radius: 6px 6px 0 0; } .bar i:last-of-type { border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; }
+  .bar i.c { background: var(--car); } .bar i.g { background: var(--gas); }
   .key { font-size: 12px; color: var(--muted); } .key b { font-weight: 400; }
   .days { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:10px; text-align:center; font-size:12px; color:var(--muted); margin-top:6px; }
   .action { margin-top: 12px; }
@@ -69,14 +69,9 @@
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
         <div class="card" style="margin-top: 18px;">
-          <div class="row" style="justify-content:space-between;"><strong>Electricity each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car</span></div>
-          <div class="bars" id="bars"></div>
+          <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span> <span style="color:var(--car)">■</span> Car</span></div>
+          <div class="bars" id="bars" style="height:190px;"></div>
           <div class="days" id="daynames"></div>
-          <div id="gasblock">
-            <div class="row" style="justify-content:space-between;margin-top:18px;"><strong>Gas each day</strong><span class="key">Heating and hot water together, for now</span></div>
-            <div class="bars" id="gasbars" style="height:110px;"></div>
-            <div class="days" id="gasnames"></div>
-          </div>
           <div id="dayview" hidden style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
             <div class="row" style="justify-content:space-between;"><strong id="dayname"></strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--car)">■</span> Car <span style="color:var(--gas)">■</span> Gas</span></div>
             <div class="key" style="margin-top:8px;">Electricity</div>
@@ -152,15 +147,14 @@ function render(d) {
   $("total").textContent = money(w.total);
   $("vs").textContent = w.usualElec ? "Electricity " + money(w.elec) + ", " + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? " under" : " over") + " your usual week" : "";
   $("split").textContent = "House " + money(w.house) + " · Car " + money(w.car) + (d.hasGas ? " · Gas " + money(w.gas) : "");
-  const emax = Math.max(...w.days.map((x) => x.houseElec + x.car), 0.5);
-  $("bars").innerHTML = w.days.map((x, i) => `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)} in detail"><span>${money(x.houseElec + x.car)}</span>`
-    + (x.car > 0 ? `<i class="c" style="height:${Math.round((x.car / emax) * 110)}px"></i>` : "")
-    + `<i class="h" style="height:${Math.max(2, Math.round((x.houseElec / emax) * 110))}px"></i></div>`).join("");
+  // One bar a day, stacked by cost: house at the bottom, gas, then the car on top.
+  const dayTotal = (x) => x.houseElec + x.gas + x.car;
+  const tmax = Math.max(...w.days.map(dayTotal), 0.5);
+  const seg = (cls, v, what) => (v > 0 ? `<i class="${cls}" title="${what} ${money(v)}" style="height:${Math.max(2, Math.round((v / tmax) * 150))}px"></i>` : "");
+  $("bars").innerHTML = w.days.map((x, i) => `<div class="bar${x.odd ? " odd" : ""}" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)}: ${money(dayTotal(x))}. Select for detail"><span>${money(dayTotal(x))}</span>`
+    + seg("c", x.car, "Car") + seg("g", x.gas, "Gas") + seg("h", x.houseElec, "House") + `</div>`).join("");
   $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
-  $("gasblock").hidden = !d.hasGas;
-  const gmax = Math.max(...w.days.map((x) => x.gas), 0.5);
-  $("gasbars").innerHTML = w.days.map((x, i) => `<div class="bar" data-day="${i}" role="button" tabindex="0" aria-label="${esc(x.day)} in detail"><span>${money(x.gas)}</span><i class="g" style="height:${Math.max(2, Math.round((x.gas / gmax) * 75))}px"></i></div>`).join("");
-  $("gasnames").innerHTML = w.days.map((x) => `<span>${esc(x.day)}</span>`).join("");
+  $("gaskey").hidden = $("gaskeyword").hidden = !d.hasGas;
   $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>${tell(o.id, "We know why")}`).join("");
   window.__days = w.days;
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
@@ -196,6 +190,7 @@ function showDay(i) {
   const x = window.__days?.[i];
   if (!x?.profile) { $("dayview").hidden = true; return; }
   document.querySelectorAll(".bar").forEach((b) => b.classList.toggle("picked", b.dataset.day == i));
+  $("bars").classList.add("picking");
   const { house, car } = x.profile;
   const max = Math.max(...house.map((h, k) => h + car[k]), 0.5);
   $("halfhours").innerHTML = house.map((h, k) => {
