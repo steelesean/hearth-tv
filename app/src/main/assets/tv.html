@@ -1136,7 +1136,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
   setPaired(!!p0.paired);
   var seen = false;
   try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
-  if (!seen && !p0.paired && p0.address) openPairing(); else setFocus(ask);
+  var preview = !window.HearthNative && /[?&]energy/.test(location.search);
+  if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(ask);
 })();
 </script>
 </body>
