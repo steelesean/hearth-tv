@@ -554,8 +554,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
     return days < 7 ? 'on ' + d.toLocaleDateString('en-GB', { weekday: 'long' }) : 'on ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   }
 
-  // ---------- The greeting asks, the buttons answer ----------
-  // One short question for the time and day. Answers either ask the assistant (which knows the
+  // ---------- The greeting, and the buttons under it ----------
+  // A plain greeting by default. It becomes a question only when there's a reason: Friday or
+  // Saturday film night, or something on that the service knows about (see askMoment). The
+  // answers under it still follow the time of day. Answers either ask the assistant (which knows the
   // household's taste), carry on, open a followed show with a new episode today, or open the
   // children's things. Kept short: the space around the question is part of the calm.
   function moment(d) {
@@ -567,7 +569,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var fresh = newToday ? { label: newToday.title + ': new today', show: newToday } : null;
     var story = JD.filter(kidAvailable)[d.getDate() % 4] || JD.filter(kidAvailable)[0];
     var m;
-    if (h < 5 || h >= 21.5) m = { headline: 'Getting late. Something short?', prompts: [
+    if (h < 5 || h >= 21.5) m = { headline: h < 5 ? 'Hello' : 'Good evening', prompts: [
       { label: 'One episode, under an hour', ask: 'Suggest one episode of something under an hour for tonight' }, carry,
       { label: 'Something gentle', ask: 'Suggest something gentle and calm to watch before bed' }] };
     else if (h < 12) m = { headline: 'Good morning', prompts: [
@@ -576,14 +578,14 @@ body { color: var(--ink); font-family: var(--font-ui); }
     else if (h < 16) m = { headline: 'Good afternoon', prompts: [
       { label: 'Something for the children', kids: true },
       { label: 'A film for later', ask: 'Suggest a film for us tonight' }] };
-    else if (h < 18.5) m = { headline: 'Teatime. One for the children?', prompts: [
+    else if (h < 18.5) m = { headline: h < 18 ? 'Good afternoon' : 'Good evening', prompts: [
       story ? { label: 'A Julia Donaldson story', kid: story } : null,
       { label: 'Something calm', calm: true },
       { label: 'Something for us later', ask: 'Suggest something for the two of us to watch tonight' }] };
     else if (day === 5 || day === 6) m = { headline: 'It’s ' + DAYS[day] + '. Film night?', prompts: [
       { label: 'Pick us a film', ask: 'Suggest a film for tonight' },
       { label: 'One the children can watch too', ask: 'Suggest a family film the children can watch with us tonight' }, carry] };
-    else m = { headline: DAYS[day] + ' night. Something new?', prompts: [
+    else m = { headline: 'Good evening', prompts: [
       { label: 'A series to start', ask: 'Suggest a series we could start tonight' },
       { label: 'Something lighter', ask: 'Suggest something lighter to watch tonight' }, carry] };
     // A followed show out today takes the middle place in the evening.

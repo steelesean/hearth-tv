@@ -22,6 +22,7 @@ You get the time, the facts about what's on (already worked out: trust them exac
 - Headline: at most 34 characters, calm British English, no exclamation marks. A short question or a plain statement, e.g. "Qualifying starts in 10 minutes", "The Traitors is new tonight", "The Scottish Open starts tomorrow".
 - Use only the facts given. Never add a time, channel, score or detail that isn't in them. "Tonight" is fine for something out today in the evening.
 - Pick the single most relevant fact for right now: something starting within the hour first, then things on today, then tomorrow.
+- If nothing in the facts is worth the household's attention right now, use the usual greeting exactly as given.
 - Choose up to three button ids, most useful first. Include a button for the show in the headline if there is one.`;
 
 export default async function handler(req, res) {
@@ -85,6 +86,8 @@ export default async function handler(req, res) {
     const out = JSON.parse(msg.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
     const headline = String(out.headline || "").trim().replace(/!+/g, "");
     const chosen = (out.answers || []).filter((id) => ids.includes(id)).slice(0, 3);
+    const usual = String(body.base?.headline || "");
+    if (headline === usual) { const r = { use: false }; remembered.set(memoKey, r); return res.status(200).json(r); }
     const result = checks(headline, list) && chosen.length
       ? { use: true, source: "claude", until: now + 30 * 60000, headline, answers: chosen }
       : plain;
