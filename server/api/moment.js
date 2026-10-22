@@ -19,7 +19,7 @@ const remembered = new Map();   // facts and answers → Claude's choice, for ha
 const SYSTEM = `You write the one-line greeting at the top of a UK family's TV home screen, and choose which answer buttons sit under it.
 
 You get the time, the facts about what's on (already worked out: trust them exactly), and the buttons available.
-- Headline: at most 34 characters, calm British English, no exclamation marks. A short question or a plain statement, e.g. "Qualifying starts in 10 minutes", "The Traitors is new tonight", "The Scottish Open starts tomorrow".
+- Headline: at most 34 characters, calm British English, no exclamation marks. A short question or a plain statement, e.g. "Qualifying starts in 10 minutes", "The Traitors is on tonight", "The Scottish Open starts tomorrow". Say a show is "on tonight" or "back tomorrow", never "new tonight".
 - Use only the facts given. Never add a time, channel, score or detail that isn't in them. "Tonight" is fine for something out today in the evening.
 - Pick the single most relevant fact for right now: something starting within the hour first, then things on today, then tomorrow.
 - If nothing in the facts is worth the household's attention right now, use the usual greeting exactly as given.
@@ -42,8 +42,8 @@ export default async function handler(req, res) {
   // The facts: shows the household follows, then sport.
   const list = [];
   for (const s of (body.shows || []).slice(0, 6)) {
-    if (s.days === 0) list.push({ kind: "show", text: s.title + ": a new episode is out today.", minsAway: 60, plain: s.title + " is new tonight", show: s.title });
-    else if (s.days === 1) list.push({ kind: "show", text: s.title + ": a new episode is out tomorrow.", minsAway: 24 * 60, plain: s.title + " is new tomorrow", show: s.title });
+    if (s.days === 0) list.push({ kind: "show", text: s.title + ": a new episode is out today.", minsAway: 60, plain: s.title + " is on tonight", show: s.title });
+    else if (s.days === 1) list.push({ kind: "show", text: s.title + ": a new episode is out tomorrow.", minsAway: 24 * 60, plain: s.title + " is on tomorrow", show: s.title });
   }
   const sport = await upcoming(now).catch(() => ({ events: [] }));
   list.push(...facts(sport.events, now));
@@ -113,7 +113,7 @@ function checks(headline, list) {
 /** For the plain version: the headline's show first if there's a button for it, then the TV's order. */
 function orderAnswers(ids, answers, top) {
   const now = answers.find((a) => a.label === "Watch on NOW");
-  const first = top.show ? answers.find((a) => a.label.toLowerCase().startsWith(top.show.toLowerCase()))
+  const first = top.show ? answers.find((a) => a.label.toLowerCase() === ("watch " + top.show).toLowerCase())
     : top.kind === "f1" || top.kind === "golf" ? now : null;
   // NOW only leads for sport; otherwise it isn't offered.
   return [...(first ? [first.id] : []), ...ids.filter((id) => id !== first?.id && id !== now?.id)].slice(0, 3);

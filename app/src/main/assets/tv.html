@@ -41,7 +41,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .pill svg { width: 26px; height: 26px; }
 
 .hero { display: flex; flex-direction: column; align-items: center; margin-top: 34px; }
-.greeting { font-family: var(--font-display); font-weight: 400; font-size: 88px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+.greeting { font-family: var(--font-display); font-weight: 400; font-size: 70px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
 /* The question in the greeting, answered by up to three buttons; then one quiet line. The
    question keeps to 1500px and steps its type down rather than wrapping, so the space stays. */
 .greeting { max-width: 1500px; white-space: nowrap; }
@@ -566,7 +566,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var h = d.getHours() + d.getMinutes() / 60, day = d.getDay(), weekend = day === 0 || day === 6;
     var last = lastGrownUp(), carry = last && last.kind !== 'app' ? { label: 'Carry on with ' + last.title, carry: true } : null;
     var newToday = watchingShows().filter(function (x) { return x.days === 0 && !x.usDate; })[0];
-    var fresh = newToday ? { label: newToday.title + ': new today', show: newToday } : null;
+    var fresh = newToday ? { label: 'Watch ' + newToday.title, show: newToday } : null;
     var story = JD.filter(kidAvailable)[d.getDate() % 4] || JD.filter(kidAvailable)[0];
     var m;
     if (h < 5 || h >= 21.5) m = { headline: h < 5 ? 'Hello' : 'Good evening', prompts: [
@@ -592,7 +592,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (fresh && h >= 18.5 && h < 21.5) m.prompts.splice(1, 1, fresh);
     // Every answer the service may choose from: these, plus any followed show out today or tomorrow.
     var pool = m.prompts.filter(Boolean).concat([{ label: 'Watch on NOW', app: 'now' }], watchingShows().filter(function (x) { return x.days === 0 || x.days === 1; })
-      .map(function (x) { return { label: x.title + (x.days === 0 ? ': new today' : ': new tomorrow'), show: x }; }), carry ? [carry] : []);
+      .map(function (x) { return { label: 'Watch ' + x.title, show: x }; }), carry ? [carry] : []);
     var seen = {}; pool = pool.filter(function (p) { if (!p || seen[p.label]) return false; seen[p.label] = 1; return true; });
     pool.forEach(function (p, i) { p.id = 'a' + i; });
     m.prompts = m.prompts.filter(Boolean).slice(0, 3);
@@ -630,7 +630,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var g = $('greeting');
     if (g.textContent === text && g._fitted) return;
     g.textContent = text; g.style.fontSize = '';
-    for (var size = 88; size > 60 && g.scrollWidth > 1500; size -= 4) g.style.fontSize = size - 4 + 'px';
+    for (var size = 70; size > 52 && g.scrollWidth > 1500; size -= 4) g.style.fontSize = size - 4 + 'px';
     g._fitted = true;
   }
   var promptKey = '';
