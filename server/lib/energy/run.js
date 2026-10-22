@@ -3,6 +3,9 @@
 import * as octopus from "./octopus.js";
 import { analyse } from "./analyse.js";
 import { weeklyNote, plainNote } from "./note.js";
+import { loadFeedback } from "./store.js";
+
+const QUIET_FOR = 90 * 24 * 60 * 60 * 1000;   // a dismissed suggestion stays away this long
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -49,6 +52,10 @@ export async function refresh(now = Date.now()) {
     elec, gas, elecPricing, gasPricing, alternatives, now,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
+  // Leave out anything the household said they already do, or that isn't for them.
+  const feedback = await loadFeedback().catch(() => ({}));
+  facts.dismissed = facts.candidates.filter((c) => feedback[c.id] && now - Date.parse(feedback[c.id].at) < QUIET_FOR).map((c) => c.id);
+  facts.candidates = facts.candidates.filter((c) => !facts.dismissed.includes(c.id));
   let note = null;
   try { note = await weeklyNote(facts); } catch (e) { console.error("Note failed:", e.message); }
   facts.note = note || plainNote(facts);

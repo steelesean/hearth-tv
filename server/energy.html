@@ -28,6 +28,10 @@
   .action h3 span { font: 600 16px system-ui, sans-serif; color: var(--green); white-space: nowrap; }
   .action p { margin: 6px 0 0; color: var(--ink2); }
   .how { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .tell { display:flex; gap: 8px; margin-top: 10px; }
+  .tell button { padding: 6px 12px; font-size: 13px; }
+  dl { display:grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px 16px; margin: 8px 0 0; font-size: 14px; }
+  dt { color: var(--ink2); } dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
   table { width:100%; border-collapse: collapse; margin-top: 8px; }
   td { padding: 6px 0; border-top: 1px solid var(--line); } td:last-child { text-align:right; font-variant-numeric: tabular-nums; font-weight: 600; }
   tr.yours td { font-weight: 600; }
@@ -75,11 +79,20 @@
       <div>
         <div class="label">Worth doing</div>
         <div id="actions"></div>
+        <div class="card" style="margin-top: 18px;" id="goodcard" hidden>
+          <div class="label">Good to know</div>
+          <div id="good"></div>
+        </div>
         <div class="card" style="margin-top: 18px;">
           <div class="label">Note</div>
           <p style="margin: 6px 0 0;"><strong id="headline"></strong> <span id="summary"></span></p>
           <div class="how" id="forecast"></div>
           <div class="how" id="made"></div>
+        </div>
+        <div class="card" style="margin-top: 18px;">
+          <div class="label">The workings</div>
+          <dl id="facts"></dl>
+          <div class="how">Check these against your Octopus bill or app. If one looks wrong, tell Claude which.</div>
         </div>
       </div>
     </div>
@@ -109,20 +122,49 @@ function render(d) {
   $("view").hidden = false; $("signin").hidden = true;
   $("range").textContent = w.label;
   $("total").textContent = money(w.total);
-  $("vs").textContent = w.usual ? money(Math.abs(w.total - w.usual)) + (w.total <= w.usual ? " under" : " over") + " your usual week" : "";
+  $("vs").textContent = w.usualElec ? "Electricity " + money(w.elec) + ", " + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? " under" : " over") + " your usual week" : "";
   $("split").textContent = "House " + money(w.house) + " · Car " + money(w.car) + (d.hasGas ? " · Gas " + money(w.gas) : "");
   const max = Math.max(...w.days.map((x) => x.total), 1);
   $("bars").innerHTML = w.days.map((x) => `<div class="bar${x.odd ? " odd" : ""}"><span>${money(x.total)}</span><i style="height:${Math.round((x.total / max) * 110)}px"></i></div>`).join("");
   $("daynames").innerHTML = w.days.map((x) => `<span${x.odd ? ' style="color:var(--odd);font-weight:600"' : ""}>${esc(x.day)}</span>`).join("");
-  $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>`).join("");
+  $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>${tell(o.id, "We know why")}`).join("");
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
   $("tariffs").innerHTML = d.tariff.rows.map((t) => `<tr class="${t.yours ? "yours" : ""}"><td>${esc(t.name)}</td><td>£${Math.round(t.cost)}</td></tr>`).join("");
-  $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div></div>`).join("") || '<p class="muted">Nothing worth changing this week.</p>';
+  $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div>${tell(a.id, "Already doing this")}</div>`).join("") || '<p class="muted">Nothing worth changing this week.</p>';
+  const good = (d.candidates || []).filter((c) => c.per_year_gbp === 0 && !c.id.startsWith("odd-"));
+  $("goodcard").hidden = !good.length;
+  $("good").innerHTML = good.map((c) => `<p style="margin:8px 0 0;">${esc(c.facts)}</p><div class="how">${esc(c.how_we_know)}</div>`).join("");
+  const pct = (x) => Math.round(x * 100) + "%";
+  const rows = [
+    ["Electricity priced", d.tariff.coverage != null ? pct(d.tariff.coverage) + " of half-hours" : "–"],
+    ["Days of readings", (d.source?.elecDays ?? "–") + " electricity, " + (d.source?.gasDays ?? 0) + " gas"],
+    ["Always on, overnight", d.baseline ? d.baseline.watts + " W" : "–"],
+    ["Car, share of electricity", pct(d.car.share)],
+    ["Nights the car charged", d.car.nightsCharged + " of the last 90"],
+    ["4 to 7pm, share of house use", pct(d.peak.share)],
+    ["Cheap hours on your tariff", d.shift?.own ? d.shift.from + " to " + d.shift.to : "none"],
+    ["Gas meter units", d.hasGas ? d.gasUnits : "no gas"],
+    ["Tariffs compared", [d.tariff.rows.find((r) => r.yours)?.name, ...(d.source?.alternativesPriced || [])].filter(Boolean).join(", ")],
+  ];
+  if (d.dismissed?.length) rows.push(["Left out at your request", d.dismissed.length + ""]);
+  $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   $("headline").textContent = note.headline || "";
   $("summary").textContent = note.summary || "";
   $("forecast").textContent = d.forecast ? d.forecast.month + " so far " + money(d.forecast.soFar) + ", heading for about " + money(d.forecast.projected) + "." : "";
   $("made").textContent = "Worked out " + new Date(d.generatedAt).toLocaleString("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + (note.plain ? ". Claude wasn't available, so this is the plain version." : ". Figures calculated from your Octopus meter, then explained by Claude.");
 }
+
+function tell(id, label) {
+  return `<div class="tell"><button class="quiet" data-id="${esc(id)}" data-verdict="doing">${esc(label)}</button><button class="quiet" data-id="${esc(id)}" data-verdict="not-for-us">Not for us</button></div>`;
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-verdict]");
+  if (!b) return;
+  const box = b.parentElement;
+  box.textContent = "Saving…";
+  const r = await fetch("/api/energy/feedback", { method: "POST", headers: { "x-hearth-key": key, "Content-Type": "application/json" }, body: JSON.stringify({ id: b.dataset.id, verdict: b.dataset.verdict }) }).catch(() => null);
+  box.textContent = r && r.ok ? "Thanks. We'll leave that out for the next 90 days." : "Couldn't save that. Try again in a moment.";
+});
 
 $("form").addEventListener("submit", (e) => { e.preventDefault(); key = $("key").value.trim(); store.set(key); load(); });
 $("refresh").addEventListener("click", async () => {

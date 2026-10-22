@@ -140,6 +140,7 @@ export function analyse(input) {
       date: d,
       complete: slotsPerDay.get(d) >= 46,
       house: gbp(housePence),
+      houseElec: gbp(h ? h.pence + h.standing : 0),
       car: gbp(c ? c.pence : 0),
       gas: gbp(g ? g.pence : 0),
       houseKwh: round(houseKwh.get(d) || 0, 1),
@@ -159,19 +160,27 @@ export function analyse(input) {
   }
   const week = weekDates(monday).map((d) => daily.get(d)).filter(Boolean);
   const weekTotal = round(sum(week.map((d) => d.total)));
+  // "Usual" is electricity only: gas follows the weather, and we don't have the weather yet.
+  const weekElec = round(sum(week.map((d) => d.houseElec + d.car)));
   const earlierWeeks = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => weekDates(addDays(monday, -7 * n)).map((d) => daily.get(d)))
-    .filter((w) => w.every((d) => d?.complete)).map((w) => sum(w.map((d) => d.total)));
+    .filter((w) => w.every((d) => d?.complete)).map((w) => sum(w.map((d) => d.houseElec + d.car)));
   const usualWeek = round(median(earlierWeeks));
 
-  // Odd days: well above the same weekday over the previous eight weeks, with the block that did it.
+  // Odd days: house electricity well above the same weekday over the previous eight weeks,
+  // with the block that did it. Gas is left out until it can be adjusted for the weather.
   const odd = [];
   for (const d of week) {
     const same = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => daily.get(addDays(d.date, -7 * n))).filter((x) => x?.complete);
     if (same.length < 3) continue;
-    const usual = median(same.map((x) => x.house + x.gas));
-    const extra = d.house + d.gas - usual;
-    if (extra > Math.max(1.5, 0.35 * usual)) {
-      odd.push({ date: d.date, day: longDate(d.date), cost: round(d.house + d.gas), usual: round(usual), extra: round(extra), block: oddBlock(house, d.date, same.map((x) => x.date)) });
+    const usualKwh = median(same.map((x) => x.houseKwh));
+    if (d.houseKwh - usualKwh > Math.max(3, 0.35 * usualKwh)) {
+      const usual = median(same.map((x) => x.houseElec));
+      odd.push({
+        date: d.date, day: longDate(d.date),
+        kwh: d.houseKwh, usualKwh: round(usualKwh, 1), extraKwh: round(d.houseKwh - usualKwh, 1),
+        cost: d.houseElec, usual: round(usual), extra: round(d.houseElec - usual),
+        block: oddBlock(house, d.date, same.map((x) => x.date)),
+      });
     }
   }
   const oddDates = new Set(odd.map((o) => o.date));
@@ -234,7 +243,6 @@ export function analyse(input) {
         if (m) { const extra = (v.pence + v.standing - m.pence - m.standing) / 100; if (extra > worst.extra) worst = { date: d, extra: round(extra) }; }
       }
       if (worst.date) worstDay = worst;
-      row.shiftPerKwh = agileShift(alt.pricing, fitFrom, now);
     }
     rows.push(row);
   }
@@ -242,6 +250,7 @@ export function analyse(input) {
   const best = rows[0];
   const tariff = {
     days: fitDays,
+    coverage: round(mine.coverage, 3),
     rows,
     best: best && !best.yours ? { name: best.name, saving: round(mine.cost - best.cost), perYear: Math.round(((mine.cost - best.cost) / Math.max(fitDays, 1)) * 365) } : null,
     agileWorstDay: worstDay,
@@ -255,7 +264,14 @@ export function analyse(input) {
   const daysInMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
   const forecast = { month: new Date(today + "T12:00:00Z").toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" }), soFar, projected: round(soFar + pace * (daysInMonth - monthDays.length)) };
 
-  const candidates = buildCandidates({ tariff, baseline, peak, carSummary, odd });
+  // Moving use out of 4 to 7pm: on their own tariff if it has cheap hours, otherwise on Agile.
+  const ownShift = shiftSaving(input.elecPricing, now - 28 * DAY, now);
+  const agileAlt = (input.alternatives || []).find((a) => a.label === "Agile");
+  const shift = ownShift && ownShift.perKwh >= 5 ? { ...ownShift, tariff: input.currentName, own: true }
+    : agileAlt ? { ...shiftSaving(agileAlt.pricing, now - 28 * DAY, now), tariff: "Agile", own: false } : null;
+
+  const overnight = shift && shift.own ? overnightRuns(house, car, now, baseWatts, shift) : null;
+  const candidates = buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight });
 
   return {
     generatedAt: new Date(now).toISOString(),
@@ -263,13 +279,14 @@ export function analyse(input) {
       from: monday, to: addDays(monday, 6),
       label: rangeLabel(monday, addDays(monday, 6)),
       total: weekTotal,
-      usual: Number.isFinite(usualWeek) ? usualWeek : null,
+      elec: weekElec,
+      usualElec: Number.isFinite(usualWeek) ? usualWeek : null,
       house: round(sum(week.map((d) => d.house))),
       car: round(sum(week.map((d) => d.car))),
       gas: round(sum(week.map((d) => d.gas))),
       days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date) })),
     },
-    odd, baseline, peak, car: carSummary, tariff, forecast,
+    odd, baseline, peak, shift, overnight, car: carSummary, tariff, forecast,
     gasUnits: gas.unit,
     hasGas: gas.readings.length > 0,
     candidates,
@@ -309,21 +326,72 @@ function averageUnitPence(pricing, now) {
   return xs.length ? sum(xs) / xs.length : 25;
 }
 
-/** On Agile: what moving one kWh from 4–7pm to 9pm–midnight saves, on average (pence). */
-function agileShift(pricing, from, to) {
-  const unit = priceAt(pricing[0].rates.unit);
-  const peak = [], late = [];
+/**
+ * What moving one kWh out of 4 to 7pm saves, on average (pence): against the cheapest
+ * three hours of the day on this tariff, outside 4 to 7pm. Null if the prices are missing.
+ */
+function shiftSaving(pricing, from, to) {
+  const bySlot = Array.from({ length: 48 }, () => []);
   for (let t = from; t < to; t += HALF_HOUR) {
-    const p = unit(t); if (p === undefined) continue;
-    const s = local(t).slot;
-    if (s >= 32 && s < 38) peak.push(p);
-    if (s >= 42) late.push(p);
+    const a = pricing.find((p) => t >= p.from && t < p.to);
+    const p = a && priceAt(a.rates.unit)(t);
+    if (p !== undefined) bySlot[local(t).slot].push(p);
   }
-  return peak.length && late.length ? round(sum(peak) / peak.length - sum(late) / late.length, 1) : null;
+  const avg = bySlot.map((xs) => (xs.length ? sum(xs) / xs.length : NaN));
+  const peak = avg.slice(32, 38);
+  if (peak.some((x) => !Number.isFinite(x))) return null;
+  let best = null;
+  for (let s = 0; s < 48; s++) {
+    const win = [0, 1, 2, 3, 4, 5].map((i) => (s + i) % 48);
+    if (win.some((x) => x >= 32 && x < 38) || win.some((x) => !Number.isFinite(avg[x]))) continue;
+    const mean = sum(win.map((x) => avg[x])) / 6;
+    if (!best || mean < best.mean) best = { mean, from: s };
+  }
+  if (!best) return null;
+  // Widen to the whole cheap stretch around it (within 1p of the cheapest), e.g. 23:30 to 05:30.
+  const cheap = (x) => Number.isFinite(avg[x]) && avg[x] <= best.mean + 1 && !(x >= 32 && x < 38);
+  let a = best.from, b = (best.from + 6) % 48, n = 6;
+  while (n < 40 && cheap((a + 47) % 48)) { a = (a + 47) % 48; n++; }
+  while (n < 40 && cheap(b)) { b = (b + 1) % 48; n++; }
+  return { perKwh: round(sum(peak) / 6 - best.mean, 1), from: hhmm(a), to: hhmm(b), cheapPence: round(best.mean, 1) };
+}
+
+/**
+ * Nights with an appliance-sized run (0.6 to 2.5 kWh a half-hour above always-on, so not the
+ * car) in the tariff's cheap window. Returns how often, how big, and what it saves a year.
+ */
+function overnightRuns(house, car, now, baseWatts, shift) {
+  // Half-hours next to car charging are the start or end of a charge, not an appliance.
+  const nearCar = new Set();
+  for (const r of car) if (r.v > 0) for (const d of [-1, 0, 1]) nearCar.add(r.t + d * HALF_HOUR);
+  const base = (Number.isFinite(baseWatts) ? baseWatts : 200) / 2000;   // kWh per half-hour
+  const [fh, fm] = shift.from.split(":").map(Number), [th, tm] = shift.to.split(":").map(Number);
+  const fromSlot = fh * 2 + (fm ? 1 : 0), toSlot = th * 2 + (tm ? 1 : 0);
+  const inWindow = (s) => (fromSlot < toSlot ? s >= fromSlot && s < toSlot : s >= fromSlot || s < toSlot);
+  const nights = new Map();
+  for (const r of house) {
+    if (r.t < now - 28 * DAY) continue;
+    const l = local(r.t);
+    if (!inWindow(l.slot) || nearCar.has(r.t)) continue;
+    const extra = r.v - base;
+    if (extra < 0.6) continue;
+    const night = local(r.t - 12 * 3600 * 1000).date;
+    nights.set(night, (nights.get(night) || 0) + extra);
+  }
+  if (!nights.size) return null;
+  const kwh = median([...nights.values()]);
+  const slots = Math.max(1, Math.round(kwh / 0.9));
+  return {
+    nights: nights.size,
+    kwhPerRun: round(kwh, 1),
+    kw: round(kwh / (slots / 2), 1),
+    minutes: slots * 30,
+    perYear: Math.round((kwh * shift.perKwh * (nights.size / 28) * 365) / 100),
+  };
 }
 
 /** Things worth doing, each already costed. Claude picks and words them; it can't change the sums. */
-function buildCandidates({ tariff, baseline, peak, carSummary, odd }) {
+function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight }) {
   const out = [];
   if (tariff.best && tariff.best.perYear >= 20) {
     const mine = tariff.rows.find((r) => r.yours);
@@ -332,6 +400,15 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd }) {
       per_year_gbp: tariff.best.perYear,
       facts: `Last ${tariff.days} days of half-hourly electricity, re-priced: ${tariff.best.name} £${tariff.rows.find((r) => r.name === tariff.best.name).cost}, ${mine.name} £${mine.cost}. Standing charges included. Car is ${Math.round(carSummary.share * 100)}% of electricity, ${Math.round(carSummary.nightShare * 100)}% of it charged midnight to 5:30am.`
         + (tariff.agileWorstDay && tariff.best.name === "Agile" ? ` Agile's worst day in the period cost £${tariff.agileWorstDay.extra} more than the current tariff.` : ""),
+      how_we_know: `Your own meter readings for the last ${tariff.days} days, priced at each tariff's published rates for those days.`,
+    });
+  }
+  if (!tariff.best && tariff.rows.length > 1) {
+    const mine = tariff.rows.find((r) => r.yours), next = tariff.rows[1];
+    out.push({
+      id: "tariff-ok",
+      per_year_gbp: 0,
+      facts: `${mine.name} is already the cheapest for how you use electricity: £${Math.round(mine.cost)} over the last ${tariff.days} days, against £${Math.round(next.cost)} on ${next.name}. Nothing to switch.`,
       how_we_know: `Your own meter readings for the last ${tariff.days} days, priced at each tariff's published rates for those days.`,
     });
   }
@@ -344,23 +421,32 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd }) {
       how_we_know: `The quietest half-hour between 1am and 5am on each of the last ${baseline.nights} nights, with car charging taken out.`,
     });
   }
-  const agile = tariff.rows.find((r) => r.name === "Agile");
-  if (agile?.shiftPerKwh > 5 && peak.kwhPerDay >= 1) {
-    const kwh = Math.min(1, peak.kwhPerDay / 2);
+  // 4 to 7pm is mostly cooking, lights and TV, which can't move. Half-hourly readings can't tell
+  // a dishwasher from an oven, so this is information, never an instruction.
+  if (shift && shift.own && shift.perKwh > 5 && peak.kwhPerDay >= 1) {
     out.push({
-      id: "peak",
-      per_year_gbp: Math.round((kwh * agile.shiftPerKwh * 365) / 100),
-      facts: `${Math.round(peak.share * 100)}% of house electricity is used 4 to 7pm, ${peak.kwhPerDay} kWh a day. On Agile, 4 to 7pm averaged ${agile.shiftPerKwh}p per kWh more than 9pm to midnight. Moving ${round(kwh, 1)} kWh a day (a dishwasher or dryer run) later saves this, but only on Agile.`,
-      how_we_know: "Your 4 to 7pm use over the last 28 days, and Agile's actual prices for the same days.",
+      id: "peak-info",
+      per_year_gbp: 0,
+      facts: `${Math.round(peak.share * 100)}% of house electricity is used 4 to 7pm (${peak.kwhPerDay} kWh a day), when your tariff is ${shift.perKwh}p per kWh dearer than ${shift.from} to ${shift.to}. Most of this is likely cooking and evening use that can't move; we can't see which appliances it is.`,
+      how_we_know: "Your 4 to 7pm use over the last 28 days, and your tariff's prices for the same days.",
+    });
+  }
+  // The other way round: appliance-sized runs already in the cheap hours. Credit them; don't preach.
+  if (shift && shift.own && overnight && overnight.nights >= 4) {
+    out.push({
+      id: "overnight-ok",
+      per_year_gbp: 0,
+      facts: `On ${overnight.nights} of the last 28 nights something drew about ${overnight.kw} kW for ${overnight.minutes} minutes between ${shift.from} and ${shift.to}, not the car: most likely an appliance on a timer. Run then rather than 4 to 7pm, that already saves about £${overnight.perYear} a year.`,
+      how_we_know: "Overnight half-hours well above your always-on use but too small to be the car, over the last 28 nights.",
     });
   }
   for (const o of odd.slice(0, 2)) {
     out.push({
       id: "odd-" + o.date,
       per_year_gbp: 0,
-      facts: `${o.day} cost £${o.cost} against a usual £${o.usual} for that weekday (£${o.extra} more).`
+      facts: `${o.day}: the house used ${o.kwh} kWh of electricity against a usual ${o.usualKwh} kWh for that weekday, £${o.extra} more.`
         + (o.block ? ` Something used an extra ${o.block.extraKw} kW from ${o.block.from} to ${o.block.to}.` : ""),
-      how_we_know: "Compared with the same weekday over the previous eight weeks, car charging taken out.",
+      how_we_know: "Electricity compared with the same weekday over the previous eight weeks, car charging taken out.",
     });
   }
   return out;

@@ -21,3 +21,16 @@ export async function load() {
   if (!r || r.statusCode !== 200 || !r.stream) return null;
   return new Response(r.stream).json();
 }
+
+// What the household has said about suggestions: { [id]: { verdict, at } }.
+const FEEDBACK = "energy/feedback.json";
+
+export async function loadFeedback() {
+  const r = await get(FEEDBACK, { access: "private" }).catch(() => null);
+  if (!r || r.statusCode !== 200 || !r.stream) return {};
+  return new Response(r.stream).json().catch(() => ({}));
+}
+
+export async function saveFeedback(feedback) {
+  await put(FEEDBACK, JSON.stringify(feedback), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+}
