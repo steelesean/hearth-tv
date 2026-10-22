@@ -9,7 +9,11 @@ const QUIET_FOR = 90 * 24 * 60 * 60 * 1000;   // a dismissed suggestion stays aw
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Rates for each agreement that overlaps the window. */
+/**
+ * Rates for each agreement that overlaps the window. Some tariffs (e.g. IOG-SMB-VAR-24-10-29)
+ * aren't published, so Octopus returns no prices; then borrow from the household's other tariff
+ * of the same launch (same date suffix) or failing that any of their tariffs, and say so.
+ */
 async function pricingFor(kind, agreements, from, to) {
   const out = [];
   for (const a of agreements) {
@@ -17,6 +21,17 @@ async function pricingFor(kind, agreements, from, to) {
     const at = Math.min(to, a.valid_to ? Date.parse(a.valid_to) : Infinity);
     if (af >= at) continue;
     out.push({ from: af, to: at, code: a.tariff_code, rates: await octopus.rates(kind, a.tariff_code, new Date(af), new Date(at)) });
+  }
+  const launch = (code) => code.match(/\d{2}-\d{2}-\d{2}(?=-[A-Z]$)/)?.[0];
+  for (const p of out) {
+    if (p.rates.unit.length) continue;
+    const donors = out.filter((q) => q !== p && q.rates.unit.length)
+      .sort((x, y) => (launch(y.code) === launch(p.code)) - (launch(x.code) === launch(p.code)));
+    for (const d of donors) {
+      const code = d.code.slice(0, -1) + p.code.slice(-1);          // their region
+      const rates = await octopus.rates(kind, code, new Date(p.from), new Date(p.to)).catch(() => null);
+      if (rates?.unit.length) { p.rates = rates; p.assumedFrom = code; break; }
+    }
   }
   return out;
 }
@@ -62,7 +77,7 @@ export async function refresh(now = Date.now()) {
   // What Octopus returned for the household's own tariff, so gaps can be diagnosed from the page.
   const iso = (t) => (Number.isFinite(t) ? new Date(t).toISOString().slice(0, 16) : "open");
   facts.source_pricing = elecPricing.map((a) => ({
-    code: a.code, from: iso(a.from), to: iso(a.to),
+    code: a.code, from: iso(a.from), to: iso(a.to), assumedFrom: a.assumedFrom || null,
     unitRates: a.rates.unit.length, standing: a.rates.standing.length,
     first: a.rates.unit[0] && { from: iso(a.rates.unit[0].from), to: iso(a.rates.unit[0].to), p: a.rates.unit[0].p },
     last: a.rates.unit.at(-1) && { from: iso(a.rates.unit.at(-1).from), to: iso(a.rates.unit.at(-1).to), p: a.rates.unit.at(-1).p },

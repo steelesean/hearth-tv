@@ -262,7 +262,9 @@ export function analyse(input) {
   const mine = tariffCost(input.elecPricing);
   // Any half-hours Octopus had no price for are filled at the tariff's own average, as for the
   // alternatives below; the workings show how much that was.
-  if (mine.coverage > 0 && mine.coverage < 1) mine.cost = round(mine.cost / mine.coverage);
+  // Only small gaps are filled; with more missing, the figures are flagged and no advice is given.
+  const priced = mine.coverage >= 0.95;
+  if (priced && mine.coverage < 1) mine.cost = round(mine.cost / mine.coverage);
   const rows = [{ name: input.currentName || "Your tariff", cost: mine.cost, yours: true }];
   let worstDay = null;
   for (const alt of input.alternatives || []) {
@@ -286,7 +288,8 @@ export function analyse(input) {
     days: fitDays,
     coverage: round(mine.coverage, 3),
     rows,
-    best: best && !best.yours ? { name: best.name, saving: round(mine.cost - best.cost), perYear: Math.round(((mine.cost - best.cost) / Math.max(fitDays, 1)) * 365) } : null,
+    incomplete: !priced,
+    best: priced && best && !best.yours ? { name: best.name, saving: round(mine.cost - best.cost), perYear: Math.round(((mine.cost - best.cost) / Math.max(fitDays, 1)) * 365) } : null,
     agileWorstDay: worstDay,
   };
 
@@ -485,7 +488,8 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       how_we_know: "Electricity compared with the same weekday over the previous eight weeks, car charging taken out.",
     });
   }
-  return out;
+  // Odd days are measured in kWh, so they stand; anything costed waits for complete prices.
+  return tariff.incomplete ? out.filter((c) => c.id.startsWith("odd-")) : out;
 }
 
 function rangeLabel(from, to) {

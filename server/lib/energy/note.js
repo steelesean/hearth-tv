@@ -62,7 +62,8 @@ export async function weeklyNote(facts) {
       electricity: facts.week.elec, usualElectricityWeek: facts.week.usualElec,
       gasNote: "Gas isn't compared with earlier weeks yet: it depends on the weather, which we don't have. Don't call gas high or low.",
     },
-    monthForecast: facts.forecast,
+    monthForecast: facts.tariff.incomplete ? null : facts.forecast,
+    pricingWarning: facts.tariff.incomplete ? `Octopus had prices for only ${Math.round(facts.tariff.coverage * 100)}% of half-hours, so electricity costs are understated. Say so plainly, give no money figures for electricity, and don't comment on the electricity cost.` : null,
     candidates: facts.candidates.map(({ id, per_year_gbp, facts: f }) => ({ id, per_year_gbp, facts: f })),
   };
   const params = {

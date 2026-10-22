@@ -128,6 +128,7 @@ async function load() {
 function render(d) {
   const w = d.week, note = d.note || {};
   $("view").hidden = false; $("signin").hidden = true;
+  $("status").innerHTML = d.tariff?.incomplete ? '<span class="error">Octopus only had prices for ' + Math.round(d.tariff.coverage * 100) + "% of your half-hours, so electricity costs here are too low and there's no tariff advice. See the workings.</span>" : "";
   $("range").textContent = w.label;
   $("total").textContent = money(w.total);
   $("vs").textContent = w.usualElec ? "Electricity " + money(w.elec) + ", " + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? " under" : " over") + " your usual week" : "";
@@ -156,7 +157,7 @@ function render(d) {
     ["Tariffs compared", [d.tariff.rows.find((r) => r.yours)?.name, ...(d.source?.alternativesPriced || [])].filter(Boolean).join(", ")],
   ];
   for (const a of d.source_pricing || []) {
-    rows.push(["Octopus rates: " + a.code, a.from + " to " + a.to + " · " + a.unitRates + " unit rates (" + (a.distinctPrices || []).join("p, ") + "p) · first " + (a.first ? a.first.from + "→" + a.first.to : "none") + " · last " + (a.last ? a.last.from + "→" + a.last.to : "none")]);
+    rows.push(["Octopus rates: " + a.code + (a.assumedFrom ? " (not published; using " + a.assumedFrom + ")" : ""), a.from + " to " + a.to + " · " + a.unitRates + " unit rates (" + (a.distinctPrices || []).join("p, ") + "p) · first " + (a.first ? a.first.from + "→" + a.first.to : "none") + " · last " + (a.last ? a.last.from + "→" + a.last.to : "none")]);
   }
   if (d.dismissed?.length) rows.push(["Left out at your request", d.dismissed.length + ""]);
   $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
