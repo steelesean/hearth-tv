@@ -3,6 +3,7 @@
 // a day on accounts without Auto-Assist, shared with the TV's bedtime check, so calls are few.
 
 import { put, get } from "@vercel/blob";
+import QRCode from "qrcode";
 
 const AUTH = "https://login.tado.com/oauth2/";
 const API = "https://my.tado.com/api/v2/";
@@ -33,7 +34,9 @@ export async function startSignIn() {
   if (!r.ok) throw new Error("Tado didn't start the sign-in (" + r.status + ").");
   const s = await readState();
   await writeState({ ...s, device: r.json.device_code, deviceExpires: Date.now() + (r.json.expires_in || 300) * 1000 });
-  return { code: r.json.user_code, link: r.json.verification_uri_complete || r.json.verification_uri, expiresIn: r.json.expires_in || 300 };
+  const link = r.json.verification_uri_complete || r.json.verification_uri;
+  const qr = await QRCode.toString(link, { type: "svg", margin: 0, errorCorrectionLevel: "M" }).catch(() => null);
+  return { code: r.json.user_code, link, qr, expiresIn: r.json.expires_in || 300 };
 }
 
 /** Step 2, called every few seconds by the page: has the household approved it yet? */

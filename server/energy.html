@@ -50,6 +50,8 @@
   .row { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
   .error { color: var(--odd); }
   [hidden] { display:none !important; }
+  .qr { display:inline-block; background:#fff; padding:10px; border-radius:12px; margin-top:12px; line-height:0; }
+  .qr svg { width:180px; height:180px; }
 </style>
 </head>
 <body>
@@ -115,9 +117,10 @@
         <div class="card" style="margin-top: 18px;">
           <div class="label">Tado</div>
           <p id="tadotext" style="margin:6px 0 0;">Connect Tado to split gas into heating by room, and hot water and cooking.</p>
+          <div class="qr" id="tadoqr" hidden></div>
           <div class="row" style="margin-top:10px;"><button id="tadogo">Connect Tado</button><button class="quiet" id="tadocheck" hidden>Check what Tado offers</button></div>
           <dl id="tadofacts" hidden></dl>
-          <div class="how">Uses about six of Tado's 100 daily requests to check. The TV's bedtime check shares that allowance.</div>
+          <div class="how">Your Tado account allows about 1,000 requests a day, shared with the TV's bedtime check. This uses about five a day, and always leaves at least 300 spare.</div>
         </div>
         <div class="card" style="margin-top: 18px;">
           <div class="label">The workings</div>
@@ -275,14 +278,16 @@ function showTado(st) {
 $("tadogo").addEventListener("click", async () => {
   try {
     const s = await tado("start");
-    $("tadotext").innerHTML = 'On your phone, open <a href="' + esc(s.link) + '" target="_blank" rel="noopener">' + esc(s.link) + "</a> and check the code is <strong>" + esc(s.code) + "</strong>. Waiting…";
+    $("tadotext").innerHTML = "Scan this with your phone's camera, or open <a href=\"" + esc(s.link) + '" target="_blank" rel="noopener">' + esc(s.link) + "</a>. Check the code is <strong>" + esc(s.code) + "</strong>, then approve. Waiting…";
+    if (s.qr) { $("tadoqr").innerHTML = s.qr; $("tadoqr").querySelector("svg")?.setAttribute("aria-label", "QR code for the Tado sign-in link"); $("tadoqr").hidden = false; }
     const until = Date.now() + s.expiresIn * 1000;
     while (Date.now() < until) {
       await new Promise((r) => setTimeout(r, 5000));
       const p = await tado("poll");
-      if (p.connected) { $("tadotext").textContent = "Connected. Now check what Tado offers."; $("tadocheck").hidden = false; return; }
-      if (!p.waiting) { $("tadotext").textContent = p.error || "That didn't work. Try again."; return; }
+      if (p.connected) { $("tadoqr").hidden = true; $("tadotext").textContent = "Connected. Press “Work it out again” to bring in the heating history."; $("tadocheck").hidden = false; return; }
+      if (!p.waiting) { $("tadoqr").hidden = true; $("tadotext").textContent = p.error || "That didn't work. Try again."; return; }
     }
+    $("tadoqr").hidden = true;
     $("tadotext").textContent = "The code expired. Try again.";
   } catch (e) { $("tadotext").textContent = e.message; }
 });
