@@ -95,3 +95,35 @@ export async function alternatives() {
 export async function productName(code) {
   try { return (await get("/products/" + code + "/")).display_name || code; } catch { return code; }
 }
+
+// ---------- Intelligent Octopus smart-charge slots ----------
+// Octopus's GraphQL API lists the car's completed smart-charge slots, billed at the cheap rate
+// even outside 23:30–05:30. It only keeps recent ones, so the caller stores what it gets.
+
+const GRAPHQL = "https://api.octopus.energy/v1/graphql/";
+
+async function graphql(query, variables, token) {
+  const r = await fetch(GRAPHQL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: token } : {}) },
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (j.errors?.length) throw new Error(j.errors[0].message || "GraphQL error");
+  return j.data;
+}
+
+export async function completedDispatches() {
+  const t = await graphql("mutation($key: String!) { obtainKrakenToken(input: { APIKey: $key }) { token } }", { key: process.env.OCTOPUS_API_KEY });
+  const token = t?.obtainKrakenToken?.token;
+  if (!token) throw new Error("Octopus didn't give a token for the API key.");
+  const q = (fields) => `query($a: String!) { completedDispatches(accountNumber: $a) { ${fields} } }`;
+  let d;
+  try { d = await graphql(q("start end delta meta { source location }"), { a: process.env.OCTOPUS_ACCOUNT }, token); }
+  catch { d = await graphql(q("startDt endDt delta meta { source location }"), { a: process.env.OCTOPUS_ACCOUNT }, token); }
+  return (d?.completedDispatches || []).map((x) => ({
+    from: Date.parse(x.start || x.startDt), to: Date.parse(x.end || x.endDt),
+    kwh: Math.abs(Number(x.delta) || 0), source: x.meta?.source || "",
+  })).filter((x) => x.from && x.to > x.from);
+}

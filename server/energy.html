@@ -123,6 +123,13 @@
           <div class="how">Your Tado account allows about 1,000 requests a day, shared with the TV's bedtime check. This uses about five a day, and always leaves at least 300 spare.</div>
         </div>
         <div class="card" style="margin-top: 18px;">
+          <div class="label">Ohme</div>
+          <p id="ohmetext" style="margin:6px 0 0;">Connect the Ohme charger to use its own record of each charge: exact kWh, miles added and cost per mile.</p>
+          <div class="qr" id="ohmeqr" hidden></div>
+          <div class="row" style="margin-top:10px;"><button id="ohmego">Connect Ohme</button></div>
+          <div class="how">Scan with your phone and sign in with your Ohme app details. The password goes to Ohme only and isn't stored. Read-only: it never changes your charging.</div>
+        </div>
+        <div class="card" style="margin-top: 18px;">
           <div class="label">The workings</div>
           <dl id="facts"></dl>
           <div class="how">Check these against your Octopus bill or app. If one looks wrong, tell Claude which.</div>
@@ -146,6 +153,7 @@ async function load() {
   $("refresh").hidden = false;
   const d = await r.json().catch(() => ({}));
   tado("status").then(showTado).catch(() => {});
+  ohme("status").then(showOhme).catch(() => {});
   if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "Couldn't load.") + "</span>"; return; }
   $("status").textContent = "";
   render(d);
@@ -211,6 +219,11 @@ function render(d) {
   for (const a of d.source_pricing || []) {
     rows.push(["Octopus rates: " + a.code + (a.assumedFrom ? " (not published; using " + a.assumedFrom + ")" : ""), a.from + " to " + a.to + " · " + a.unitRates + " unit rates (" + (a.distinctPrices || []).join("p, ") + "p) · first " + (a.first ? a.first.from + "→" + a.first.to : "none") + " · last " + (a.last ? a.last.from + "→" + a.last.to : "none")]);
   }
+  if (d.car?.source === "Ohme") rows.push(["Car, from Ohme", d.car.ohmeKwh + " kWh on " + d.car.charges + " days · about " + d.car.miles + " miles · " + (d.car.pencePerMile ?? "–") + "p a mile · Ohme's own cost estimate £" + d.car.ohmeCost.toFixed(2) + (d.car.daytimeHours ? " · " + d.car.daytimeHours + " hours outside the cheap window" : "")]);
+  else if (d.ohme?.error) rows.push(["Ohme", "problem: " + d.ohme.error]);
+  if (d.dispatches) rows.push(["Smart-charge slots", d.dispatches.available ? d.dispatches.stored + " kept from Octopus" + (d.dispatches.since ? " since " + d.dispatches.since : "") + " · " + d.dispatches.halfHoursRepriced + " half-hours at the cheap rate"
+    : "Octopus didn't list them (" + (d.dispatches.error || "unknown") + ")" + (d.dispatches.stored ? " · using " + d.dispatches.stored + " kept earlier" : "")]);
+  if (d.heating?.baseline) rows.push(["Hot water and cooking baseline", d.heating.baseline.kwhPerDay != null ? d.heating.baseline.kwhPerDay.toFixed(1) + " kWh a day, from " + d.heating.baseline.quietDays + " days with no heating" : "not yet: " + d.heating.baseline.quietDays + " days with no heating so far (needs 4)"]);
   if (d.tado) rows.push(["Tado history", !d.tado.connected ? "not connected" : d.tado.error ? "problem: " + d.tado.error
     : (d.tado.rooms || []).length + " rooms · " + (d.tado.fetched || 0) + " requests this run · " + (d.tado.missingDays ?? "?") + " days still to fetch" + (d.tado.requestsLeft != null ? " · " + d.tado.requestsLeft + " left today" : "")]);
   if (d.dismissed?.length) rows.push(["Left out at your request", d.dismissed.length + ""]);
@@ -295,6 +308,31 @@ $("tadocheck").addEventListener("click", async () => {
   $("tadotext").textContent = "Asking Tado…";
   try { showTado({ connected: true, probe: await tado("probe") }); $("tadotext").textContent = "Here's what Tado offers:"; }
   catch (e) { $("tadotext").textContent = e.message; }
+});
+
+async function ohme(step) {
+  const r = await fetch("/api/energy/ohme", { method: "POST", headers: { "x-hearth-key": key, "Content-Type": "application/json" }, body: JSON.stringify({ step }) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the service." };
+  if (!r || !r.ok) throw new Error(d.error || "Ohme didn't answer.");
+  return d;
+}
+function showOhme(st) {
+  $("ohmego").textContent = st.connected ? "Connect again" : "Connect Ohme";
+  if (st.connected) $("ohmetext").textContent = "Connected" + (st.email ? " as " + st.email : "") + (st.connectedAt ? " on " + new Date(st.connectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "") + ". Press “Work it out again” to bring in the charging history.";
+}
+$("ohmego").addEventListener("click", async () => {
+  try {
+    const s = await ohme("start");
+    $("ohmeqr").innerHTML = s.qr; $("ohmeqr").querySelector("svg")?.setAttribute("aria-label", "QR code for the Ohme sign-in page"); $("ohmeqr").hidden = false;
+    $("ohmetext").innerHTML = 'Scan this with your phone\'s camera, or open <a href="' + esc(s.link) + '" target="_blank" rel="noopener">the sign-in page</a>, and sign in with your Ohme app details. Waiting…';
+    const until = Date.now() + s.expiresIn * 1000;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const st = await ohme("status");
+      if (st.connected && st.connectedAt && Date.parse(st.connectedAt) > Date.now() - s.expiresIn * 1000) { $("ohmeqr").hidden = true; showOhme(st); return; }
+    }
+    $("ohmeqr").hidden = true; $("ohmetext").textContent = "The sign-in link expired. Try again.";
+  } catch (e) { $("ohmeqr").hidden = true; $("ohmetext").textContent = e.message; }
 });
 
 function tell(id, label) {

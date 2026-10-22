@@ -112,6 +112,36 @@ function splitCar(elec) {
   return { house, car };
 }
 
+/**
+ * With Ohme's hour-by-hour record, the car is what Ohme says it charged: each hour's kWh is shared
+ * between its two half-hours by how far each rose above the house's usual, and never more than
+ * the meter read. Without Ohme, the meter-only split above is used.
+ */
+function splitCarWithOhme(elec, ohmeHours) {
+  const typical = [];
+  for (let s = 0; s < 48; s++) typical[s] = median(elec.filter((r) => r.v < EV_SLOT_KWH && local(r.t).slot === s).map((r) => r.v)) || 0;
+  const byT = new Map(elec.map((r) => [r.t, r]));
+  const carAt = new Map();
+  for (const h of ohmeHours) {
+    const start = Math.floor(h.t / HALF_HOUR) * HALF_HOUR;
+    const slots = [start, start + HALF_HOUR].map((t) => byT.get(t)).filter(Boolean);
+    if (!slots.length) continue;
+    const ex = slots.map((r) => Math.max(0, r.v - typical[local(r.t).slot]));
+    const total = sum(ex);
+    slots.forEach((r, i) => {
+      const share = total > 0 ? ex[i] / total : 1 / slots.length;
+      carAt.set(r.t, Math.min(r.v, (carAt.get(r.t) || 0) + h.kwh * share));
+    });
+  }
+  const house = [], car = [];
+  for (const r of elec) {
+    const c = carAt.get(r.t) || 0;
+    house.push({ t: r.t, v: r.v - c });
+    if (c > 0) car.push({ t: r.t, v: c });
+  }
+  return { house, car };
+}
+
 /** Each half-hour of a day, house and car, for the dashboard's day view (kWh, 0 to 47). */
 function dayProfile(house, car, gas, date, split) {
   const on = (rows) => { const a = new Array(48).fill(0); for (const r of rows) { const l = local(r.t); if (l.date === date) a[l.slot] += r.v; } return a.map((x) => round(x, 2)); };
@@ -138,6 +168,8 @@ function byDay(readings) {
 const addDays = (date, n) => new Date(Date.parse(date + "T12:00:00Z") + n * DAY).toISOString().slice(0, 10);
 const weekdayOf = (date) => new Date(date + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
 const longDate = (date) => new Date(date + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+const slotOf = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 2 + (m >= 30 ? 1 : 0); };
+const inCheap = (slot, w) => { const a = slotOf(w.from), b = slotOf(w.to); return a < b ? slot >= a && slot < b : slot >= a || slot < b; };
 const hhmm = (slot) => String(Math.floor(slot / 2)).padStart(2, "0") + ":" + (slot % 2 ? "30" : "00");
 
 /**
@@ -168,6 +200,21 @@ function splitGas(gasReadings, gasPricing, heatDays) {
       d.otherKwh += r.v; d.otherPence += p; d.other[l.slot] += r.v;
     }
   }
+  // Hot water used while any room calls for heat lands in heating above. Days when no room
+  // called at all show the household's own hot water and cooking; on heating days, at least that
+  // much is moved back out of heating, taken from the rooms in proportion.
+  const quiet = Object.entries(days).filter(([date, d]) => d.heatingKwh === 0 && Object.values(heatDays[date]).every((w) => w.every((x) => !x)));
+  const baseline = quiet.length >= 4 ? median(quiet.map(([, d]) => d.otherKwh)) : null;
+  for (const d of Object.values(days)) {
+    if (baseline === null || d.heatingKwh === 0 || d.otherKwh >= baseline) continue;
+    const move = Math.min(baseline - d.otherKwh, d.heatingKwh);
+    const movePence = d.heatingPence * (move / d.heatingKwh);
+    const keep = 1 - move / d.heatingKwh;
+    for (const x of Object.values(d.rooms)) { x.kwh *= keep; x.pence *= keep; }
+    d.heatingKwh -= move; d.heatingPence -= movePence; d.otherKwh += move; d.otherPence += movePence;
+    d.baselineMovedKwh = move;
+  }
+  days.__baseline = { kwhPerDay: baseline, quietDays: quiet.length };
   for (const [date, heat] of Object.entries(heatDays)) {
     const d = days[date];
     if (!d) continue;
@@ -190,10 +237,13 @@ function splitGas(gasReadings, gasPricing, heatDays) {
  */
 export function analyse(input) {
   const now = input.now || Date.now();
-  const { house, car } = splitCar(input.elec);
+  const ohme = input.ohme?.length ? input.ohme : null;
+  const { house, car } = ohme ? splitCarWithOhme(input.elec, ohme) : splitCar(input.elec);
   const gas = gasToKwh(input.gas || []);
 
   const gasSplit = input.heat ? splitGas(gas.readings, input.gasPricing || [], input.heat) : {};
+  const hotWaterBaseline = gasSplit.__baseline || null;
+  delete gasSplit.__baseline;
   const housePriced = price(house, input.elecPricing);
   const carPriced = price(car, input.elecPricing);
   const gasPriced = gas.readings.length ? price(gas.readings, input.gasPricing || []) : { days: new Map() };
@@ -294,7 +344,17 @@ export function analyse(input) {
     cost: round(sum([...carPriced.days.values()].map((d) => d.pence)) / 100),
     nightShare: round(nightCharging, 2),
     nightsCharged: new Set(car.filter((r) => r.v > 0).map((r) => local(r.t - 12 * 3600 * 1000).date)).size,
+    source: ohme ? "Ohme" : "meter",
   };
+  if (ohme) {
+    const inRange = ohme.filter((h) => h.t >= (input.elec[0]?.t || 0));
+    const miles = sum(inRange.map((h) => h.km)) * 0.621371;
+    carSummary.ohmeKwh = Math.round(sum(inRange.map((h) => h.kwh)));
+    carSummary.miles = Math.round(miles);
+    carSummary.pencePerMile = miles > 0 ? round((carSummary.cost * 100) / miles, 1) : null;
+    carSummary.ohmeCost = round(sum(inRange.map((h) => h.ohmePence)) / 100);
+    carSummary.charges = new Set(inRange.map((h) => local(h.t - 12 * 3600 * 1000).date)).size;
+  }
 
   // Tariff fit: the same half-hours, re-priced on each tariff. Standing charges included.
   const fitFrom = now - 90 * DAY;
@@ -352,6 +412,7 @@ export function analyse(input) {
   const shift = ownShift && ownShift.perKwh >= 5 ? { ...ownShift, tariff: input.currentName, own: true }
     : agileAlt ? { ...shiftSaving(agileAlt.pricing, now - 28 * DAY, now), tariff: "Agile", own: false } : null;
 
+  if (ohme && shift?.own) carSummary.daytimeHours = ohme.filter((h) => h.t >= (input.elec[0]?.t || 0) && !inCheap(local(h.t).slot, shift)).length;
   const overnight = shift && shift.own ? overnightRuns(house, car, now, baseWatts, shift) : null;
   const roomTotals = (dates) => {
     const t = {};
@@ -374,7 +435,11 @@ export function analyse(input) {
   const heating = Object.keys(gasSplit).length ? {
     week: roomTotals(week.map((d) => d.date)),
     period: roomTotals(Object.keys(gasSplit)),
-    note: "Gas split by when each room called for heat in Tado, weighted by how hard. Gas with no room calling is hot water and cooking. Hot water used while the heating runs counts as heating.",
+    baseline: hotWaterBaseline,
+    note: "Gas split by when each room called for heat in Tado, weighted by how hard. Gas with no room calling is hot water and cooking. "
+      + (hotWaterBaseline?.kwhPerDay != null
+        ? `On heating days, at least your usual ${round(hotWaterBaseline.kwhPerDay, 1)} kWh a day of hot water and cooking (the median of ${hotWaterBaseline.quietDays} days with no heating) is counted as such, not as heating.`
+        : "Hot water used while the heating runs counts as heating until there are at least four days with no heating to learn your usual amount."),
   } : null;
 
   const candidates = buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overnight, heating });
@@ -555,6 +620,15 @@ function buildCandidates({ tariff, baseline, peak, carSummary, odd, shift, overn
       facts: `${o.day}: the house used ${o.kwh} kWh of electricity against a usual ${o.usualKwh} kWh for that weekday, £${o.extra} more.`
         + (o.block?.spread ? " The extra was spread thinly across the day, with no one stretch standing out." : o.block ? ` Something used an extra ${o.block.extraKw} kW from ${o.block.from} to ${o.block.to}.` : ""),
       how_we_know: "Electricity compared with the same weekday over the previous eight weeks, car charging taken out.",
+    });
+  }
+  if (carSummary.source === "Ohme" && carSummary.miles > 0 && carSummary.pencePerMile != null) {
+    out.push({
+      id: "car-info",
+      per_year_gbp: 0,
+      facts: `Over the last 90 days the car charged ${carSummary.ohmeKwh} kWh on ${carSummary.charges} days and added about ${carSummary.miles} miles, costing £${carSummary.cost.toFixed(2)} at your tariff's rates: about ${carSummary.pencePerMile}p a mile.`
+        + (carSummary.daytimeHours ? ` Ohme shows ${carSummary.daytimeHours} hours of charging outside the cheap hours; any that Octopus scheduled are billed cheap, but a manual boost is not.` : ""),
+      how_we_know: "Ohme's own record of each hour's charging and range added, priced at your Octopus rates for those half-hours.",
     });
   }
   const hw = heating?.week;

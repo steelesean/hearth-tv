@@ -3,7 +3,8 @@
 import * as octopus from "./octopus.js";
 import { analyse } from "./analyse.js";
 import { weeklyNote, plainNote } from "./note.js";
-import { loadFeedback } from "./store.js";
+import { loadFeedback, mergeDispatches } from "./store.js";
+import { chargingByHour } from "./ohme.js";
 import { heatHistory } from "./tado.js";
 import { local } from "./analyse.js";
 
@@ -54,6 +55,27 @@ export async function refresh(now = Date.now()) {
     pricingFor("elec", meters.elec.agreements, from, to),
     meters.gas ? pricingFor("gas", meters.gas.agreements, from, to) : [],
   ]);
+  // Intelligent Octopus: confirmed smart-charge slots are billed at the cheap rate, house included.
+  let dispatchInfo = { available: false };
+  try {
+    const kept = await mergeDispatches(await octopus.completedDispatches());
+    const repriced = applyDispatches(elecPricing, kept);
+    dispatchInfo = { available: true, stored: kept.length, halfHoursRepriced: repriced, since: kept[0] ? new Date(kept[0].from).toISOString().slice(0, 10) : null };
+  } catch (e) {
+    const kept = await mergeDispatches([]).catch(() => []);
+    const repriced = kept.length ? applyDispatches(elecPricing, kept) : 0;
+    dispatchInfo = { available: false, error: e.message, stored: kept.length, halfHoursRepriced: repriced };
+  }
+
+  // Ohme: its own hour-by-hour record of charging, if connected.
+  let ohme = null, ohmeInfo = { connected: false };
+  try {
+    ohme = await chargingByHour(from, to);
+    ohmeInfo = ohme ? { connected: true, hours: ohme.length } : { connected: false };
+  } catch (e) {
+    ohmeInfo = { connected: true, error: e.message };
+  }
+
   const current = elecPricing[elecPricing.length - 1];
   const region = current.code.slice(-1);
   const currentProduct = octopus.productOf(current.code);
@@ -79,7 +101,7 @@ export async function refresh(now = Date.now()) {
   }
 
   const facts = analyse({
-    elec, gas, elecPricing, gasPricing, alternatives, now, heat,
+    elec, gas, elecPricing, gasPricing, alternatives, now, heat, ohme,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
   // Leave out anything the household said they already do, or that isn't for them.
@@ -99,6 +121,8 @@ export async function refresh(now = Date.now()) {
     distinctPrices: [...new Set(a.rates.unit.map((r) => r.p))].slice(0, 6),
   }));
   facts.tado = tadoInfo;
+  facts.ohme = ohmeInfo;
+  facts.dispatches = dispatchInfo;
   facts.source = { elecDays: Math.round(elec.length / 48), gasDays: gas.length ? Math.round(gas.length / 48) : 0, alternativesPriced: alternatives.map((a) => a.label) };
   return facts;
 }
@@ -106,4 +130,32 @@ export async function refresh(now = Date.now()) {
 /** "Flexible Octopus October 2025 v1" → "Flexible Octopus". */
 function shortName(name) {
   return String(name).replace(/\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b.*$/i, "").replace(/\s+v\d+$/i, "").trim();
+}
+
+/**
+ * Adds a half-hour cheap-rate entry for each half-hour a confirmed smart-charge slot touched, so
+ * the price lookup (shortest period wins) uses it. The cheap rate is the lowest unit rate within
+ * twelve hours on that agreement. Returns how many half-hours changed.
+ */
+function applyDispatches(pricing, dispatches) {
+  const HH = 30 * 60 * 1000;
+  let n = 0;
+  for (const a of pricing) {
+    const add = [];
+    for (const d of dispatches) {
+      if (/bump/i.test(d.source)) continue;                         // a manual boost is billed normally
+      for (let t = Math.floor(d.from / HH) * HH; t < d.to; t += HH) {
+        if (t < a.from || t >= a.to) continue;
+        const near = a.rates.unit.filter((r) => r.from < t + 12 * 3600e3 && r.to > t - 12 * 3600e3).map((r) => r.p);
+        if (!near.length) continue;
+        add.push({ from: t, to: t + HH, p: Math.min(...near), dispatch: true });
+      }
+    }
+    if (add.length) {
+      const seen = new Set(add.map((x) => x.from));
+      a.rates.unit = [...a.rates.unit.filter((r) => !(r.dispatch && seen.has(r.from))), ...add].sort((x, y) => x.from - y.from);
+      n += seen.size;
+    }
+  }
+  return n;
 }

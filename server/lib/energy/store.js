@@ -34,3 +34,16 @@ export async function loadFeedback() {
 export async function saveFeedback(feedback) {
   await put(FEEDBACK, JSON.stringify(feedback), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
 }
+
+// Octopus only lists recent smart-charge slots, so every one seen is kept here.
+const DISPATCHES = "energy/dispatches.json";
+
+export async function mergeDispatches(fresh) {
+  const r = await get(DISPATCHES, { access: "private", useCache: false }).catch(() => null);
+  const kept = r && r.statusCode === 200 && r.stream ? await new Response(r.stream).json().catch(() => []) : [];
+  const byStart = new Map(kept.map((d) => [d.from, d]));
+  for (const d of fresh || []) byStart.set(d.from, d);
+  const all = [...byStart.values()].sort((a, b) => a.from - b.from);
+  if (fresh?.length) await put(DISPATCHES, JSON.stringify(all), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+  return all;
+}
