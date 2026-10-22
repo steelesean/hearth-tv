@@ -591,7 +591,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     // A followed show out today takes the middle place in the evening.
     if (fresh && h >= 18.5 && h < 21.5) m.prompts.splice(1, 1, fresh);
     // Every answer the service may choose from: these, plus any followed show out today or tomorrow.
-    var pool = m.prompts.filter(Boolean).concat(watchingShows().filter(function (x) { return x.days === 0 || x.days === 1; })
+    var pool = m.prompts.filter(Boolean).concat([{ label: 'Watch on NOW', app: 'now' }], watchingShows().filter(function (x) { return x.days === 0 || x.days === 1; })
       .map(function (x) { return { label: x.title + (x.days === 0 ? ': new today' : ': new tomorrow'), show: x }; }), carry ? [carry] : []);
     var seen = {}; pool = pool.filter(function (p) { if (!p || seen[p.label]) return false; seen[p.label] = 1; return true; });
     pool.forEach(function (p, i) { p.id = 'a' + i; });
@@ -650,6 +650,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   }
   function answer(p) {
     if (p.carry) return carryOn();
+    if (p.app) return openApp(p.app);
     if (p.show) return openShow(p.show.title, p.show.app);
     if (p.kid) return openKid(p.kid);
     if (p.kids) return setMode(true);

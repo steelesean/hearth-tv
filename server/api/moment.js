@@ -23,7 +23,7 @@ You get the time, the facts about what's on (already worked out: trust them exac
 - Use only the facts given. Never add a time, channel, score or detail that isn't in them. "Tonight" is fine for something out today in the evening.
 - Pick the single most relevant fact for right now: something starting within the hour first, then things on today, then tomorrow.
 - If nothing in the facts is worth the household's attention right now, use the usual greeting exactly as given.
-- Choose up to three button ids, most useful first. Include a button for the show in the headline if there is one.`;
+- Choose up to three button ids, most useful first. Include a button for the show in the headline if there is one. Formula 1 and golf are watched on NOW: when the headline is about them, put the "Watch on NOW" button first. Otherwise leave it out.`;
 
 export default async function handler(req, res) {
   const now = Date.now();
@@ -112,6 +112,9 @@ function checks(headline, list) {
 
 /** For the plain version: the headline's show first if there's a button for it, then the TV's order. */
 function orderAnswers(ids, answers, top) {
-  const first = top.show ? answers.find((a) => a.label.toLowerCase().startsWith(top.show.toLowerCase())) : null;
-  return [...(first ? [first.id] : []), ...ids.filter((id) => !first || id !== first.id)].slice(0, 3);
+  const now = answers.find((a) => a.label === "Watch on NOW");
+  const first = top.show ? answers.find((a) => a.label.toLowerCase().startsWith(top.show.toLowerCase()))
+    : top.kind === "f1" || top.kind === "golf" ? now : null;
+  // NOW only leads for sport; otherwise it isn't offered.
+  return [...(first ? [first.id] : []), ...ids.filter((id) => id !== first?.id && id !== now?.id)].slice(0, 3);
 }

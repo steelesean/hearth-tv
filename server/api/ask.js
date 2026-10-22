@@ -139,6 +139,7 @@ const PROVIDERS = {
   channel4: ["channel 4", "channel4"],
   itvx: ["itvx"],
   my5: ["my5", "channel 5"],
+  now: ["now tv", "now"],
 };
 
 async function tmdb(path) {

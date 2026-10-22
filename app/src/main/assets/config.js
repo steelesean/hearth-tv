@@ -37,6 +37,8 @@ window.HEARTH_CONFIG = {
       "packages": ["com.amazon.firebat", "com.amazon.avod"], "match": ["prime video"] },
     { "key": "appletv", "label": "Apple TV", "name": "Apple TV", "swatch": "#8E9290",
       "packages": ["com.apple.atve.amazon.appletv"], "match": ["apple tv"] },
+    { "key": "now", "label": "NOW", "name": "NOW", "swatch": "#1BB5A5",
+      "packages": ["com.bskyb.nowtv.beta", "com.nowtv.nowtv"], "match": ["now tv", "now"] },
     { "key": "youtube", "label": "YouTube", "name": "YouTube", "swatch": "#E3392E",
       "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"],
       "searchUrl": "https://www.youtube.com/results?search_query={q}" }
