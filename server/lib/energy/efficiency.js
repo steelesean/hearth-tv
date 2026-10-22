@@ -32,7 +32,7 @@ async function temperatures({ lat, lon }, from, to) {
   const q = "latitude=" + lat + "&longitude=" + lon + "&daily=temperature_2m_mean&timezone=Europe%2FLondon";
   const [arch, recent] = await Promise.all([
     json("https://archive-api.open-meteo.com/v1/archive?" + q + "&start_date=" + from + "&end_date=" + to),
-    json("https://api.open-meteo.com/v1/forecast?" + q + "&past_days=14&forecast_days=1").catch(() => null),
+    json("https://api.open-meteo.com/v1/forecast?" + q + "&past_days=14&forecast_days=16").catch(() => null),
   ]);
   const t = new Map();
   for (const src of [arch, recent]) (src?.daily?.time || []).forEach((d, i) => { const v = src.daily.temperature_2m_mean[i]; if (v != null && !t.has(d)) t.set(d, v); });
@@ -112,5 +112,11 @@ export async function heatingEfficiency(meters, gasPence, now = Date.now()) {
   out.perYear = { degreeDays: Math.round(yearDd), kwh: Math.round((fb.slope - fa.slope) * yearDd) };
   if (gasPence) out.perYear.gbp = Math.round((out.perYear.kwh * gasPence) / 100);
   out.gasPence = gasPence ? round(gasPence, 2) : null;
+  // The days ahead, for the month forecast: forecast temperatures and the gas this house needs for them.
+  const today = local(now).date;
+  out.ahead = [...temps].filter(([d]) => d >= today).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, temp]) => {
+    const dd = Math.max(0, BASE_C - temp);
+    return { date, temp: round(temp), kwh: round(dd >= HEATING_DAY ? fa.base + fa.slope * dd : Math.max(0, fa.base)) };
+  });
   return out;
 }

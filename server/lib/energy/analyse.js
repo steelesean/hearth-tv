@@ -422,10 +422,27 @@ export function analyse(input) {
   // This month so far, and where it's heading on the last fortnight's pace.
   const month = today.slice(0, 7);
   const monthDays = [...daily.values()].filter((d) => d.date.startsWith(month));
-  const soFar = round(sum(monthDays.map((d) => d.total)));
-  const pace = median([...daily.values()].filter((d) => d.complete).slice(-14).map((d) => d.total));
+  // Each part on its own pace, so the parts add up to the total: electricity used in the house,
+  // gas, the car, and standing charges. Gas can be re-projected from the weather forecast later.
   const daysInMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
-  const forecast = { month: new Date(today + "T12:00:00Z").toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" }), soFar, projected: round(soFar + pace * (daysInMonth - monthDays.length)) };
+  const recent = [...daily.values()].filter((d) => d.complete).slice(-14);
+  const left = daysInMonth - monthDays.length;
+  const PARTS = { house: "houseUse", heating: "gas", car: "car", standing: "standing" };
+  const parts = {};
+  for (const [name, field] of Object.entries(PARTS)) {
+    const so = sum(monthDays.map((d) => d[field] || 0)), pace = median(recent.map((d) => d[field] || 0)) || 0;
+    parts[name] = { soFar: round(so), pace: round(pace), projected: round(so + pace * left) };
+  }
+  const soFar = round(sum(monthDays.map((d) => d.total)));
+  const lastMonthKey = addDays(month + "-01", -1).slice(0, 7);
+  const lastMonthDays = [...daily.values()].filter((d) => d.date.startsWith(lastMonthKey));
+  const monthName = (m) => new Date(m + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const forecast = {
+    month: monthName(month), soFar, projected: round(sum(Object.values(parts).map((p) => p.projected))), parts,
+    daysWithData: monthDays.length, daysInMonth, through: monthDays.at(-1)?.date || null, paceDays: recent.length,
+    lastMonth: lastMonthDays.length >= 28 ? { month: monthName(lastMonthKey), total: round(sum(lastMonthDays.map((d) => d.total))) } : null,
+    gasFrom: "the last fortnight's pace",
+  };
 
   // Moving use out of 4 to 7pm: on their own tariff if it has cheap hours, otherwise on Agile.
   const ownShift = shiftSaving(input.elecPricing, now - 28 * DAY, now);

@@ -7,6 +7,8 @@ import { loadFeedback, mergeDispatches } from "./store.js";
 import { chargingByHour } from "./ohme.js";
 import { mileage, TRIP_METER } from "./polestar.js";
 import { heatingEfficiency } from "./efficiency.js";
+
+const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 import { heatHistory } from "./tado.js";
 import { local } from "./analyse.js";
 
@@ -127,6 +129,18 @@ export async function refresh(now = Date.now()) {
     facts.efficiency = { available: false, reason: "Couldn't work it out: " + e.message };
   }
   const ef = facts.efficiency;
+  // Gas for the rest of the month from the weather forecast and this house's own response to cold.
+  const fc = facts.forecast, gasPence = ef.gasPence;
+  if (ef.available && fc?.through && gasPence && ef.ahead?.length) {
+    const monthEnd = fc.through.slice(0, 8) + String(fc.daysInMonth).padStart(2, "0");
+    const rest = ef.ahead.filter((d) => d.date > fc.through && d.date <= monthEnd);
+    const uncovered = fc.daysInMonth - fc.daysWithData - rest.length;
+    const heat = fc.parts.heating;
+    heat.projected = Math.round((heat.soFar + sum(rest.map((d) => d.kwh)) * gasPence / 100 + Math.max(0, uncovered) * heat.pace) * 100) / 100;
+    fc.projected = Math.round(Object.values(fc.parts).reduce((a, p) => a + p.projected, 0) * 100) / 100;
+    fc.gasFrom = "the weather forecast for " + (ef.area || "your area") + (uncovered > 0 ? ", and the recent pace beyond it" : "");
+    fc.aheadTemp = rest.length ? Math.round(rest.reduce((a, d) => a + d.temp, 0) / rest.length * 10) / 10 : null;
+  }
   if (ef.available) {
     facts.candidates.push({
       id: "insulation-info",
