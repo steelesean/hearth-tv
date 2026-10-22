@@ -208,6 +208,8 @@ function render(d) {
   for (const a of d.source_pricing || []) {
     rows.push(["Octopus rates: " + a.code + (a.assumedFrom ? " (not published; using " + a.assumedFrom + ")" : ""), a.from + " to " + a.to + " · " + a.unitRates + " unit rates (" + (a.distinctPrices || []).join("p, ") + "p) · first " + (a.first ? a.first.from + "→" + a.first.to : "none") + " · last " + (a.last ? a.last.from + "→" + a.last.to : "none")]);
   }
+  if (d.tado) rows.push(["Tado history", !d.tado.connected ? "not connected" : d.tado.error ? "problem: " + d.tado.error
+    : (d.tado.rooms || []).length + " rooms · " + (d.tado.fetched || 0) + " requests this run · " + (d.tado.missingDays ?? "?") + " days still to fetch" + (d.tado.requestsLeft != null ? " · " + d.tado.requestsLeft + " left today" : "")]);
   if (d.dismissed?.length) rows.push(["Left out at your request", d.dismissed.length + ""]);
   $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   $("headline").textContent = note.headline || "";

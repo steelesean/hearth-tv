@@ -11,7 +11,7 @@ const CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46";   // Tado's own public
 const STATE = "energy/tado.json";
 
 async function readState() {
-  const r = await get(STATE, { access: "private" }).catch(() => null);
+  const r = await get(STATE, { access: "private", useCache: false }).catch(() => null);
   if (!r || r.statusCode !== 200 || !r.stream) return {};
   return new Response(r.stream).json().catch(() => ({}));
 }
@@ -170,7 +170,9 @@ function weights(report, slotOf, date) {
  */
 export async function heatHistory(dates, slotOf, budget = 100) {
   const s = await readState();
-  if (!s.refresh || !s.homeId || !s.rooms?.length) return { days: {}, connected: !!s.refresh, missing: dates.length };
+  if (!s.refresh) return { days: {}, connected: false, missing: dates.length };
+  if (!s.homeId || !s.rooms?.length) await probe();                 // learn the home and rooms first
+  Object.assign(s, await readState());
   const out = {};
   const todo = [];
   for (const d of dates) {

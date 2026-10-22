@@ -17,7 +17,7 @@ export async function age() {
 }
 
 export async function load() {
-  const r = await get(LATEST, { access: "private" });
+  const r = await get(LATEST, { access: "private", useCache: false });
   if (!r || r.statusCode !== 200 || !r.stream) return null;
   return new Response(r.stream).json();
 }
@@ -26,7 +26,7 @@ export async function load() {
 const FEEDBACK = "energy/feedback.json";
 
 export async function loadFeedback() {
-  const r = await get(FEEDBACK, { access: "private" }).catch(() => null);
+  const r = await get(FEEDBACK, { access: "private", useCache: false }).catch(() => null);
   if (!r || r.statusCode !== 200 || !r.stream) return {};
   return new Response(r.stream).json().catch(() => ({}));
 }
