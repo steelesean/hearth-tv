@@ -172,6 +172,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-total { width: 420px; flex: none; }
 .energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; font-weight: 400; }
 .energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
+.energy .e-total small.e-month { color: var(--ink-soft); margin-top: 6px; line-height: 1.35; }
 .energy .e-figs { flex: 1; display: flex; }
 .energy .e-fig { flex: 1; border-left: 2px solid var(--line); padding: 2px 0 4px 22px; }
 .energy .e-fig .k { font-size: 19px; color: var(--ink-soft); white-space: nowrap; }
@@ -221,6 +222,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-rooms td.cold { color: #B5542D; }
 .energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
 .energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
+.energy .e-foot .e-eff { font-size: 20px; font-weight: 600; color: var(--ink-2); margin-right: 10px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -314,7 +316,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <div class="e-made" id="eMade"></div>
     </div>
     <div class="e-sum">
-      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small></div>
+      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small><small id="eMonth" class="e-month"></small></div>
       <div class="e-figs" id="eFigs"></div>
     </div>
     <div class="e-warn" id="eWarn" hidden></div>
@@ -3631,11 +3633,16 @@ var qrcode = function() {
       var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
       return '<div class="e-fig"><div class="k"><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</div><div class="v">' + money(sums[k]) + '</div></div>';
     }).join('');
+    // The month: spent so far and where it's heading, with last month to compare.
+    var f = d.forecast;
+    $('eMonth').innerHTML = f && f.projected && !(d.tariff && d.tariff.incomplete)
+      ? esc(f.month) + ' so far £' + Math.round(f.soFar) + ' · heading for £' + Math.round(f.projected) + (f.lastMonth ? '<br>' + esc(f.lastMonth.month) + ' was £' + Math.round(f.lastMonth.total) : '')
+      : '';
     var rooms = d.heating && d.heating.week;
     var sources = ['your Octopus meter'];
     if (rooms) sources.push('Tado');
     if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
-    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
+    $('eFoot').innerHTML = effLine(d.efficiency) + esc('Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.');
     $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
     $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
 
@@ -3734,6 +3741,13 @@ var qrcode = function() {
         + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
       cards.appendChild(c3);
     }
+  }
+  // One quiet line on the heating card: the before-and-after since the insulation. The chart lives on the web dashboard.
+  function effLine(ef) {
+    if (!ef || !ef.available || !ef.change) return '';
+    var less = ef.change.pct <= 0;
+    return '<b class="e-eff">Since the ' + esc(ef.change.what) + ', the house needs ' + Math.abs(ef.change.pct) + '% ' + (less ? 'less' : 'more') + ' gas to stay warm'
+      + (ef.perYear && ef.perYear.gbp != null && less ? ', about £' + Math.round(ef.perYear.gbp) + ' a year' : '') + '.</b> ';
   }
   function showDay(x) { $('eDetail').className = 'e-detail'; $('eDetail').textContent = dayLine(x); }
 
