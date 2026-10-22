@@ -109,6 +109,13 @@
           <div class="how" id="made"></div>
         </div>
         <div class="card" style="margin-top: 18px;">
+          <div class="label">Tado</div>
+          <p id="tadotext" style="margin:6px 0 0;">Connect Tado to split gas into heating by room, and hot water and cooking.</p>
+          <div class="row" style="margin-top:10px;"><button id="tadogo">Connect Tado</button><button class="quiet" id="tadocheck" hidden>Check what Tado offers</button></div>
+          <dl id="tadofacts" hidden></dl>
+          <div class="how">Uses about six of Tado's 100 daily requests to check. The TV's bedtime check shares that allowance.</div>
+        </div>
+        <div class="card" style="margin-top: 18px;">
           <div class="label">The workings</div>
           <dl id="facts"></dl>
           <div class="how">Check these against your Octopus bill or app. If one looks wrong, tell Claude which.</div>
@@ -131,6 +138,7 @@ async function load() {
   if (r.status === 401) { key = ""; store.set(""); $("signin").hidden = false; $("status").textContent = "That password didn't work."; return; }
   $("refresh").hidden = false;
   const d = await r.json().catch(() => ({}));
+  tado("status").then(showTado).catch(() => {});
   if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "Couldn't load.") + "</span>"; return; }
   $("status").textContent = "";
   render(d);
@@ -206,6 +214,48 @@ function showDay(i) {
 }
 document.addEventListener("click", (e) => { const b = e.target.closest(".bar[data-day]"); if (b) showDay(b.dataset.day); });
 document.addEventListener("keydown", (e) => { const b = e.target.closest?.(".bar[data-day]"); if (b && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); showDay(b.dataset.day); } });
+
+async function tado(step) {
+  const r = await fetch("/api/energy/tado", { method: "POST", headers: { "x-hearth-key": key, "Content-Type": "application/json" }, body: JSON.stringify({ step }) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the service." };
+  if (!r || !r.ok) throw new Error(d.error || "Tado didn't answer.");
+  return d;
+}
+function showTado(st) {
+  $("tadogo").textContent = st.connected ? "Connect again" : "Connect Tado";
+  $("tadocheck").hidden = !st.connected;
+  if (st.connected) $("tadotext").textContent = "Connected" + (st.connectedAt ? " on " + new Date(st.connectedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : "") + ".";
+  const p = st.probe;
+  if (!p) return;
+  const rows = [
+    ["Home", p.home + " (" + p.generation + ")"],
+    ["Rooms", (p.rooms || []).join(", ") || "none found"],
+    ["Room-by-room history", p.dayReport ? "Yes: " + p.dayReport.intervals + " heating periods for " + p.dayReport.room + " yesterday (" + p.dayReport.path + ")" : "Not available this way. The TV can record it instead."],
+    ...p.checks.map((c) => [c.what, c.status + " · " + c.shape + (c.rateLimit ? " · limit " + c.rateLimit : "")]),
+    ["Requests used", String(p.requestsUsed)],
+  ];
+  $("tadofacts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd style="font-weight:400;">${esc(v)}</dd>`).join("");
+  $("tadofacts").hidden = false;
+}
+$("tadogo").addEventListener("click", async () => {
+  try {
+    const s = await tado("start");
+    $("tadotext").innerHTML = 'On your phone, open <a href="' + esc(s.link) + '" target="_blank" rel="noopener">' + esc(s.link) + "</a> and check the code is <strong>" + esc(s.code) + "</strong>. Waiting…";
+    const until = Date.now() + s.expiresIn * 1000;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const p = await tado("poll");
+      if (p.connected) { $("tadotext").textContent = "Connected. Now check what Tado offers."; $("tadocheck").hidden = false; return; }
+      if (!p.waiting) { $("tadotext").textContent = p.error || "That didn't work. Try again."; return; }
+    }
+    $("tadotext").textContent = "The code expired. Try again.";
+  } catch (e) { $("tadotext").textContent = e.message; }
+});
+$("tadocheck").addEventListener("click", async () => {
+  $("tadotext").textContent = "Asking Tado…";
+  try { showTado({ connected: true, probe: await tado("probe") }); $("tadotext").textContent = "Here's what Tado offers:"; }
+  catch (e) { $("tadotext").textContent = e.message; }
+});
 
 function tell(id, label) {
   return `<div class="tell"><button class="quiet" data-id="${esc(id)}" data-verdict="doing">${esc(label)}</button><button class="quiet" data-id="${esc(id)}" data-verdict="not-for-us">Not for us</button></div>`;
