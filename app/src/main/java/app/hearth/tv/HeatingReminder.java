@@ -95,12 +95,12 @@ final class HeatingReminder {
             if (cached.isEmpty()) return "";
             JSONObject e = new JSONObject(cached);
             JSONObject week = e.getJSONObject("week");
-            // Only a week that ended yesterday, so an old copy never reads as last week.
+            // Only 7 days that ended recently, so an old copy is never read out as current.
             SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd", Locale.UK);
             Date to = iso.parse(week.optString("to"));
             if (System.currentTimeMillis() - to.getTime() > 3 * 86400000L) return "";
             if (e.optJSONObject("tariff") != null && e.getJSONObject("tariff").optBoolean("incomplete")) return "";
-            StringBuilder out = new StringBuilder(String.format(Locale.UK, "\nEnergy last week: £%.2f", week.optDouble("total")));
+            StringBuilder out = new StringBuilder(String.format(Locale.UK, "\nEnergy, last 7 days: £%.2f", week.optDouble("total")));
             JSONObject note = e.optJSONObject("note");
             org.json.JSONArray actions = note == null ? null : note.optJSONArray("actions");
             if (actions != null && actions.length() > 0) {

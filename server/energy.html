@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hearth Energy</title>
 <style>
-  :root { --fixed:#B9BDB8; --gas:#6F7FA8; --water:#A9B7D6; --car:#C9A227; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#7C9488; --odd:#B5542D; --oddbar:#D8936F; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; } }
-  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#6E8679; --odd:#E39A76; --oddbar:#B9714F; --gas:#8E9CC4; --water:#5E6C91; }
+  :root { --fixed:#8E918A; --gas:#E04A3A; --water:#3987E5; --car:#C98500; --bg:#ECEBE7; --card:#F7F6F3; --line:#D6D5CF; --ink:#1F2321; --ink2:#3A3F3C; --muted:#6B706C; --green:#2F4A3F; --bar:#C4768F; --odd:#B5542D; --oddbar:#D8936F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#C4768F; --odd:#E39A76; --oddbar:#B9714F; --gas:#E04A3A; --water:#3987E5; } }
+  :root[data-theme="dark"] { --bg:#191B1A; --card:#222524; --line:#353937; --ink:#ECEBE7; --ink2:#C9CBC7; --muted:#9A9E99; --green:#9DBBA9; --bar:#C4768F; --odd:#E39A76; --oddbar:#B9714F; --gas:#E04A3A; --water:#3987E5; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
@@ -72,7 +72,7 @@
   <div id="view" hidden>
     <div class="grid">
       <div>
-        <div class="label">This week</div>
+        <div class="label">Last 7 days</div>
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
         <div class="card" style="margin-top: 18px;" id="monthcard" hidden>
@@ -206,7 +206,8 @@ function render(d) {
   const short = (v) => (v < 1 ? Math.round(v * 100) + "p" : money(v));
   $("bars").innerHTML = w.days.map((x, i) => {
     const gasParts = x.gasHeating != null ? [["g", x.gasHeating, "Heating"], ["w", x.gasOther, "Hot water and cooking"]] : [["g", x.gas, "Gas"]];
-    const parts = [["c", x.car, "Car"], ...gasParts, ["h", houseOf(x), "House"], ...(hasFixed ? [["f", x.standing, "Standing"]] : [])].filter(([, v]) => v > 0);
+    // Top to bottom: car, house, hot water, heating, standing (the same order as the TV, checked for colour blindness).
+    const parts = [["c", x.car, "Car"], ["h", houseOf(x), "House"], ...gasParts.slice().reverse(), ...(hasFixed ? [["f", x.standing, "Standing"]] : [])].filter(([, v]) => v > 0);
     const label = (what) => (what === "Hot water and cooking" ? "Water" : what);
     const above = parts.filter(([c, v]) => px(v) < 18 && c !== "f").map(([c, v, what]) => `<span class="small ${c}" title="${what}">${label(what)} ${short(v)}</span>`).join("");
     const segs = parts.map(([c, v, what]) => `<i class="${c}" title="${what} ${money(v)}" style="height:${px(v)}px">${px(v) >= 18 ? short(v) : ""}</i>`).join("");
@@ -224,7 +225,7 @@ function render(d) {
   if (hw) {
     const total = hw.heating + hw.hotWaterAndCooking;
     const rmax = Math.max(...hw.rooms.map((r) => r.cost), 0.01);
-    $("heatwhen").textContent = "This week, from Tado" + (hw.days < 7 ? " (" + hw.days + " of 7 days so far)" : "");
+    $("heatwhen").textContent = "Last 7 days, from Tado" + (hw.days < 7 ? " (" + hw.days + " of 7 days so far)" : "");
     $("rooms").innerHTML = hw.rooms.map((r) => `<tr><td style="width:34%">${esc(r.room)}</td><td><div class="track"><i style="width:${Math.round((r.cost / rmax) * 100)}%"></i></div></td><td class="n" style="width:22%">${r.hoursPerDay} h a day</td><td class="n" style="width:16%"><strong>${money(r.cost)}</strong></td></tr>`).join("")
       + `<tr><td>Hot water and cooking</td><td><div class="track"><i style="width:${Math.round((hw.hotWaterAndCooking / rmax) * 100)}%;background:var(--water)"></i></div></td><td class="n"></td><td class="n"><strong>${money(hw.hotWaterAndCooking)}</strong></td></tr>`;
     $("heatnote").textContent = (d.heating.note || "") + " An estimate, not a meter in each room." + (d.tado?.missingDays ? " Still fetching earlier days from Tado: " + d.tado.missingDays + " to go." : "");
@@ -235,7 +236,7 @@ function render(d) {
   showMonth(d.forecast, d.tariff?.incomplete);
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
   $("tariffs").innerHTML = d.tariff.rows.map((t) => `<tr class="${t.yours ? "yours" : ""}"><td>${esc(t.name)}</td><td>£${Math.round(t.cost)}</td></tr>`).join("");
-  $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div>${tell(a.id, "Already doing this")}</div>`).join("") || '<p class="muted">Nothing worth changing this week.</p>';
+  $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div>${tell(a.id, "Already doing this")}</div>`).join("") || '<p class="muted">Nothing worth changing at the moment.</p>';
   const good = (d.candidates || []).filter((c) => c.per_year_gbp === 0 && !c.id.startsWith("odd-"));
   $("goodcard").hidden = !good.length;
   $("good").innerHTML = good.map((c) => `<p style="margin:8px 0 0;">${esc(c.facts)}</p><div class="how">${esc(c.how_we_know)}</div>`).join("");
