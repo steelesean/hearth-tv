@@ -1,6 +1,6 @@
 // What the TV and the dashboard read: the latest calculated week.
 
-import { load } from "../lib/store.js";
+import { load } from "../../lib/energy/store.js";
 
 export default async function handler(req, res) {
   if (!process.env.HEARTH_ASSISTANT_KEY || req.headers["x-hearth-key"] !== process.env.HEARTH_ASSISTANT_KEY) {

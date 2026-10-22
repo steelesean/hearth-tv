@@ -4,8 +4,14 @@
 name: Build app
 
 # Other branches are built too, to check they compile, but only main is published.
+# Changes only to the Vercel services (server/) or to docs don't touch the TV, so they skip
+# the build and don't publish an update the stick would offer.
 on:
   push:
+    paths-ignore:
+      - 'server/**'
+      - '.github/**'
+      - '**.md'
   workflow_dispatch:
 
 permissions:

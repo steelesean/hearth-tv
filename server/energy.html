@@ -95,7 +95,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 async function load() {
   if (!key) { $("signin").hidden = false; return; }
   $("status").textContent = "Loading…";
-  const r = await fetch("/api/week", { headers: { "x-hearth-key": key } });
+  const r = await fetch("/api/energy/week", { headers: { "x-hearth-key": key } });
   if (r.status === 401) { key = ""; store.set(""); $("signin").hidden = false; $("status").textContent = "That password didn't work."; return; }
   $("refresh").hidden = false;
   const d = await r.json().catch(() => ({}));
@@ -127,7 +127,7 @@ function render(d) {
 $("form").addEventListener("submit", (e) => { e.preventDefault(); key = $("key").value.trim(); store.set(key); load(); });
 $("refresh").addEventListener("click", async () => {
   $("status").textContent = "Reading Octopus and working it out. About half a minute…";
-  const r = await fetch("/api/refresh", { headers: { "x-hearth-key": key } });
+  const r = await fetch("/api/energy/refresh", { headers: { "x-hearth-key": key } });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "That didn't work.") + "</span>"; return; }
   load();
