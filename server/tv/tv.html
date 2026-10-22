@@ -1,0 +1,3618 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920">
+<title>Hearth</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+/* Layout: one 1920×1080 canvas scaled to the screen. Greeting, one "now" line and the command
+   bar up top; then Watching, a compact Apps row and the children's row. Ten-foot UI: big
+   targets, one obvious focus. From 8pm to 7am the evening palette takes over.
+   Kept deliberately light for older Fire TV sticks: no blur, no :has(), no color-mix(). */
+.stage { --sheet-bg: #1F2321; --sheet-ink: #F7F6F3; --glow: #F5F4F0; --ink-2: #3A3F3C; --hint: #9A9E99; --card: #FFFFFF; --dim: rgba(236,235,231,0.94); --carry-soft: #B9BDB8; --carry-accent: #A9C7B6; }
+.stage.evening {
+  --ground: #252723; --surface: #2E312C; --ink: #E7E5DF; --ink-soft: #A2A69E; --line: #43473F;
+  --focus: #A9C7B6; --focus-glow: rgba(169,199,182,0.2); --glow: #2C2F2A; --ink-2: #CFCDC6; --hint: #7E827A;
+  --card: #333630; --dim: rgba(37,39,35,0.94); --sheet-bg: #3B3F38; --sheet-ink: #E7E5DF; --carry-soft: #5F625C; --carry-accent: #2F4A3F;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); }
+body { color: var(--ink); font-family: var(--font-ui); }
+.stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: top left;
+  background: radial-gradient(1200px 600px at 50% 16%, var(--glow) 0%, transparent 70%), var(--ground);
+  color: var(--ink); padding: 56px 96px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+}
+
+.top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.top-left, .top-right { display: flex; align-items: center; }
+.top-left > * + *, .top-right > * + * { margin-left: 16px; }
+.time { font-size: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.meta { font-size: 24px; color: var(--ink-soft); }
+.pill {
+  font: 500 24px var(--font-ui); color: var(--ink); background: transparent;
+  border: 2px solid var(--line); border-radius: 999px; height: 60px; padding: 0 28px;
+  display: inline-flex; align-items: center; white-space: nowrap;
+}
+.pill > * + * { margin-left: 12px; }
+.pill .dot { width: 14px; height: 14px; border-radius: 50%; background: #E4A853; }
+.pill { height: 56px; font-size: 22px; padding: 0 24px; }
+.pill .dot.ok { background: var(--ok); }
+.pill svg { width: 26px; height: 26px; }
+
+.hero { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.greeting { font-family: var(--font-display); font-weight: 400; font-size: 88px; line-height: 1.05; letter-spacing: -0.02em; margin: 0; }
+.nowline { margin-top: 14px; font: 400 28px var(--font-ui); color: var(--ink-2); display: inline-flex; align-items: center; background: transparent; border: 2px solid transparent; border-radius: 999px; padding: 6px 20px; min-height: 52px; box-sizing: border-box; }
+.nowline .seg + .seg::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--hint); margin: 0 16px; vertical-align: middle; }
+.nowline b { color: var(--focus); font-weight: 600; }
+.nowline.focusable.is-focus { transform: none; }
+
+.command {
+  margin-top: 26px; width: 1100px; height: 104px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--line); border-radius: 60px;
+  display: flex; align-items: center; padding: 0 44px;
+  box-shadow: 0 10px 30px rgba(31,35,33,0.06); transition: border-color .2s, box-shadow .2s;
+}
+.command.on { border-color: var(--focus); box-shadow: 0 0 0 10px var(--focus-glow), 0 10px 30px rgba(31,35,33,0.08); }
+.command svg { flex: none; width: 34px; height: 34px; color: var(--focus); margin-right: 20px; }
+#ask { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 34px var(--font-ui); color: var(--ink); }
+#ask::placeholder { color: var(--hint); }
+
+.rows { margin-top: auto; }
+.row + .row { margin-top: 28px; }
+.row-label { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 14px 4px; }
+.upnext { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; grid-gap: 22px; }
+.ep { height: 150px; border-radius: 24px; background: var(--surface); border: 2px solid var(--line); padding: 20px 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left; font-family: var(--font-ui); color: var(--ink); }
+.ep .t { font: 500 32px/1.05 var(--font-display); }
+.ep .m { font-size: 20px; color: var(--ink-soft); }
+.ep .d { font-size: 20px; font-weight: 600; color: var(--focus); }
+.ep.carry { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.ep.carry .m { color: var(--carry-soft); }
+.ep.carry .d { color: var(--carry-accent); }
+.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 18px; }
+.app {
+  height: 84px; border-radius: 20px; border: 2px solid var(--line); background: var(--surface);
+  display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
+}
+.app .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; margin-right: 14px; }
+.app .name { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
+.app.live { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.app.live .swatch { border-radius: 50%; animation: blink 2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+
+.kids { display: grid; grid-template-columns: repeat(6, 1fr); grid-gap: 18px; }
+.kid {
+  height: 150px; border-radius: 26px; border: 0; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: 22px 24px; box-sizing: border-box; text-align: left; color: #fff; font-family: var(--font-ui);
+}
+.kid .title { font-family: var(--font-display); font-size: 32px; line-height: 1.05; font-weight: 500; position: relative; }
+.kid .src { font-size: 17px; font-weight: 500; opacity: .85; margin-top: 6px; position: relative; }
+
+/* Focus: the single loudest thing on screen */
+.focusable { outline: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
+.focusable.is-focus {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 6px var(--ground), 0 0 0 12px var(--focus), 0 18px 40px rgba(31,35,33,0.18);
+  border-color: transparent; position: relative; z-index: 2;
+}
+#ask.is-focus { transform: none; box-shadow: none; }
+
+/* Message sheet */
+.sheet {
+  position: absolute; left: 50%; bottom: 72px; width: 1100px; margin-left: -550px; box-sizing: border-box;
+  background: var(--sheet-bg); color: var(--sheet-ink); border-radius: 32px; padding: 34px 44px;
+  display: flex; align-items: center; opacity: 0; transform: translateY(30px);
+  transition: opacity .25s, transform .25s; z-index: 9; pointer-events: none;
+}
+.sheet.show { opacity: 1; transform: none; }
+.sheet .glyph { flex: none; width: 76px; height: 76px; border-radius: 22px; background: var(--focus); display: flex; align-items: center; justify-content: center; margin-right: 30px; }
+.sheet .glyph svg { width: 34px; height: 34px; color: #fff; }
+.sheet.warn .glyph { background: #8A5A2B; }
+.sheet h2 { margin: 0; font: 500 36px var(--font-display); }
+.sheet p { margin: 6px 0 0; font-size: 24px; color: #B9BDB8; }
+
+/* Overlays: pairing and Live TV */
+.overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--dim); display: flex; align-items: center; justify-content: center; }
+.card { color: var(--ink); background: var(--surface); border-radius: 40px; border: 2px solid var(--line); box-shadow: 0 40px 100px rgba(31,35,33,0.16); padding: 64px; box-sizing: border-box; }
+.pair-card { display: flex; align-items: center; width: 1360px; }
+.qr { flex: none; width: 360px; height: 360px; padding: 24px; box-sizing: border-box; background: #fff; border-radius: 28px; border: 2px solid var(--line); margin-right: 64px; }
+.qr svg, .qr img { width: 100%; height: 100%; display: block; }
+.pair-copy h2, .live-card h2 { font: 400 64px/1.05 var(--font-display); letter-spacing: -0.015em; margin: 0 0 18px; }
+.pair-copy p { font-size: 28px; color: var(--ink-soft); margin: 0 0 18px; line-height: 1.4; }
+.code { font: 500 80px var(--font-ui); letter-spacing: 0.22em; font-variant-numeric: tabular-nums; margin: 0 0 18px; }
+.pair-actions { margin-top: 12px; }
+.pair-note { display: block; font-size: 22px; color: var(--ink-soft); margin-top: 18px; }
+.live-card { width: 1500px; }
+.channels { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 24px; margin-top: 40px; }
+.picks { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 28px; margin-top: 40px; }
+.pick { height: 300px; border-radius: 28px; border: 2px solid var(--line); background: var(--card); color: var(--ink); text-align: left; padding: 34px; box-sizing: border-box; display: flex; flex-direction: column; font-family: var(--font-ui); }
+.pick .pick-title { font: 500 44px/1.05 var(--font-display); letter-spacing: -0.01em; }
+.pick .pick-meta { font-size: 22px; color: var(--ink-soft); margin-top: 12px; }
+.pick .pick-why { font-size: 26px; line-height: 1.35; margin-top: auto; }
+.pick-col { display: flex; flex-direction: column; }
+.pick-col .verdicts { display: flex; margin-top: 18px; }
+.pick-col .verdicts > * + * { margin-left: 14px; }
+.verdict.follow { border-color: var(--focus); color: var(--focus); }
+.verdict { font: 500 22px var(--font-ui); color: var(--ink); background: transparent; border: 2px solid var(--line); border-radius: 999px; height: 54px; padding: 0 22px; white-space: nowrap; }
+.pick-col.done .pick:not(.is-focus) { opacity: .45; }
+.pick-col .noted { font-size: 22px; color: var(--ink-soft); height: 54px; display: flex; align-items: center; margin-top: 18px; }
+.how-card { width: 1300px; }
+.how-card h2 { margin-bottom: 10px; }
+.how-actions { display: flex; margin-top: 36px; }
+.how-actions > * + * { margin-left: 20px; }
+.live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
+.channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: var(--card); font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
+
+/* Screensaver: big quiet time and weather, drifting slowly so nothing burns in */
+.saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--ground); }
+/* At night the screensaver goes darker still, so it barely lights the room */
+.stage.evening .saver { background: #161715; }
+.stage.evening .saver-time { color: #8E918A; }
+.stage.evening .saver-date { color: #5F625C; }
+.stage.evening .saver-weather { color: #7E8179; }
+.saver-weather b { color: var(--focus); font-weight: 600; }
+.saver-inner { position: absolute; left: 200px; top: 220px; transition: left 3s ease, top 3s ease; }
+.saver-time { font: 400 280px/1 var(--font-display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.saver-date { font-size: 40px; color: var(--ink-soft); margin-top: 24px; }
+.saver-weather { font-size: 40px; color: var(--ink); margin-top: 14px; }
+.kid .gone { position: absolute; left: 24px; top: 22px; font-size: 18px; font-weight: 600; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; }
+.picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
+
+/* Kids mode */
+.stage.kids-mode .apps-row, .stage.kids-mode .watch-row, .stage.kids-mode .nowline { display: none; }
+.stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
+.stage.kids-mode .kid { height: 250px; }
+.stage.kids-mode #modeBtn .dot { background: var(--focus); }
+/* Energy: a full screen of its own, opened from the Energy tile. Everything lines up on one
+   column grid: header, the five figures (which are also the chart key), the chart, three cards. */
+.energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
+.energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
+.energy .e-title { font-size: 30px; font-weight: 500; }
+.energy .e-title span { color: var(--ink-soft); font-size: 26px; margin-left: 18px; font-weight: 400; }
+.energy .e-made { font-size: 20px; color: var(--ink-soft); }
+.energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
+.energy .e-sum { display: flex; align-items: flex-end; margin-top: 18px; }
+.energy .e-total { width: 420px; flex: none; }
+.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; font-weight: 400; }
+.energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
+.energy .e-figs { flex: 1; display: flex; }
+.energy .e-fig { flex: 1; border-left: 2px solid var(--line); padding: 2px 0 4px 22px; }
+.energy .e-fig .k { font-size: 19px; color: var(--ink-soft); white-space: nowrap; }
+.energy .e-fig .k i { display: inline-block; width: 16px; height: 16px; border-radius: 5px; margin-right: 10px; vertical-align: -2px; }
+.energy .e-fig .v { font: 500 40px/1.1 var(--font-ui); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.energy .e-chart { margin-top: 20px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 20px 32px 14px 28px; display: flex; flex-direction: column; }
+.energy .e-plot { position: relative; height: 320px; margin-left: 64px; }
+.energy .e-grid-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--line); }
+.energy .e-grid-line span { position: absolute; right: 100%; margin-right: 14px; top: -13px; font-size: 18px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.energy .e-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; }
+.energy .eday { flex: 1; margin: 0 30px; background: transparent; border: 0; border-radius: 12px; padding: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; font-family: var(--font-ui); color: var(--ink); position: relative; }
+.energy .eday .tot { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.energy .eday.odd .tot { color: #B5542D; }
+.energy .eday .seg { display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 600; color: #1F2321; overflow: hidden; border-top: 2px solid var(--surface); }
+.energy .eday .seg:first-of-type { border-radius: 10px 10px 0 0; border-top: 0; }
+.energy .eday .seg:last-child { border-radius: 0 0 4px 4px; }
+.energy .eday.is-focus { transform: none; box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px var(--focus); }
+.energy .e-days { display: flex; margin-left: 64px; margin-top: 12px; }
+.energy .e-days span { flex: 1; margin: 0 30px; text-align: center; font-size: 21px; color: var(--ink-soft); }
+.energy .e-days span b { color: var(--ink); font-weight: 600; }
+.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; }
+.energy .e-detail.odd { color: #B5542D; }
+.energy .e-cards { display: flex; margin-top: 18px; flex: 1; min-height: 0; }
+.energy .e-card { flex: 1; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 18px 24px; text-align: left; font-family: var(--font-ui); color: var(--ink); overflow: hidden; display: flex; flex-direction: column; }
+.energy .e-card + .e-card { margin-left: 24px; }
+.energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
+.energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
+.energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.energy .e-card .how { font-size: 17px; color: var(--ink-soft); margin-top: auto; padding-top: 8px; }
+.energy .e-verdicts { display: flex; margin-top: 12px; }
+.energy .e-verdicts > * + * { margin-left: 12px; }
+.energy .e-verdicts .verdict { height: 48px; font-size: 20px; }
+.energy .e-rooms { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.energy .e-rooms td { padding: 4px 0; font-size: 20px; white-space: nowrap; }
+.energy .e-rooms td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 14px; }
+.energy .e-rooms .track i { display: block; height: 100%; border-radius: 6px; }
+.energy .eday .usual { position: absolute; left: -16px; right: -16px; height: 0; pointer-events: none; }
+.energy .eday .usual::before, .energy .eday .usual::after { content: ""; position: absolute; top: -2px; width: 12px; border-top: 4px solid var(--ink); }
+.energy .eday .usual::before { left: 0; } .energy .eday .usual::after { right: 0; }
+.energy .e-detail .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
+.energy .e-trend { display: flex; align-items: flex-end; height: 64px; margin-top: 12px; }
+.energy .e-trend i { flex: 1; margin: 0 4px; background: var(--line); border-radius: 5px 5px 2px 2px; }
+.energy .e-trend i.now { background: var(--focus); }
+.energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
+.energy .e-card p.two { -webkit-line-clamp: 2; }
+.energy .e-rooms td.cold { color: #B5542D; }
+.energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
+.energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="top">
+    <div class="top-left">
+      <span class="time" id="clock"></span>
+      <span class="meta" id="date"></span>
+    </div>
+    <div class="top-right">
+      <button class="pill focusable" id="phoneBtn" type="button">
+        <svg id="phoneIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6v-2"/></svg>
+        <span class="dot ok" id="phoneDot" hidden></span>
+        <span id="phoneLabel">Connect phone</span>
+      </button>
+      <button class="pill focusable" id="modeBtn" type="button"><span class="dot"></span><span id="modeLabel">Family</span></button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1 class="greeting" id="greeting">Hello</h1>
+    <button class="nowline" id="nowline" type="button"></button>
+    <form class="command" id="commandForm" autocomplete="off">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.5 4.8 2.7 7.4 8 8-5.3.6-7.5 3.2-8 8-.5-4.8-2.7-7.4-8-8 5.3-.6 7.5-3.2 8-8z"/></svg>
+      <input id="ask" class="focusable" type="text" placeholder="Ask for something, or try “suggest a film”" aria-label="Ask for something to watch">
+    </form>
+  </section>
+
+  <section class="rows">
+    <div class="row watch-row" id="watchRow" hidden>
+      <h3 class="row-label">Watching</h3>
+      <div class="upnext" id="upnext"></div>
+    </div>
+    <div class="row apps-row">
+      <h3 class="row-label">Apps</h3>
+      <div class="apps" id="apps"></div>
+    </div>
+    <div class="row">
+      <h3 class="row-label" id="kidsLabel">For the children</h3>
+      <div class="kids" id="kids"></div>
+    </div>
+  </section>
+
+  <div class="sheet" id="sheet" role="status" aria-live="polite">
+    <div class="glyph"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg></div>
+    <div><h2 id="sheetTitle"></h2><p id="sheetBody"></p></div>
+  </div>
+
+  <div class="saver" id="saver" hidden>
+    <div class="saver-inner" id="saverInner">
+      <div class="saver-time" id="saverTime"></div>
+      <div class="saver-date" id="saverDate"></div>
+      <div class="saver-weather" id="saverWeather"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="pairModal" hidden>
+    <div class="card pair-card">
+      <div class="qr" id="qr"></div>
+      <div class="pair-copy">
+        <h2>Use your phone as the remote</h2>
+        <p>Point your phone's camera at the code, then enter this number when asked.</p>
+        <div class="code" id="pairCode">····</div>
+        <p id="pairAddress">Or go to the address below on any phone on this Wi-Fi.</p>
+        <div class="pair-actions">
+          <button class="pill focusable" id="useRemote" type="button">Use the remote instead</button>
+          <span class="pair-note">You can find this again under “Connect phone”.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="picksPanel" hidden>
+    <div class="card live-card">
+      <h2 id="picksTitle">A few ideas</h2>
+      <p class="lede" id="picksLede"></p>
+      <div class="picks" id="picks"></div>
+      <p class="picks-note" id="picksNote" hidden></p>
+    </div>
+  </div>
+
+  <div class="overlay" id="howPanel" hidden>
+    <div class="card live-card how-card">
+      <h2 id="howTitle">How was it?</h2>
+      <p class="lede" id="howLede">Your answer helps Hearth suggest better things.</p>
+      <div class="how-actions" id="howActions"></div>
+    </div>
+  </div>
+
+  <div class="energy" id="energyPanel" hidden>
+    <div class="e-top">
+      <div class="e-title">Energy<span id="eRange"></span></div>
+      <div class="e-made" id="eMade"></div>
+    </div>
+    <div class="e-sum">
+      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small></div>
+      <div class="e-figs" id="eFigs"></div>
+    </div>
+    <div class="e-warn" id="eWarn" hidden></div>
+    <div class="e-chart">
+      <div class="e-plot" id="ePlot"><div class="e-bars" id="eBars"></div></div>
+      <div class="e-days" id="eDays"></div>
+      <div class="e-detail" id="eDetail"></div>
+    </div>
+    <div class="e-cards" id="eCards"></div>
+    <div class="e-foot" id="eFoot"></div>
+  </div>
+
+  <div class="overlay" id="livePanel" hidden>
+    <div class="card live-card">
+      <h2>Live TV</h2>
+      <div class="channels" id="channels"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Browser previews only: show any script error on screen, so a broken preview says why.
+  if (!window.HearthNative) window.addEventListener('error', function (e) {
+    var d = document.getElementById('previewError') || document.body.appendChild(document.createElement('pre'));
+    d.id = 'previewError';
+    d.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;background:#B5542D;color:#fff;font:14px/1.4 monospace;padding:12px;border-radius:8px;white-space:pre-wrap';
+    d.textContent += (e.message || 'Error') + (e.filename ? '  [' + e.filename.split('/').pop() + ':' + e.lineno + ']' : (e.target && e.target.src ? '  [could not load ' + e.target.src + ']' : '')) + '\n';
+  }, true);
+</script>
+<div id="previewKeyBox" hidden style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:98;background:#F7F6F3;color:#1F2321;border:2px solid #D6D5CF;border-radius:20px;padding:28px;width:440px;font:18px/1.4 system-ui,sans-serif;box-shadow:0 30px 80px rgba(0,0,0,.2)">
+  <div style="font-weight:600;font-size:20px">Preview the Energy screen</div>
+  <p style="margin:8px 0 14px;color:#3A3F3C">Enter the Hearth password, the one the TV’s assistant uses. It’s kept in this browser only.</p>
+  <form id="previewKeyForm"><input id="previewKeyInput" type="password" autocomplete="current-password" aria-label="Hearth password" style="width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #D6D5CF">
+  <button style="margin-top:12px;font:inherit;font-weight:600;background:#1F2321;color:#F7F6F3;border:0;border-radius:999px;padding:10px 20px">Show my week</button></form>
+  <p id="previewKeyMsg" style="margin:10px 0 0;color:#B5542D"></p>
+</div>
+<script>
+  // Browser preview only: ask for the Hearth password on the page, then fetch the week.
+  window.previewKey = function (msg) {
+    var box = document.getElementById('previewKeyBox');
+    document.getElementById('previewKeyMsg').textContent = msg || '';
+    box.hidden = false;
+    setTimeout(function () { document.getElementById('previewKeyInput').focus(); }, 50);
+  };
+  document.getElementById('previewKeyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var key = document.getElementById('previewKeyInput').value.trim();
+    if (!key) return;
+    try { localStorage.setItem('hearthKey', key); } catch (err) {}
+    document.getElementById('previewKeyBox').hidden = true;
+    document.getElementById('previewKeyMsg').textContent = '';
+    window.HearthPreviewFetch && window.HearthPreviewFetch();
+  });
+</script>
+<script>/* config.js */
+// Everything the home screen shows, in one place. The TV page, the phone remote and the
+// Android app all read this file. Keep the part after "=" as strict JSON (double quotes,
+// no trailing commas) because the Android side parses it directly.
+//
+// apps:     "packages" are tried first; if none is installed, any app whose name contains
+//           one of "match" is used instead.
+//
+// What our Fire TV Stick 4K (Fire OS 6.2.8) accepts:
+//   iPlayer   intent:// links that name its main screen, captured from Fire TV's own
+//             launcher (see the channels below). Plain bbc.co.uk links are ignored.
+//   Channel 4 only its own channel4:// links, format not yet known.
+//   ITVX      itv.com links. Netflix: netflix.com/title and /watch. YouTube: any youtube.com
+//             link. Disney+: disneyplus.com links (which kinds still to test).
+//   Apple TV and My5 aren't installed yet.
+//
+// channels: "url" opens the live stream where we know how; otherwise the app opens on its
+//           home page.
+// searchUrl: optional; where a suggestion from the assistant opens, with {q} as the title.
+// kids:     "url" plays the programme straight away (tested on the stick, October 2026).
+//           iPlayer programme IDs: The Gruffalo b00pk64x, Room on the Broom p0102qfj,
+//           Zog b0bwdw8y, Stick Man b06t09rk. If one leaves iPlayer, the tile will open
+//           iPlayer instead. Bluey (series m000vbrk) has no working series link yet.
+window.HEARTH_CONFIG = {
+  "tvName": "Living room TV",
+  "apps": [
+    { "key": "live", "label": "Live TV", "name": "Live TV", "swatch": "#E5574B", "live": true },
+    { "key": "iplayer", "label": "iPlayer", "name": "BBC iPlayer", "swatch": "#E8417F",
+      "packages": ["uk.co.bbc.iplayer"], "match": ["iplayer"] },
+    { "key": "channel4", "label": "Channel 4", "name": "Channel 4", "swatch": "#3E8E7E",
+      "packages": ["com.channel4.ondemand"], "match": ["channel 4"] },
+    { "key": "netflix", "label": "Netflix", "name": "Netflix", "swatch": "#D8302F",
+      "packages": ["com.netflix.ninja"], "match": ["netflix"] },
+    { "key": "disney", "label": "Disney+", "name": "Disney+", "swatch": "#2B4FA8",
+      "packages": ["com.disney.disneyplus"], "match": ["disney"] },
+    { "key": "prime", "label": "Prime Video", "name": "Prime Video", "swatch": "#2AA3D6",
+      "packages": ["com.amazon.firebat", "com.amazon.avod"], "match": ["prime video"] },
+    { "key": "appletv", "label": "Apple TV", "name": "Apple TV", "swatch": "#8E9290",
+      "packages": ["com.apple.atve.amazon.appletv"], "match": ["apple tv"] },
+    { "key": "youtube", "label": "YouTube", "name": "YouTube", "swatch": "#E3392E",
+      "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"],
+      "searchUrl": "https://www.youtube.com/results?search_query={q}" }
+  ],
+  "extraApps": [
+    { "key": "itvx", "name": "ITVX", "packages": ["air.ITVMobilePlayer"], "match": ["itvx", "itv"] },
+    { "key": "my5", "name": "My5", "packages": [], "match": ["my5", "channel 5"] }
+  ],
+  "channels": [
+    { "key": "bbcone", "name": "BBC One", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:bbc_one/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["bbc 1", "bbc one"] },
+    { "key": "bbctwo", "name": "BBC Two", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:bbc_two/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["bbc 2", "bbc two"] },
+    { "key": "itv1", "name": "ITV1", "app": "itvx", "url": "https://www.itv.com/watch?channel=itv", "aliases": ["itv1", "itv 1", "itv"] },
+    { "key": "c4", "name": "Channel 4", "app": "channel4", "url": "https://www.channel4.com/now/C4", "aliases": ["channel 4", "channel four", "c4"] },
+    { "key": "e4", "name": "E4", "app": "channel4", "url": "https://www.channel4.com/now/E4", "aliases": ["e4"] },
+    { "key": "c5", "name": "Channel 5", "app": "my5", "url": "", "aliases": ["channel 5", "channel five"] },
+    { "key": "cbeebies", "name": "CBeebies", "app": "iplayer", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/urn:bbc:iplayer:service:cbeebies/live&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["cbeebies"] }
+  ],
+  "kids": [
+    { "key": "gruffalo", "title": "The Gruffalo", "app": "iplayer", "src": "iPlayer", "art": "k-gruffalo", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b00pk64x&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["gruffalo"], "bedtime": false },
+    { "key": "broom", "title": "Room on the Broom", "app": "iplayer", "src": "iPlayer", "art": "k-broom", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/p0102qfj&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["room on the broom", "broom"], "bedtime": true },
+    { "key": "bluey", "title": "Bluey", "app": "iplayer", "src": "iPlayer", "art": "k-bluey", "url": "", "aliases": ["bluey"], "bedtime": false },
+    { "key": "cars", "title": "Cars", "app": "disney", "src": "Disney+", "art": "k-cars", "url": "", "aliases": ["cars", "lightning mcqueen", "mcqueen"], "bedtime": false },
+    { "key": "zog", "title": "Zog", "app": "iplayer", "src": "iPlayer", "art": "k-zog", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b0bwdw8y&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["zog"], "bedtime": true },
+    { "key": "stickman", "title": "Stick Man", "app": "iplayer", "src": "iPlayer", "art": "k-stickman", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b06t09rk&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["stick man", "stickman"], "bedtime": true }
+  ]
+};
+
+</script>
+<script>/* qrcode.js */
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+
+</script>
+<script>
+(function () {
+  var C = window.HEARTH_CONFIG;
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), ask = $('ask');
+
+  // Native bridge. In a desktop browser there's no TV, so pretend everything opens.
+  var N = window.HearthNative || {
+    pairing: function () { return JSON.stringify({ address: '192.168.1.42:8080', code: '4817', paired: false }); },
+    openApp: function () { return 'ok'; },
+    openLink: function () { return 'ok'; },
+    showKeyboard: function () {},
+    installed: function () { return JSON.stringify(C.apps.map(function (a) { return a.key; })); },
+    assistantReady: function () { return true; },
+    update: function () { return ''; },
+    installUpdate: function () {},
+    weather: function () { return JSON.stringify({ town: 'Edinburgh', now: 9, desc: 'Cloudy', high: 12, low: 4, tonightLow: -1, frost: true, rain: 20 }); },
+    kidStatus: function () { return JSON.stringify({ gruffalo: false }); },
+    follows: function () { try { return localStorage.getItem('dev.follows') || '[{"title":"Slow Horses","app":"appletv"}]'; } catch (e) { return '[]'; } },
+    setFollows: function (j) { try { localStorage.setItem('dev.follows', j); } catch (e) {} },
+    saveWatching: function () {},
+    upnext: function () {
+      var d = function (n) { var x = new Date(Date.now() + n * 86400000); return x.toISOString().slice(0, 10); };
+      setTimeout(function () { window.hearthUpnext({ shows: [
+        { title: 'Slow Horses', app: 'appletv', found: true, season: 5, next: { date: d(2), season: 5, episode: 4 }, status: 'Returning Series' },
+        { title: 'The Gentlemen', app: 'netflix', found: true, season: 1, next: null, status: 'Returning Series' },
+        { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
+      ] }); }, 300);
+    },
+    // In a browser preview served by the energy service, fetch the real week with the Hearth
+    // password, asked for in a box on the page (see previewKey below).
+    energy: function () {
+      if (!/^https?:/.test(location.protocol)) return;
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (!key) { window.previewKey(''); return; }
+      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+        .then(function (x) {
+          if (x.status === 401) { try { localStorage.removeItem('hearthKey'); } catch (e) {} window.previewKey('That password didn’t work. Check it in Vercel under HEARTH_ASSISTANT_KEY.'); }
+          else if (x.d.error) window.previewKey(x.d.error);
+          else window.hearthEnergy(x.d);
+        })
+        .catch(function () { window.previewKey('Couldn’t reach the energy service.'); });
+    },
+    energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
+    energyFeedback: function (id, verdict) {
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (/^https?:/.test(location.protocol)) fetch('/api/energy/feedback', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, verdict: verdict }) });
+    },
+    learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
+    ask: function (id, payload) {
+      setTimeout(function () {
+        window.hearthAnswer(id, { reply: 'Three you might like tonight.', action: { type: 'suggest', key: '' }, suggestions: [
+          { title: 'The Diplomat', kind: 'series', year: '2023', app: 'netflix', reason: 'Sharp political drama, like Slow Horses.' },
+          { title: 'Paddington 2', kind: 'film', year: '2017', app: 'netflix', reason: 'Warm, funny and safe for everyone.' },
+          { title: 'Mr Bates vs The Post Office', kind: 'series', year: '2024', app: 'itvx', reason: 'Gripping true story, four episodes.' }
+        ] });
+      }, 900);
+    }
+  };
+
+  // ---------- Build the screen from config ----------
+  function appByKey(k) {
+    var all = C.apps.concat(C.extraApps);
+    for (var i = 0; i < all.length; i++) if (all[i].key === k) return all[i];
+    return { key: k, name: k };
+  }
+  function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; }
+
+  C.apps.forEach(function (a) {
+    var b = el('button', 'app focusable' + (a.live ? ' live' : ''),
+      '<span class="swatch" style="background:' + a.swatch + '"></span><span class="name"></span>');
+    b.type = 'button'; b.querySelector('.name').textContent = a.label;
+    b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
+    $('apps').appendChild(b);
+  });
+
+  var kidButtons = [];
+  C.kids.forEach(function (k) {
+    var b = el('button', 'kid focusable ' + k.art, '<span class="art"></span><span class="title"></span><span class="src"></span>');
+    b.type = 'button';
+    b.querySelector('.title').textContent = k.title;
+    b.querySelector('.src').textContent = k.src;
+    b.addEventListener('click', function () { openKid(k.key); });
+    b._kid = k; kidButtons.push(b);
+    var gone = el('span', 'gone'); gone.textContent = 'Not on iPlayer now'; gone.hidden = true; b.appendChild(gone); b._gone = gone;
+    $('kids').appendChild(b);
+  });
+
+  C.channels.forEach(function (ch) {
+    var b = el('button', 'channel focusable'); b.type = 'button'; b.textContent = ch.name;
+    b.addEventListener('click', function () { closeOverlays(); openChannel(ch.key); });
+    $('channels').appendChild(b);
+  });
+
+  // ---------- Fit and clock ----------
+  // On the TV the WebView itself lays the page out at 1920 wide (see MainActivity), so this
+  // is normally 1. In a desktop browser it shrinks the canvas to fit the window.
+  function fit() {
+    var w = document.documentElement.clientWidth || innerWidth, h = document.documentElement.clientHeight || innerHeight;
+    var k = (w && h) ? Math.min(w / 1920, h / 1080) : 1;
+    stage.style.webkitTransform = stage.style.transform = 'scale(' + k + ')';
+  }
+  addEventListener('resize', fit); addEventListener('load', fit); fit(); setTimeout(fit, 500);
+
+  var kidsMode = false, bedtime = false;
+  function tick() {
+    var d = new Date();
+    $('clock').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var w = weatherNow();
+    stage.classList.toggle('evening', N.evening ? N.evening() : (d.getHours() >= 20 || d.getHours() < 7));
+    $('date').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    renderNow(w);
+    if (!$('saver').hidden) paintSaver(d, w);
+    var h = d.getHours();
+    $('greeting').textContent = kidsMode ? (bedtime ? 'Time for a story' : 'Hello, you two')
+      : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  }
+  function weatherNow() { try { var j = N.weather ? N.weather() : ''; return j ? JSON.parse(j) : null; } catch (e) { return null; } }
+  tick(); setInterval(tick, 15000);
+
+  // ---------- Screensaver after five quiet minutes ----------
+  var lastActive = Date.now();
+  function paintSaver(d, w) {
+    $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('saverWeather').innerHTML = nowSegments(w, true).map(function (x) { return x.html; }).join(' · ');
+    $('saverInner').style.left = (120 + Math.round(Math.random() * 700)) + 'px';
+    $('saverInner').style.top = (100 + Math.round(Math.random() * 380)) + 'px';
+  }
+  function wake() { lastActive = Date.now(); if (!$('saver').hidden) { $('saver').hidden = true; return true; } return false; }
+  setInterval(function () {
+    var busy = asking || !$('pairModal').hidden || !$('howPanel').hidden;
+    if ($('saver').hidden && !busy && Date.now() - lastActive > 5 * 60 * 1000) { $('saver').hidden = false; paintSaver(new Date(), weatherNow()); }
+    else if (!$('saver').hidden && new Date().getSeconds() < 15) paintSaver(new Date(), weatherNow());
+  }, 15000);
+
+  // ---------- Updates ----------
+  var updateWaiting = false;
+  function checkUpdate() {
+    var u = null; try { u = N.update && N.update() ? JSON.parse(N.update()) : null; } catch (e) {}
+    updateWaiting = !!u;
+    renderNow(weatherNow());
+  }
+  $('nowline').addEventListener('click', function () {
+    if (!updateWaiting) return;
+    $('sheetTitle').textContent = 'Downloading the update…'; $('sheetBody').textContent = 'Fire TV will ask you to confirm. Choose Install.';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, 20000);
+    N.installUpdate();
+  });
+
+  // ---------- The "now" line: at most two things worth knowing, most useful first ----------
+  function esc(t) { var e = document.createElement('span'); e.textContent = t; return e.innerHTML; }
+  function nowSegments(w, forSaver) {
+    var out = [];
+    if (updateWaiting && !forSaver) out.push({ html: '<b>An update is ready</b>. Press OK here to install' });
+    var soon = watchingShows().filter(function (x) { return x.days !== null && x.days >= 0 && x.days <= 3; })[0];
+    if (soon) out.push({ html: '<b>' + esc(soon.title) + '</b> ' + (soon.usDate ? 'is out in the US ' : 'has a new episode ') + dayWord(soon.days, soon.date) });
+    if (w) out.push({ html: esc(w.now + '° and ' + w.desc.toLowerCase()) + (w.frost && (new Date().getHours() >= 16) ? ', frost tonight' : '') });
+    return out.slice(0, 2);
+  }
+  function renderNow(w) {
+    var segs = nowSegments(w, false), line = $('nowline');
+    line.innerHTML = segs.map(function (x) { return '<span class="seg">' + x.html + '</span>'; }).join('');
+    line.hidden = !segs.length;
+    line.classList.toggle('focusable', updateWaiting);   // only selectable when there's something to do
+  }
+  function dayWord(days, date) {
+    if (days === 0) return 'today';
+    if (days === 1) return 'tomorrow';
+    var d = new Date(date + 'T12:00:00');
+    return days < 7 ? 'on ' + d.toLocaleDateString('en-GB', { weekday: 'long' }) : 'on ' + d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+
+  // ---------- Watching: carry on, then our top series and when the next episode is out ----------
+  // A show counts as ours if we follow it, loved it, or asked Hearth for it on two or more days.
+  function showsLog() { try { return JSON.parse(localStorage.getItem('hearth.shows') || '[]'); } catch (e) { return []; } }
+  function rememberShow(title, kind, app) {
+    if (!title) return;
+    var log = showsLog(); log.unshift({ title: title, kind: kind || '', app: app || '', at: new Date().toISOString() });
+    try { localStorage.setItem('hearth.shows', JSON.stringify(log.slice(0, 200))); } catch (e) {}
+    mirror();
+  }
+  function follows() { try { return JSON.parse(N.follows ? N.follows() : '[]'); } catch (e) { return []; } }
+  function isFollowed(title) { return follows().some(function (f) { return f.title.toLowerCase() === title.toLowerCase(); }); }
+  function follow(title, app) {
+    if (isFollowed(title)) return;
+    var f = follows(); f.unshift({ title: title, app: app || '' });
+    N.setFollows(JSON.stringify(f.slice(0, 12)));
+    fetchUpnext(true);
+  }
+  function topShows() {
+    var score = {}, add = function (title, app, n) {
+      var k = title.toLowerCase(); score[k] = score[k] || { title: title, app: app, n: 0, days: {} }; score[k].n += n;
+      if (app && !score[k].app) score[k].app = app; return score[k];
+    };
+    follows().forEach(function (f) { add(f.title, f.app, 3); });
+    var cutoff = Date.now() - 21 * 86400000;
+    showsLog().forEach(function (x) {
+      if (x.kind === 'film' || new Date(x.at) < cutoff) return;
+      var e = add(x.title, x.app, 0), day = x.at.slice(0, 10);
+      if (!e.days[day]) { e.days[day] = 1; e.n += 1; }
+    });
+    feedback().forEach(function (x) {
+      if (x.kind !== 'series') return;
+      if (x.verdict === 'loved') add(x.title, x.app, 2);
+      if (x.verdict === 'no') add(x.title, x.app, -100);
+    });
+    return Object.keys(score).map(function (k) { return score[k]; })
+      .filter(function (x) { return x.n >= 2; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 3);
+  }
+  function upnextCache() { try { return JSON.parse(localStorage.getItem('hearth.upnext') || '{}'); } catch (e) { return {}; } }
+  function watchingShows() {
+    var cache = upnextCache().shows || {}, today = new Date(new Date().toDateString());
+    return topShows().map(function (t) {
+      var u = cache[t.title.toLowerCase()] || {}, days = null;
+      if (u.next && u.next.date) days = Math.round((new Date(u.next.date + 'T00:00:00') - today) / 86400000);
+      return { title: u.title || t.title, app: u.app || t.app, season: u.season, next: u.next, status: u.status, usDate: u.usDate, days: days, date: u.next ? u.next.date : '' };
+    }).sort(function (a, b) { return (a.days === null ? 99 : a.days) - (b.days === null ? 99 : b.days); });
+  }
+  function showLine(x) {
+    if (x.days !== null && x.days >= 0) return (x.usDate ? 'In the US ' : 'New ') + dayWord(x.days, x.date);
+    if (/ended|canceled/i.test(x.status || '')) return 'Finished';
+    if (x.status) return 'All episodes out';
+    return '';
+  }
+  function fetchUpnext(force) {
+    var shows = topShows(); if (!shows.length || !N.upnext || !(N.assistantReady && N.assistantReady())) return;
+    var c = upnextCache(), key = shows.map(function (x) { return x.title.toLowerCase(); }).sort().join('|');
+    if (!force && c.key === key && Date.now() - (c.at || 0) < 6 * 3600 * 1000) return;
+    upnextKey = key; upnextSent = shows.map(function (x) { return x.title; });
+    N.upnext(JSON.stringify({ shows: shows.map(function (x) { return { title: x.title, app: x.app }; }),
+      apps: installedApps().map(function (a) { return a.key; }) }));
+  }
+  var upnextKey = '', upnextSent = [];
+  window.hearthUpnext = function (a) {
+    if (!a || !a.shows) return;
+    // Key each answer by the title we asked about (TMDB may spell it differently), in order.
+    var map = {}, sent = upnextSent;
+    a.shows.forEach(function (x, i) { if (x.found && sent[i]) map[sent[i].toLowerCase()] = x; });
+    try { localStorage.setItem('hearth.upnext', JSON.stringify({ at: Date.now(), key: upnextKey, shows: map })); } catch (e) {}
+    renderWatching(); renderNow(weatherNow());
+  };
+  // The last grown-up thing we opened, or the last app you were in if that's more recent
+  // (you may have moved on from inside an app).
+  function lastGrownUp() {
+    var h = history().filter(function (x) { return x.kind !== 'kid'; })[0], a = null;
+    try { a = N.lastApp && N.lastApp() ? JSON.parse(N.lastApp()) : null; } catch (e) {}
+    if (a && a.key && (!h || a.at > new Date(h.at).getTime() + 60000) && (!h || h.app !== a.key)) {
+      return { kind: 'app', key: a.key, title: appByKey(a.key).name, app: a.key, at: new Date(a.at).toISOString() };
+    }
+    return h;
+  }
+  function renderWatching() {
+    var box = $('upnext'); box.innerHTML = '';
+    var last = lastGrownUp(), shows = watchingShows(), saved = { carry: null, shows: [] };
+    if (last) {
+      var c = el('button', 'ep carry focusable', '<span class="m">Carry on from ' + (when(last.at).indexOf('yesterday') === 0 ? 'last night' : when(last.at)) + '</span><span class="t"></span><span class="d"></span>');
+      c.type = 'button'; c.querySelector('.t').textContent = last.title; c.querySelector('.d').textContent = appByKey(last.app).name || '';
+      c.addEventListener('click', carryOn); box.appendChild(c);
+      saved.carry = { title: last.title, app: last.app, when: when(last.at) };
+    }
+    shows.forEach(function (x) {
+      var app = appByKey(x.app), b = el('button', 'ep focusable', '<span class="t"></span><span class="m"></span><span class="d"></span>');
+      b.type = 'button';
+      b.querySelector('.t').textContent = x.title;
+      b.querySelector('.m').textContent = [x.season ? 'Series ' + x.season : '', app.name && app.key ? app.name : ''].filter(Boolean).join(' · ');
+      b.querySelector('.d').textContent = showLine(x);
+      b.addEventListener('click', function () { openShow(x.title, x.app); });
+      box.appendChild(b);
+      saved.shows.push({ title: x.title, app: x.app, line: showLine(x), date: x.date, usDate: !!x.usDate });
+    });
+    $('watchRow').hidden = !box.children.length;
+    if (N.saveWatching) N.saveWatching(JSON.stringify(saved));
+  }
+  // Opens a specific show: straight to the app's search where we know how, otherwise the app.
+  function openShow(title, appKey) {
+    rememberShow(title, 'series', appKey);
+    remember({ kind: 'pick', key: appKey, title: title, app: appKey, pickKind: 'series' });
+    openPick({ title: title, app: appKey });
+    setTimeout(renderWatching, 1000);
+  }
+
+  // ---------- Focus (class-based so the remote and phone share it) ----------
+  var cur = null;
+  function visible(e) { return e.offsetParent !== null; }
+  function layer() {
+    if (!$('pairModal').hidden) return $('pairModal');
+    if (!$('livePanel').hidden) return $('livePanel');
+    if (!$('picksPanel').hidden) return $('picksPanel');
+    if (!$('howPanel').hidden) return $('howPanel');
+    if (!$('energyPanel').hidden) return $('energyPanel');
+    return stage;
+  }
+  function items() {
+    var root = layer(), list = root.querySelectorAll('.focusable'), out = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!visible(e)) continue;
+      if (root === stage && (e.closest('.overlay') || e.closest('.energy'))) continue;
+      out.push(e);
+    }
+    return out;
+  }
+  function setFocus(e) {
+    if (cur) cur.classList.remove('is-focus');
+    cur = e; e.classList.add('is-focus');
+    $('commandForm').classList.toggle('on', e === ask);
+    if (e !== ask) { if (document.activeElement === ask) ask.blur(); e.focus({ preventScroll: true }); }
+  }
+  function move(dir) {
+    var list = items();
+    if (!cur || list.indexOf(cur) < 0) { setFocus(list[0] === $('phoneBtn') && layer() === stage ? ask : list[0]); return; }
+    var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    var best = null, bestScore = Infinity;
+    list.forEach(function (e) {
+      if (e === cur) return;
+      var b = e.getBoundingClientRect(), dx = b.left + b.width / 2 - ax, dy = b.top + b.height / 2 - ay, main, cross;
+      if (dir === 'left')  { if (b.right > a.left + 2) return; main = -dx; cross = Math.abs(dy); }
+      if (dir === 'right') { if (b.left < a.right - 2) return; main = dx;  cross = Math.abs(dy); }
+      if (dir === 'up')    { if (b.bottom > a.top + 2) return; main = -dy; cross = Math.abs(dx); }
+      if (dir === 'down')  { if (b.top < a.bottom - 2) return; main = dy;  cross = Math.abs(dx); }
+      var s = main + cross * 2.2;
+      if (s < bestScore) { bestScore = s; best = e; }
+    });
+    if (best) setFocus(best);
+  }
+  function select() {
+    if (!cur || !visible(cur)) { move('down'); return; }
+    if (cur === ask) { ask.focus(); N.showKeyboard(); return; }
+    cur.click();
+  }
+
+  // ---------- Messages ----------
+  var sheet = $('sheet'), sheetTimer;
+  function say(title, body, warn) {
+    $('sheetTitle').textContent = title; $('sheetBody').textContent = body || '';
+    sheet.classList.toggle('warn', !!warn);
+    sheet.classList.add('show');
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { sheet.classList.remove('show'); }, warn ? 5000 : 3000);
+  }
+
+  // ---------- Actions ----------
+  function missing(app) { say('Can’t find ' + app.name + ' on this TV', 'Install it from the Amazon store, then try again.', true); }
+  function openApp(key, quiet) {
+    var app = appByKey(key);
+    if (!quiet) say('Opening ' + app.name, '');
+    remember({ kind: 'app', key: key, title: app.name, app: key });
+    setTimeout(renderWatching, 50);
+    setTimeout(function () { if (N.openApp(key) === 'missing') missing(app); }, 700);
+  }
+  function openChannel(key) {
+    var ch = C.channels.filter(function (c) { return c.key === key; })[0]; if (!ch) return;
+    var app = appByKey(ch.app);
+    say(ch.name, 'Opening ' + app.name);
+    remember({ kind: 'channel', key: key, title: ch.name + ' live', app: ch.app });
+    setTimeout(function () { if (N.openLink(ch.app, ch.url || '') === 'missing') missing(app); }, 700);
+  }
+  function kidAvailable(key) {
+    try { return JSON.parse(N.kidStatus ? N.kidStatus() : '{}')[key] !== false; } catch (e) { return true; }
+  }
+  function markKids() { kidButtons.forEach(function (b) { b._gone.hidden = kidAvailable(b._kid.key); }); }
+  function openKid(key) {
+    var k = C.kids.filter(function (x) { return x.key === key; })[0]; if (!k) return;
+    var app = appByKey(k.app);
+    if (!kidAvailable(key)) {
+      say(k.title + ' isn’t on iPlayer at the moment', 'Opening iPlayer instead.', true);
+      setTimeout(function () { if (N.openApp(k.app) === 'missing') missing(app); }, 1500);
+      return;
+    }
+    say(k.title, 'Opening ' + app.name);
+    remember({ kind: 'kid', key: key, title: k.title, app: k.app });
+    setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
+  }
+  function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
+  function closeOverlays() { $('energyPanel').hidden = true; $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
+
+  // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
+  var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
+  function mirror() {
+    if (!N.savePage) return;
+    var out = {};
+    try { PAGE_KEYS.forEach(function (k) { var v = localStorage.getItem(k); if (v !== null) out[k] = v; }); } catch (e) {}
+    N.savePage(JSON.stringify(out));
+  }
+  setInterval(mirror, 5 * 60 * 1000);
+
+  // ---------- What we've opened (kept on the stick, sent to the assistant) ----------
+  function history() { try { return JSON.parse(localStorage.getItem('hearth.history') || '[]'); } catch (e) { return []; } }
+  function remember(item) {
+    item.at = new Date().toISOString();
+    var h = history().filter(function (x) { return !(x.kind === item.kind && x.key === item.key && x.title === item.title); });
+    h.unshift(item);
+    try { localStorage.setItem('hearth.history', JSON.stringify(h.slice(0, 30))); } catch (e) {}
+    mirror();
+  }
+  function when(iso) {
+    var d = new Date(iso), now = new Date(), t = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+    return days === 0 ? 'earlier today at ' + t : days === 1 ? 'yesterday at ' + t : d.toLocaleDateString('en-GB', { weekday: 'long' }) + ' at ' + t;
+  }
+  // "Carry on from last night": reopen the last grown-up thing we opened. The app itself
+  // remembers the episode, so its Continue Watching row is one press away.
+  function carryOn() {
+    var last = lastGrownUp();
+    if (!last) { say('Nothing to carry on with yet', 'Once you’ve watched something through Hearth, I’ll remember it.', true); return; }
+    var title = 'Carrying on: ' + last.title, body = 'Last opened ' + when(last.at);
+    if (last.kind === 'channel') openChannel(last.key);
+    else if (last.kind === 'pick') openPick(last);
+    else openApp(last.key, true);
+    setTimeout(function () { say(title, body); renderWatching(); }, 50);
+  }
+
+  // ---------- The assistant (Claude), for anything the rules above don't cover ----------
+  var asking = null;
+  function installedApps() {
+    var keys = []; try { keys = JSON.parse(N.installed()); } catch (e) {}
+    return C.apps.concat(C.extraApps).filter(function (a) { return !a.live && keys.indexOf(a.key) >= 0; })
+      .map(function (a) { return { key: a.key, name: a.name }; });
+  }
+  function askAssistant(q) {
+    var id = String(Date.now());
+    asking = id;
+    $('sheetTitle').textContent = 'Thinking…'; $('sheetBody').textContent = '“' + q + '”';
+    sheet.classList.remove('warn'); sheet.classList.add('show'); clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { if (asking === id) { asking = null; say('That took too long', 'Try again in a moment.', true); } }, 30000);
+    var d = new Date();
+    N.ask(id, JSON.stringify({
+      request: q,
+      now: d.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }),
+      catalogue: {
+        apps: installedApps(),
+        channels: C.channels.map(function (c) { return { key: c.key, name: c.name }; }),
+        kids: C.kids.map(function (k) { return { key: k.key, title: k.title }; })
+      },
+      history: history().slice(0, 15).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; }),
+      feedback: feedbackForAssistant()
+    }));
+  }
+  window.hearthAnswer = function (id, a) {
+    if (id !== asking) return;   // an older question, or it already timed out
+    asking = null; clearTimeout(sheetTimer); sheet.classList.remove('show');
+    if (!a || a.error || !a.action) { say('The assistant couldn’t help', (a && a.error) || 'Try asking another way.', true); return; }
+    var t = a.action.type, key = a.action.key;
+    if (t === 'open_app' && key && a.action.show) {
+      rememberShow(a.action.show, a.action.showKind, key);
+      remember({ kind: 'pick', key: key, title: a.action.show, app: key, pickKind: a.action.showKind });
+      openPick({ title: a.action.show, app: key });
+      return setTimeout(renderWatching, 1000);
+    }
+    if (t === 'open_app' && key) return openApp(key);
+    if (t === 'open_channel' && key) return openChannel(key);
+    if (t === 'open_kid' && key) return openKid(key);
+    if (t === 'suggest' && a.suggestions && a.suggestions.length) {
+      $('picksNote').hidden = !a.attribution; $('picksNote').textContent = a.attribution || '';
+      return showPicks(a.reply, a.suggestions);
+    }
+    say(a.reply || 'Sorry, I’m not sure', '', true);
+  };
+
+  function showPicks(reply, picks) {
+    $('picksLede').textContent = reply || '';
+    var box = $('picks'); box.innerHTML = '';
+    picks.slice(0, 3).forEach(function (p) {
+      var app = appByKey(p.app);
+      var b = el('button', 'pick focusable', '<span class="pick-title"></span><span class="pick-meta"></span><span class="pick-why"></span>');
+      b.type = 'button';
+      b.querySelector('.pick-title').textContent = p.title;
+      b.querySelector('.pick-meta').textContent = [p.kind === 'series' ? 'Series' : 'Film', p.year, app.name].filter(Boolean).join(' · ');
+      b.querySelector('.pick-why').textContent = p.reason;
+      b.addEventListener('click', function () {
+        closeOverlays();
+        var item = { kind: 'pick', key: p.app, title: p.title, app: p.app, pickKind: p.kind };
+        remember(item);
+        rememberShow(p.title, p.kind, p.app);
+        openPick(item);
+      });
+      var col = el('div', 'pick-col'), row = el('div', 'verdicts');
+      col.appendChild(b);
+      var options = (p.kind === 'series' && !isFollowed(p.title) ? [['follow', 'Follow']] : []).concat([['seen', 'Seen it'], ['no', 'Not for us']]);
+      options.forEach(function (v) {
+        var vb = el('button', 'verdict focusable' + (v[0] === 'follow' ? ' follow' : '')); vb.type = 'button'; vb.textContent = v[1];
+        vb.addEventListener('click', function () {
+          if (v[0] === 'follow') {
+            follow(p.title, p.app);
+            var noted0 = el('div', 'noted'); noted0.textContent = 'Following. It’ll appear in Watching';
+            col.replaceChild(noted0, row); setFocus(b); return;
+          }
+          giveFeedback(p.title, p.kind, p.app, v[0]);
+          col.classList.add('done');
+          var noted = el('div', 'noted'); noted.textContent = 'Got it, I’ll remember that';
+          col.replaceChild(noted, row);
+          setFocus(b);
+        });
+        row.appendChild(vb);
+      });
+      col.appendChild(row);
+      box.appendChild(col);
+    });
+    $('picksPanel').hidden = false; setFocus(items()[0]);
+  }
+  // Opens a suggestion: straight to search where the app supports it, otherwise the app itself.
+  function openPick(p) {
+    var app = appByKey(p.app);
+    if (app.searchUrl) {
+      say(p.title, 'Searching ' + app.name);
+      setTimeout(function () { if (N.openLink(p.app, app.searchUrl.replace('{q}', encodeURIComponent(p.title))) === 'missing') missing(app); }, 700);
+    } else {
+      say('Opening ' + app.name, 'Search for “' + p.title + '”');
+      setTimeout(function () { if (N.openApp(p.app) === 'missing') missing(app); }, 1500);
+    }
+  }
+
+  // ---------- Learning: feedback on suggestions shapes a taste profile over time ----------
+  function feedback() { try { return JSON.parse(localStorage.getItem('hearth.feedback') || '[]'); } catch (e) { return []; } }
+  var VERDICTS = { loved: 'loved it', fine: 'it was fine', no: 'not for us', seen: 'already seen', skipped: 'didn’t watch it' };
+  function giveFeedback(title, kind, app, verdict) {
+    var f = feedback().filter(function (x) { return x.title !== title; });
+    f.unshift({ title: title, kind: kind || '', app: app || '', verdict: verdict, at: new Date().toISOString() });
+    try {
+      localStorage.setItem('hearth.feedback', JSON.stringify(f.slice(0, 100)));
+      var n = Number(localStorage.getItem('hearth.sinceLearn') || 0) + 1;
+      localStorage.setItem('hearth.sinceLearn', String(n));
+      if (n >= 3) learnNow();
+    } catch (e) {}
+    mirror();
+  }
+  function feedbackForAssistant() {
+    return feedback().slice(0, 40).map(function (x) { return { title: x.title, kind: x.kind, verdict: VERDICTS[x.verdict] || x.verdict }; });
+  }
+  // After a few answers, ask Claude to fold them into the profile (kept on the stick).
+  function learnNow() {
+    if (!(N.assistantReady && N.assistantReady() && N.learn)) return;
+    N.learn(JSON.stringify({
+      feedback: feedbackForAssistant(),
+      history: history().slice(0, 20).map(function (x) { return { opened: x.title, app: x.app, when: when(x.at) }; })
+    }));
+  }
+  window.hearthLearned = function (a) {
+    if (a && a.profile && !a.error) { try { localStorage.setItem('hearth.sinceLearn', '0'); } catch (e) {} }
+  };
+
+  // Back from watching a suggestion? Ask once how it was.
+  window.hearthResumed = function () {
+    renderWatching(); fetchUpnext(false);
+    if (asking || !$('pairModal').hidden) return;
+    var asked = []; try { asked = JSON.parse(localStorage.getItem('hearth.asked') || '[]'); } catch (e) {}
+    var rated = feedback().map(function (x) { return x.title; });
+    var mins = function (x) { return (Date.now() - new Date(x.at)) / 60000; };
+    var p = history().filter(function (x) {
+      return x.kind === 'pick' && mins(x) > 40 && mins(x) < 3 * 24 * 60 && asked.indexOf(x.title) < 0 && rated.indexOf(x.title) < 0;
+    })[0];
+    if (!p) return;
+    asked.unshift(p.title);
+    try { localStorage.setItem('hearth.asked', JSON.stringify(asked.slice(0, 50))); } catch (e) {}
+    $('howTitle').textContent = 'How was ' + p.title + '?';
+    var box = $('howActions'); box.innerHTML = '';
+    [['loved', 'Loved it'], ['fine', 'It was fine'], ['no', 'Not for us'], ['skipped', 'Didn’t watch it']].forEach(function (v) {
+      var b = el('button', 'pill focusable'); b.type = 'button'; b.textContent = v[1];
+      b.addEventListener('click', function () {
+        giveFeedback(p.title, p.pickKind, p.app, v[0]);
+        closeOverlays();
+        if (v[0] !== 'skipped') say('Thanks, noted', 'Suggestions will take that into account.');
+      });
+      box.appendChild(b);
+    });
+    $('livePanel').hidden = true; $('picksPanel').hidden = true;
+    $('howPanel').hidden = false; setFocus(box.firstChild);
+  };
+
+  function setMode(on, isBedtime) {
+    kidsMode = on; bedtime = on && !!isBedtime;
+    stage.classList.toggle('kids-mode', on);
+    $('modeLabel').textContent = on ? 'Kids' : 'Family';
+    $('kidsLabel').textContent = bedtime ? 'Calm ones for bedtime' : on ? 'Stories' : 'For the children';
+    kidButtons.forEach(function (b) { b.hidden = bedtime && !b._kid.bedtime; });
+    tick();
+  }
+  $('modeBtn').addEventListener('click', function () { setMode(!kidsMode); });
+
+  // Simple understanding of typed or spoken requests. Claude can take over the vague ones later.
+  function has(s, words) { for (var i = 0; i < words.length; i++) if (s.indexOf(words[i]) >= 0) return true; return false; }
+  function interpret(q) {
+    var s = ' ' + q.toLowerCase().replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+    if (!s.trim()) return;
+    if (/\b(carry on|keep watching|continue|last night|where we left|what we were watching)\b/.test(s)) return carryOn();
+    var k = C.kids.filter(function (x) { return has(s, x.aliases.map(function (a) { return a + ' '; })); })[0];
+    if (k) return openKid(k.key);
+    var ready = N.assistantReady && N.assistantReady();
+    if (ready && /\b(suggest|recommend|ideas?|what should|in the mood)\b/.test(s)) return askAssistant(q.trim());
+    var ch = C.channels.filter(function (x) { return has(s, x.aliases.map(function (a) { return ' ' + a + ' '; })); })[0];
+    var wantsApp = /\b(open|app|launch)\b/.test(s);
+    var app = C.apps.concat(C.extraApps).filter(function (a) { return a.match && has(s, a.match); })[0];
+    if (ch && !(wantsApp && app)) return openChannel(ch.key);
+    if (app) return openApp(app.key);
+    if (/\blive\b/.test(s)) return openLive();
+    if (/\b(bedtime|calm|sleep)\b/.test(s)) return setMode(true, true);
+    if (/\b(kids|children|cartoon)\b/.test(s)) return setMode(true);
+    if (N.assistantReady && N.assistantReady()) return askAssistant(q.trim());
+    say('Sorry, I didn’t catch that', 'Try “Channel 4 live”, “open Netflix” or “put on The Gruffalo”.', true);
+  }
+  $('commandForm').addEventListener('submit', function (e) { e.preventDefault(); var q = ask.value; ask.value = ''; ask.blur(); interpret(q); });
+
+  // ---------- Pairing ----------
+  var paired = false;
+  function setPaired(on) {
+    paired = on;
+    $('phoneIcon').hidden = on; $('phoneDot').hidden = !on;
+    $('phoneLabel').textContent = on ? 'Phone connected' : 'Connect phone';
+  }
+  function openPairing() {
+    var p = JSON.parse(N.pairing());
+    if (!p.address) { say('Connect the TV to Wi-Fi first', 'Your phone and the TV need to be on the same network.', true); return; }
+    var url = 'http://' + p.address + '/';
+    $('pairCode').textContent = p.code;
+    $('pairAddress').textContent = 'Or go to ' + p.address + ' on any phone on this Wi-Fi.';
+    try { var qr = qrcode(0, 'M'); qr.addData(url); qr.make(); $('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 0, scalable: true }); } catch (e) { $('qr').textContent = url; }
+    $('pairModal').hidden = false; setFocus($('useRemote'));
+  }
+  $('useRemote').addEventListener('click', closeOverlays);
+  $('phoneBtn').addEventListener('click', function () {
+    if (paired) say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); else openPairing();
+  });
+
+  // ---------- Keys: from the Android side (remote) and from the phone ----------
+  window.hearthKey = function (k) {
+    if (wake()) return;   // the first press just wakes the screen
+    if (k === 'back') return back();
+    if (k === 'ok') return select();
+    if (k === 'home') { closeOverlays(); if (kidsMode) setMode(false); return; }
+    move(k);
+  };
+  function back() {
+    if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden || !$('energyPanel').hidden) { closeOverlays(); return; }
+    if (kidsMode) { setMode(false); return; }
+    setFocus(ask);
+  }
+  window.hearthBack = back;
+
+  window.hearthRemote = function (cmd) {
+    if (['refresh', 'updateReady', 'heating', 'key', 'refreshShows'].indexOf(cmd.type) < 0) wake();
+    if (cmd.type === 'refresh' || cmd.type === 'updateReady') { checkUpdate(); markKids(); tick(); fetchUpnext(false); return; }
+    if (cmd.type === 'refreshShows') { fetchUpnext(true); renderWatching(); return; }
+    if (cmd.type === 'watch') {
+      closeOverlays();
+      if (cmd.value === 'carry') return carryOn();
+      var w0 = watchingShows().filter(function (x) { return x.title === cmd.value; })[0];
+      return w0 ? openShow(w0.title, w0.app) : interpret('put on ' + cmd.value);
+    }
+    if (cmd.type === 'updateFailed') return say('The update didn’t install', cmd.message || 'Try again later.', true);
+    if (cmd.type === 'key') return window.hearthKey(cmd.value);
+    if (cmd.type === 'ask') { closeOverlays(); ask.value = cmd.value; setTimeout(function () { ask.value = ''; interpret(cmd.value); }, 500); return; }
+    if (cmd.type === 'app') { closeOverlays(); return cmd.value === 'live' ? openLive() : openApp(cmd.value); }
+    if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
+    if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
+    if (cmd.type === 'mode') return setMode(!kidsMode);
+    if (cmd.type === 'energy') { closeOverlays(); return openEnergy(); }
+    if (cmd.type === 'reload') return location.reload();
+    if (cmd.type === 'restorePage') {
+      try { var data = JSON.parse(cmd.value || '{}'); PAGE_KEYS.forEach(function (k) { if (data[k] !== undefined) localStorage.setItem(k, data[k]); }); } catch (e) {}
+      return location.reload();
+    }
+    if (cmd.type === 'heating') return say(cmd.title, cmd.body);
+    if (cmd.type === 'forget') { try { localStorage.removeItem('hearth.feedback'); localStorage.removeItem('hearth.sinceLearn'); localStorage.removeItem('hearth.asked'); } catch (e) {} return; }
+    if (cmd.type === 'paired') { setPaired(true); if (!$('pairModal').hidden) closeOverlays(); say('Phone connected', 'Use your phone or the remote, whichever’s nearer.'); }
+  };
+
+  // Desktop testing: arrow keys and Enter behave like the remote
+  document.addEventListener('keydown', function (e) {
+    if (window.HearthNative) return;   // on the TV, the Android side sends keys
+    if (e.target && e.target.closest && e.target.closest('#previewKeyBox')) return;
+    var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
+    if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
+    else if (e.key === 'Enter' && document.activeElement !== ask) { e.preventDefault(); select(); }
+  });
+
+  // ---------- Energy: the week from the energy service, kept on the stick ----------
+  // The service does every sum; this only lays it out. Nothing shows if pricing was incomplete.
+  var energy = null, energyTile = null;
+  function money(x) { return '£' + Number(x).toFixed(2); }
+  function shortMoney(x) { return x < 1 ? Math.round(x * 100) + 'p' : money(x); }
+  function setEnergy(d) {
+    if (!d || !d.week || !d.week.days) return;
+    energy = d;
+    if (!energyTile) {
+      energyTile = el('button', 'app focusable', '<span class="swatch" style="background:#2F4A3F"></span><span class="name">Energy</span>');
+      energyTile.type = 'button';
+      energyTile.addEventListener('click', openEnergy);
+      $('apps').appendChild(energyTile);
+      $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
+    }
+    if (!$('energyPanel').hidden) renderEnergy();
+  }
+  window.hearthEnergy = function (d) { if (d && !d.error) setEnergy(d); };
+  try { var ec = N.energyCached ? N.energyCached() : ''; if (ec) setEnergy(JSON.parse(ec)); } catch (e) {}
+  function fetchEnergy() { if (N.energy) N.energy(); }
+  window.HearthPreviewFetch = fetchEnergy;
+  setTimeout(fetchEnergy, window.HearthNative ? 4000 : 0); setInterval(fetchEnergy, 3 * 3600 * 1000);
+  // Browser preview: tv.html?energy opens the Energy screen as soon as the week arrives.
+  if (!window.HearthNative && /[?&]energy/.test(location.search)) {
+    var opener = setInterval(function () { if (energy) { clearInterval(opener); openEnergy(); } }, 300);
+  }
+
+  var SEG = { f: ['#B9BDB8', 'Standing charges'], h: ['#7C9488', 'House'], g: ['#6F7FA8', 'Heating'], w: ['#A9B7D6', 'Hot water and cooking'], c: ['#C9A227', 'Car'] };
+  function dayParts(x) {
+    var split = x.gasHeating !== undefined && x.gasHeating !== null;
+    var parts = [['c', x.car]];
+    if (split) { parts.push(['w', x.gasOther]); parts.push(['g', x.gasHeating]); } else parts.push(['g', x.gas]);
+    parts.push(['h', x.houseUse !== undefined ? x.houseUse : x.houseElec]);
+    if (x.standing !== undefined) parts.push(['f', x.standing]);
+    return parts.filter(function (p) { return p[1] > 0; });
+  }
+  function dayTotal(x) { return dayParts(x).reduce(function (a, p) { return a + p[1]; }, 0); }
+  function dayLine(x) {
+    var name = new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var rank = { h: 0, g: 1, w: 2, c: 3, f: 4 };
+    var parts = dayParts(x).slice().sort(function (a, b) { return rank[a[0]] - rank[b[0]]; });
+    var line = name + ': ' + money(dayTotal(x)) + '. ' + parts.map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+    if (x.usual) {
+      var own = dayTotal(x) - (x.car || 0), diff = own - x.usual;
+      line += '. Without the car, ' + (Math.abs(diff) < 0.1 ? 'about usual' : shortMoney(Math.abs(diff)) + (diff > 0 ? ' more' : ' less') + ' than a usual ' + x.day.replace(/^(\w{3}).*/, function (m) { return { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }[m] || m; }));
+    }
+    return line;
+  }
+  function openEnergy() {
+    if (!energy) { say('Energy isn’t ready yet', 'It’s worked out each morning. Try again later.', true); return; }
+    renderEnergy();
+    $('energyPanel').hidden = false;
+    setFocus($('eBars').children[$('eBars').children.length - 1] || items()[0]);
+    fetchEnergy();
+  }
+  function niceStep(max) {
+    var steps = [0.5, 1, 2, 2.5, 5, 10, 20], i;
+    for (i = 0; i < steps.length; i++) if (max / steps[i] <= 5) return steps[i];
+    return 50;
+  }
+  function renderEnergy() {
+    var d = energy, w = d.week, note = d.note || {};
+    $('eRange').textContent = w.label;
+    $('eMade').textContent = 'Worked out ' + new Date(d.generatedAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    // The five figures: the same parts as the bars, so they add up to the total exactly.
+    var sums = {}, order = ['h', 'g', 'w', 'c', 'f'];
+    w.days.forEach(function (x) { dayParts(x).forEach(function (p) { sums[p[0]] = (sums[p[0]] || 0) + p[1]; }); });
+    var total = order.reduce(function (a, k) { return a + (sums[k] || 0); }, 0);
+    $('eTotal').textContent = money(total);
+    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' less' : ' more') + ' than a usual week' : '';
+    $('eFigs').innerHTML = order.filter(function (k) { return sums[k] > 0; }).map(function (k) {
+      var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
+      return '<div class="e-fig"><div class="k"><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</div><div class="v">' + money(sums[k]) + '</div></div>';
+    }).join('');
+    var rooms = d.heating && d.heating.week;
+    var sources = ['your Octopus meter'];
+    if (rooms) sources.push('Tado');
+    if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
+    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
+    $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
+    $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
+
+    // The chart: a £ scale with gridlines, one stacked bar a day.
+    var plot = $('ePlot'), area = 320 - 38;            // leave room above for the day totals
+    var max = Math.max.apply(null, w.days.map(dayTotal).concat(w.days.map(function (x) { return x.usual || 0; }), [0.5]));
+    var step = niceStep(max), top = Math.ceil(max / step) * step;
+    [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
+    for (var v = 0; v <= top + 1e-9; v += step) {
+      var g = el('div', 'e-grid-line'); g.style.bottom = Math.round(v / top * area) + 'px';
+      g.innerHTML = '<span>£' + (step < 1 ? v.toFixed(2) : v) + '</span>';
+      plot.insertBefore(g, $('eBars'));
+    }
+    var bars = $('eBars'); bars.innerHTML = '';
+    w.days.forEach(function (x) {
+      var b = el('button', 'eday focusable' + (x.odd ? ' odd' : '')); b.type = 'button';
+      var html = '<span class="tot">' + money(dayTotal(x)) + '</span>';
+      dayParts(x).forEach(function (p) {
+        var h = Math.max(3, Math.round(p[1] / top * area));
+        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 30 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
+      });
+      if (x.usual) html += '<span class="usual" style="bottom:' + Math.round(x.usual / top * area) + 'px"></span>';
+      b.innerHTML = html;
+      b.addEventListener('focus', function () { showDay(x); });
+      b.addEventListener('click', function () { showDay(x); });
+      bars.appendChild(b);
+    });
+    $('eDays').innerHTML = w.days.map(function (x) { return '<span><b>' + esc(x.day) + '</b> ' + Number(x.date.slice(8, 10)) + '</span>'; }).join('');
+    var odd = (note.odd_days || [])[0];
+    $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
+    var hasUsual = w.days.some(function (x) { return x.usual; });
+    if (odd) $('eDetail').textContent = odd.line;
+    else $('eDetail').innerHTML = (hasUsual ? '<span class="dash"></span>A usual day for that weekday: the last four weeks, without the car. ' : '') + 'Select a day for its breakdown.';
+
+    // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
+    var cards = $('eCards'); cards.innerHTML = '';
+    var c1 = el('div', 'e-card');
+    var tr = d.trend || [];
+    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
+    c1.querySelector('h4').textContent = note.headline || '';
+    c1.querySelector('p').textContent = note.summary || '';
+    if (tr.length > 2) {
+      var tmax = Math.max.apply(null, tr.map(function (t) { return t.total; }));
+      var avg = tr.reduce(function (a, t) { return a + t.total; }, 0) / tr.length;
+      var strip = el('div', 'e-trend');
+      tr.forEach(function (t, i) {
+        var bar = el('i', i === tr.length - 1 ? 'now' : '');
+        bar.style.height = Math.max(4, Math.round(t.total / tmax * 64)) + 'px';
+        strip.appendChild(bar);
+      });
+      c1.appendChild(strip);
+      var first = new Date(tr[0].from + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      c1.appendChild(el('div', 'e-trend-k', '<span>' + tr.length + ' weeks from ' + esc(first) + '</span><span>Average ' + money(avg) + ' · this week ' + money(tr[tr.length - 1].total) + '</span>'));
+    }
+    cards.appendChild(c1);
+
+    var action = (note.actions || [])[0];
+    var c2 = el('div', 'e-card');
+    if (action) {
+      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p></p><div class="e-verdicts"></div>';
+      c2.querySelector('h4').innerHTML = esc(action.title) + (action.per_year_gbp ? '<span>£' + action.per_year_gbp + ' a year</span>' : '');
+      c2.querySelector('p').textContent = action.detail;
+      [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
+        var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
+        b.addEventListener('click', function () {
+          N.energyFeedback(action.id, v[0]);
+          note.actions = note.actions.filter(function (x) { return x.id !== action.id; });
+          say('Thanks', 'We’ll leave that out for the next 90 days.');
+          renderEnergy(); setFocus($('eBars').children[0]);
+        });
+        c2.querySelector('.e-verdicts').appendChild(b);
+      });
+    } else {
+      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
+      c2.innerHTML = '<div class="e-label">Good to know</div><p></p><div class="how"></div>';
+      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing this week.';
+      c2.querySelector('.how').textContent = good ? good.how_we_know : '';
+    }
+    cards.appendChild(c2);
+
+    if (rooms && rooms.rooms.length) {
+      var c3 = el('div', 'e-card'), list = rooms.rooms.slice(0, 4);
+      var rmax = Math.max.apply(null, list.map(function (r) { return r.cost; }).concat([sums.w || rooms.hotWaterAndCooking, 0.01]));
+      var row = function (name, cost, hours, colour, cold) {
+        return '<tr><td style="width:34%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
+          + '<td class="n' + (cold ? ' cold' : '') + '" style="width:26%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
+      };
+      var roomNote = function (r) {
+        var t = r.hoursPerDay + ' h';
+        if (r.temp != null) t += ' · ' + r.temp.toFixed(1) + '°' + (r.target != null ? '/' + Math.round(r.target) + '°' : '');
+        return t;
+      };
+      c3.innerHTML = '<div class="e-label">Gas this week, by room</div><table class="e-rooms">'
+        + list.map(function (r) { return row(r.room, r.cost, roomNote(r), SEG.g[0], r.temp != null && r.target != null && r.temp < r.target - 1); }).join('')
+        + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
+        + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
+      cards.appendChild(c3);
+    }
+  }
+  function showDay(x) { $('eDetail').className = 'e-detail'; $('eDetail').textContent = dayLine(x); }
+
+  // ---------- Start ----------
+  markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick(); mirror();
+  var p0 = JSON.parse(N.pairing());
+  setPaired(!!p0.paired);
+  var seen = false;
+  try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
+  var preview = !window.HearthNative && /[?&]energy/.test(location.search);
+  if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(ask);
+})();
+</script>
+</body>
+</html>

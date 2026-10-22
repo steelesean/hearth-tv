@@ -1,0 +1,44 @@
+/* Shared by the TV page and the phone remote: tokens, fonts and the children's tile artwork. */
+@font-face { font-family: "Figtree"; src: url("fonts/figtree.woff2") format("woff2"); font-weight: 300 900; font-display: swap; }
+@font-face { font-family: "Newsreader"; src: url("fonts/newsreader.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+
+:root {
+  --ground: #ECEBE7;      /* warm stone, slightly green-grey */
+  --surface: #F7F6F3;     /* raised panels */
+  --ink: #1F2321;         /* primary text */
+  --ink-soft: #6B706C;    /* secondary text */
+  --line: #D6D5CF;        /* hairlines */
+  --focus: #2F4A3F;       /* deep moss, the one accent */
+  --focus-glow: rgba(47, 74, 63, 0.18);
+  --ok: #3F8F5E;          /* connected state */
+  --bad: #B23B2E;         /* errors */
+  --font-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Figtree", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* Bespoke CSS artwork per title. Sizes are for the TV tile; the phone scales the layer down. */
+.art { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.art::before, .art::after { content: ""; position: absolute; border-radius: 50%; }
+.k-gruffalo { background: linear-gradient(160deg, #4E6B45, #2E4430); }
+.k-gruffalo .art::before { width: 150px; height: 150px; right: -30px; top: -30px; background: #C98A3E; opacity: .9; }
+.k-gruffalo .art::after { width: 26px; height: 26px; right: 64px; top: 46px; background: #F2E3B3; box-shadow: 46px 0 0 #F2E3B3; }
+.k-broom { background: linear-gradient(170deg, #3C4F78, #1F2B47); }
+.k-broom .art::before { width: 90px; height: 90px; right: 34px; top: 26px; background: #F3E6B9; }
+.k-broom .art::after { width: 90px; height: 90px; right: 10px; top: 14px; background: #34466D; }
+.k-bluey { background: linear-gradient(160deg, #7FB2D9, #4C86B8); }
+.k-bluey .art::before { width: 220px; height: 120px; left: -40px; bottom: -60px; background: #9AC77A; border-radius: 50% 50% 0 0; }
+.k-bluey .art::after { width: 50px; height: 50px; right: 40px; top: 30px; background: #F7D774; }
+.k-cars { background: linear-gradient(160deg, #D5452F, #9B2A20); }
+.k-cars .art::before { width: 74px; height: 110px; right: 40px; top: 18px; background: #F4C84A; border-radius: 0; clip-path: polygon(58% 0, 10% 56%, 44% 56%, 30% 100%, 90% 38%, 54% 38%, 72% 0); }
+.k-cars .art::after { width: 64px; height: 64px; right: 128px; top: 34px; background: radial-gradient(circle, #B9BDB8 0 30%, #262624 31% 100%); box-shadow: 0 0 0 5px rgba(255,255,255,.14); }
+.k-zog { background: linear-gradient(160deg, #B5545A, #7F343C); }
+.k-zog .art::before { width: 70px; height: 70px; right: 30px; top: 26px; background: #F2C46B; transform: rotate(45deg); border-radius: 12px; }
+.k-zog .art::after { width: 180px; height: 180px; left: -60px; top: -90px; background: rgba(255,255,255,.12); }
+.k-stickman { background: linear-gradient(160deg, #8A7A5E, #5D5240); }
+.k-stickman .art::before { width: 8px; height: 110px; right: 70px; top: 24px; background: #E9DDC4; border-radius: 4px; transform: rotate(12deg); }
+.k-stickman .art::after { width: 36px; height: 36px; right: 58px; top: 10px; background: #E9DDC4; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

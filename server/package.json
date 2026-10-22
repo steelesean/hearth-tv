@@ -2,8 +2,10 @@
   "name": "hearth-assistant",
   "private": true,
   "type": "module",
-  "description": "Turns requests from the Hearth TV home screen into actions, using Claude.",
+  "description": "Hearth's assistant and energy week, using Claude.",
   "dependencies": {
-    "@anthropic-ai/sdk": "0.133.0"
+    "@anthropic-ai/sdk": "0.133.0",
+    "@vercel/blob": "2.8.0",
+    "qrcode": "1.5.4"
   }
 }

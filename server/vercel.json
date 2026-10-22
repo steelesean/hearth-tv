@@ -1,0 +1,14 @@
+{
+  "cleanUrls": true,
+  "crons": [
+    {
+      "path": "/api/energy/refresh",
+      "schedule": "30 4 * * *"
+    }
+  ],
+  "functions": {
+    "api/energy/refresh.js": {
+      "maxDuration": 60
+    }
+  }
+}
