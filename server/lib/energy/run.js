@@ -124,7 +124,7 @@ export async function refresh(now = Date.now()) {
   });
   // Heating efficiency before and after the roof insulation, from up to two years of daily gas.
   try {
-    facts.efficiency = await heatingEfficiency(meters, gasPricing.at(-1)?.rates?.unit?.at(-1)?.p, now);
+    facts.efficiency = await heatingEfficiency(meters, gasPricing.at(-1)?.rates?.unit?.at(-1)?.p, now, facts.gasUnits);
   } catch (e) {
     facts.efficiency = { available: false, reason: "Couldn't work it out: " + e.message };
   }

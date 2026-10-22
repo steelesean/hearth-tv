@@ -111,7 +111,7 @@
         <div class="card" style="margin-top: 18px;" id="effcard" hidden>
           <div class="row" style="justify-content:space-between;"><strong>Heating efficiency</strong><span class="muted" id="effwhen" style="font-size:13px;"></span></div>
           <p id="effline" style="margin:8px 0 0;"></p>
-          <svg id="effchart" viewBox="0 0 440 240" style="width:100%;height:auto;margin-top:10px;" role="img"></svg>
+          <svg id="effchart" viewBox="0 0 440 250" style="width:100%;height:auto;margin-top:10px;" role="img"></svg>
           <div class="key" id="effkey"></div>
           <div class="how" id="effhow"></div>
         </div>
@@ -296,23 +296,26 @@ function showEfficiency(ef) {
   if (!ef) return;
   if (!ef.available) { $("effline").textContent = ef.reason || "Not enough history yet."; $("effchart").innerHTML = ""; $("effkey").textContent = ""; $("effhow").textContent = ""; return; }
   const less = ef.change.pct <= 0;
-  $("effwhen").textContent = "Before and after the " + ef.change.what;
-  $("effline").innerHTML = "<strong>" + Math.abs(ef.change.pct) + "% " + (less ? "less" : "more") + " gas for the same cold</strong> since January: "
-    + ef.after.kwhPerDegreeDay + " kWh per degree day, against " + ef.before.kwhPerDegreeDay + " before."
-    + (ef.thisSeason ? " This autumn's " + ef.thisSeason.days + " cold days used " + ef.thisSeason.actualKwh.toLocaleString("en-GB") + " kWh, where the house as it was would have used about " + ef.thisSeason.beforeKwh.toLocaleString("en-GB") + " kWh" + (ef.thisSeason.savedGbp != null ? " (£" + ef.thisSeason.savedGbp + ")" : "") + "." : "")
-    + (ef.perYear?.gbp != null ? " Over a year like the last one: about £" + ef.perYear.gbp + "." : "");
+  const mon = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+  const at5 = (f) => Math.round(f.baseKwh + f.kwhPerDegreeDay * 10.5);       // a 5°C day is 10.5 degrees below 15.5
+  $("effwhen").textContent = "Since the " + ef.change.what;
+  $("effline").innerHTML = "<strong>The house needs " + Math.abs(ef.change.pct) + "% " + (less ? "less" : "more") + " gas to stay warm</strong> since the " + ef.change.what + " in January."
+    + "<br>On a 5°C day it now uses about " + at5(ef.after) + " kWh of gas, " + (less ? "down" : "up") + " from " + at5(ef.before) + " kWh."
+    + (ef.thisSeason?.savedGbp != null ? "<br>This autumn so far, that's saved about £" + ef.thisSeason.savedGbp + (ef.perYear?.gbp != null ? ", and it's worth about £" + ef.perYear.gbp + " over a year like the last one." : ".") : "");
   // Each dot is a day: how cold it was against the gas used. Lines are the fitted trend.
-  const W = 440, H = 240, L = 40, B = 28, all = [...ef.points.before, ...ef.points.after];
+  const W = 440, H = 250, L = 40, B = 34, all = [...ef.points.before, ...ef.points.after];
   const xmax = Math.ceil(Math.max(...all.map((p) => p[0]), 10)), ymax = Math.ceil(Math.max(...all.map((p) => p[1]), 10) / 10) * 10;
   const x = (v) => L + (v / xmax) * (W - L - 8), y = (v) => H - B - (v / ymax) * (H - B - 8);
   const dots = (ps, c) => ps.map(([a, b]) => `<circle cx="${x(a).toFixed(1)}" cy="${y(b).toFixed(1)}" r="2.6" fill="${c}" fill-opacity="0.55"></circle>`).join("");
   const line = (f, c) => { const x0 = 2, x1 = xmax; return `<line x1="${x(x0)}" y1="${y(f.baseKwh + f.kwhPerDegreeDay * x0)}" x2="${x(x1)}" y2="${y(f.baseKwh + f.kwhPerDegreeDay * x1)}" stroke="${c}" stroke-width="2.5"></line>`; };
   const grid = [0, ymax / 2, ymax].map((v) => `<line x1="${L}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"></line><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`).join("");
   $("effchart").innerHTML = grid + dots(ef.points.before, "var(--fixed)") + dots(ef.points.after, "var(--gas)") + line(ef.before, "var(--muted)") + line(ef.after, "var(--gas)")
-    + `<text x="${W - 8}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">Colder →  (degrees below 15.5°C, daily average)</text><text x="${L + 8}" y="24" font-size="11" fill="var(--muted)">Gas, kWh a day</text>`;
+    + [13, 8, 3, -2].filter((c) => 15.5 - c <= xmax).map((c) => `<text x="${x(15.5 - c)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${c}°</text>`).join("")
+    + `<text x="${W - 8}" y="${H - 1}" text-anchor="end" font-size="11" fill="var(--muted)">That day's average temperature →</text><text x="${L + 8}" y="24" font-size="11" fill="var(--muted)">Gas used that day (kWh)</text>`;
   $("effchart").setAttribute("aria-label", "Daily gas against how cold it was, before and after the " + ef.change.what);
-  $("effkey").innerHTML = '<span style="color:var(--fixed)">●</span> Before (' + ef.before.from + " to " + ef.before.to + ", " + ef.before.days + ' days) <span style="color:var(--gas)">●</span> Since (' + ef.after.days + " days)";
-  $("effhow").textContent = "How we know: daily gas from Octopus against daily average temperatures for " + (ef.area || "your area") + " (Open-Meteo). Only days cold enough to need heating. How well the line fits: " + ef.before.fit + " before, " + ef.after.fit + " since (1 is perfect). Anything else that changed, like thermostat settings or who was home, is mixed in.";
+  $("effkey").innerHTML = '<span style="color:var(--fixed)">●</span> Before, ' + mon(ef.before.from) + " to " + mon(ef.before.to) + ' &nbsp; <span style="color:var(--gas)">●</span> Since, ' + mon(ef.after.from) + " onwards";
+  $("effhow").textContent = "How we know: each dot is a day, with the gas your meter recorded and how cold it was in " + (ef.area || "your area") + ". Comparing days of the same cold means a colder winter can't make the house look worse. "
+    + ef.before.days + " cold days before the work and " + ef.after.days + " since. Days vary (sun, wind, who's at home), so treat the figure as a good estimate, not exact. Anything else that changed since January, like thermostat settings, shows up here too.";
 }
 function median(xs) { const a = [...xs].sort((p, q) => p - q); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
 function showDay(i) {

@@ -58,7 +58,7 @@ const describe = (days, f) => ({
  * Before and after the change, from as much gas history as Octopus holds (asks for two years).
  * gasPence: today's gas unit rate, to put the difference in pounds.
  */
-export async function heatingEfficiency(meters, gasPence, now = Date.now()) {
+export async function heatingEfficiency(meters, gasPence, now = Date.now(), unit = null) {
   if (!meters.gas) return { available: false, reason: "No gas meter on this account." };
   if (!meters.postcode) return { available: false, reason: "Octopus didn't give the home's postcode, so there's no local weather." };
   const from = new Date(now - 730 * DAY);
@@ -67,8 +67,10 @@ export async function heatingEfficiency(meters, gasPence, now = Date.now()) {
 
   const gas = new Map();
   for (const r of rows) { const d = local(r.t).date; gas.set(d, (gas.get(d) || 0) + r.v); }
+  // Same units as the main analysis (m³ or kWh). Failing that, a typical day: a few m³, or tens of kWh.
   const forced = (process.env.GAS_UNITS || "").toLowerCase();
-  const isKwh = forced ? forced === "kwh" : Math.max(...gas.values()) > 15;
+  const typical = [...gas.values()].sort((a, b) => a - b)[gas.size >> 1];
+  const isKwh = forced ? forced === "kwh" : unit ? unit === "kWh" : typical > 8;
   const dates = [...gas.keys()].sort();
   const temps = await temperatures(where, dates[0], local(now - DAY).date);
 
@@ -79,7 +81,7 @@ export async function heatingEfficiency(meters, gasPence, now = Date.now()) {
   const heating = all.filter((d) => d.dd >= HEATING_DAY);
   const before = heating.filter((d) => d.date < CHANGE.from), after = heating.filter((d) => d.date > CHANGE.to);
   const out = {
-    available: false, change: CHANGE, area: where.area, historyFrom: dates[0],
+    available: false, change: CHANGE, unit: isKwh ? "kWh" : "m³, converted to kWh", area: where.area, historyFrom: dates[0],
     heatingDays: { before: before.length, after: after.length },
   };
   if (before.length < MIN_DAYS || after.length < MIN_DAYS) {
