@@ -127,9 +127,12 @@ function render(d) {
 $("form").addEventListener("submit", (e) => { e.preventDefault(); key = $("key").value.trim(); store.set(key); load(); });
 $("refresh").addEventListener("click", async () => {
   $("status").textContent = "Reading Octopus and working it out. About half a minute…";
-  const r = await fetch("/api/energy/refresh", { headers: { "x-hearth-key": key } });
+  let r;
+  try { r = await fetch("/api/energy/refresh", { headers: { "x-hearth-key": key } }); }
+  catch (e) { $("status").innerHTML = '<span class="error">Couldn\'t reach the service: ' + esc(e.message) + "</span>"; return; }
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || "That didn't work.") + "</span>"; return; }
+  if (!r.ok) { $("status").innerHTML = '<span class="error">' + esc(d.error || ("That didn't work (" + r.status + ").")) + "</span>"; return; }
+  if (!d.ok) { $("status").innerHTML = '<span class="error">Unexpected reply (' + r.status + "): " + esc(JSON.stringify(d).slice(0, 300)) + "</span>"; return; }
   load();
 });
 load();
