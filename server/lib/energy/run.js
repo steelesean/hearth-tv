@@ -93,20 +93,20 @@ export async function refresh(now = Date.now()) {
   }))).filter(Boolean);
 
   // Tado: which rooms called for heat, for each day of gas readings. Optional.
-  let heat = null, tadoInfo = { connected: false };
+  let heat = null, roomTemps = null, tadoInfo = { connected: false };
   if (gas.length) {
     const dates = [...new Set(gas.map((r) => local(r.t).date))];
     try {
       const h = await heatHistory(dates, local);
       tadoInfo = { connected: h.connected, rooms: h.rooms, fetched: h.fetched, missingDays: h.missing, requestsLeft: h.requestsLeft };
-      if (Object.keys(h.days).length) heat = h.days;
+      if (Object.keys(h.days).length) { heat = h.days; roomTemps = h.temps; }
     } catch (e) {
       tadoInfo = { connected: true, error: e.message };
     }
   }
 
   const facts = analyse({
-    elec, gas, elecPricing, gasPricing, alternatives, now, heat, ohme,
+    elec, gas, elecPricing, gasPricing, alternatives, now, heat, roomTemps, ohme,
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
   // Leave out anything the household said they already do, or that isn't for them.

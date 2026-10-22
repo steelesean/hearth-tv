@@ -313,6 +313,20 @@ export function analyse(input) {
   }
   const oddDates = new Set(odd.map((o) => o.date));
 
+  // A usual day, for the marker on each bar: the same weekday over the previous four weeks
+  // (recent, so the weather is similar), house, gas and standing charges, without the car.
+  const usualDay = (date) => {
+    const same = [1, 2, 3, 4].map((n) => daily.get(addDays(date, -7 * n))).filter((x) => x?.complete);
+    return same.length >= 3 ? round(median(same.map((x) => x.house + x.gas))) : null;
+  };
+
+  // The last eight Monday-to-Sunday weeks, for the trend.
+  const trend = [7, 6, 5, 4, 3, 2, 1, 0].map((n) => {
+    const days = weekDates(addDays(monday, -7 * n)).map((x) => daily.get(x));
+    if (!days.every((x) => x?.complete)) return null;
+    return { from: addDays(monday, -7 * n), total: round(sum(days.map((x) => x.total))), elec: round(sum(days.map((x) => x.houseElec + x.car))), gas: round(sum(days.map((x) => x.gas))), car: round(sum(days.map((x) => x.car))) };
+  }).filter(Boolean);
+
   // Always-on: the lowest house half-hour between 1am and 5am, typical over the last 28 nights.
   const nights = new Map();
   for (const r of house) {
@@ -434,8 +448,17 @@ export function analyse(input) {
       rooms: Object.entries(t).map(([room, v]) => ({ room, cost: gbp(v.pence), kwh: round(v.kwh, 1), hoursPerDay: round(v.hours / n, 1) })).sort((a, b) => b.cost - a.cost),
     };
   };
+  const weekRooms = roomTotals(week.map((d) => d.date));
+  if (weekRooms && input.roomTemps) {
+    for (const r of weekRooms.rooms) {
+      const ts = week.map((d) => input.roomTemps[d.date]?.[r.room]).filter(Boolean);
+      const t = ts.map((x) => x.temp).filter((x) => x != null), g = ts.map((x) => x.target).filter((x) => x != null);
+      r.temp = t.length ? round(sum(t) / t.length, 1) : null;
+      r.target = g.length ? round(sum(g) / g.length, 1) : null;
+    }
+  }
   const heating = Object.keys(gasSplit).length ? {
-    week: roomTotals(week.map((d) => d.date)),
+    week: weekRooms,
     period: roomTotals(Object.keys(gasSplit)),
     baseline: hotWaterBaseline,
     note: "Gas split by when each room called for heat in Tado, weighted by how hard. Gas with no room calling is hot water and cooking. "
@@ -457,8 +480,9 @@ export function analyse(input) {
       house: round(sum(week.map((d) => d.house))),
       car: round(sum(week.map((d) => d.car))),
       gas: round(sum(week.map((d) => d.gas))),
-      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), profile: dayProfile(house, car, gas.readings, d.date, gasSplit[d.date]) })),
+      days: week.map((d) => ({ ...d, day: weekdayOf(d.date), odd: oddDates.has(d.date), usual: usualDay(d.date), profile: dayProfile(house, car, gas.readings, d.date, gasSplit[d.date]) })),
     },
+    trend,
     odd, baseline, peak, shift, overnight, heating, car: carSummary, tariff, forecast,
     gasUnits: gas.unit,
     hasGas: gas.readings.length > 0,

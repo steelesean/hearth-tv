@@ -138,8 +138,10 @@ export async function status() {
 }
 
 // ---------- Heating history ----------
-// One day report per room per day says when that room called for heat, and how hard. Each day
-// is boiled down to 48 half-hour weights per room and kept, so it's only ever fetched once.
+// One day report per room per day says when that room called for heat, and how hard, plus its
+// temperatures. Each day is boiled down to 48 half-hour weights per room, and the room's average
+// temperature and heating target, and kept, so it's only ever fetched once. Days kept before
+// temperatures were added (plain weights) are fetched again if they're in the last ten days.
 
 const LEVEL = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
 const dayPath = (date) => "energy/tado/" + date + ".json";
@@ -169,6 +171,21 @@ function weights(report, slotOf, date) {
   return w.map((x) => Math.round(x * 100) / 100);
 }
 
+/** The room's average temperature over the day, and its average target while heating was on. */
+function temps(report) {
+  const pts = (report?.measuredData?.insideTemperature?.dataPoints || []).map((p) => p.value?.celsius).filter((x) => typeof x === "number");
+  let on = 0, sumT = 0;
+  for (const iv of report?.settings?.dataIntervals || []) {
+    const st = iv.value || {};
+    const c = st.temperature?.celsius;
+    if (st.power !== "ON" || typeof c !== "number") continue;
+    const dur = Date.parse(iv.to) - Date.parse(iv.from);
+    if (dur > 0) { on += dur; sumT += c * dur; }
+  }
+  const r1 = (x) => Math.round(x * 10) / 10;
+  return { temp: pts.length ? r1(pts.reduce((a, b) => a + b, 0) / pts.length) : null, target: on ? r1(sumT / on) : null };
+}
+
 /**
  * Room weights for each date asked for: { date: { room: [48] } }. Stored days come from storage;
  * missing ones are fetched newest first, up to `budget` requests, so a 90-day catch-up spreads
@@ -179,33 +196,35 @@ export async function heatHistory(dates, slotOf, budget = 100) {
   if (!s.refresh) return { days: {}, connected: false, missing: dates.length };
   if (!s.homeId || !s.rooms?.length) await probe();                 // learn the home and rooms first
   Object.assign(s, await readState());
-  const out = {};
+  const out = {}, temp = {};
   const todo = [];
+  const today = slotOf(Date.now()).date;
+  const recent = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
   for (const d of dates) {
     const kept = await readDay(d);
-    if (kept) out[d] = kept;
+    if (kept && kept.v === 2) { out[d] = kept.rooms; temp[d] = kept.temps; }
+    else if (kept && d < recent) out[d] = kept;               // older days: weights are enough
     else todo.push(d);
   }
   todo.sort().reverse();
-  const today = slotOf(Date.now()).date;
   let token = null, used = 0, left = null;
   for (const d of todo) {
     if (used + s.rooms.length > budget) break;
     if (left !== null && left < 300) break;                       // leave plenty for the TV
     token = token || (await accessToken());
-    const day = {};
+    const day = {}, dayTemps = {};
     const replies = await Promise.all(s.rooms.map((room) => call(token, API + "homes/" + s.homeId + "/zones/" + room.id + "/dayReport?date=" + d).catch(() => null)));
     used += s.rooms.length;
     replies.forEach((r, i) => {
       if (!r) return;
       const m = /r=(\d+)/.exec(r.left || "");
       if (m) left = left === null ? Number(m[1]) : Math.min(left, Number(m[1]));
-      if (r.status === 200) day[s.rooms[i].name] = weights(r.json, slotOf, d);
+      if (r.status === 200) { day[s.rooms[i].name] = weights(r.json, slotOf, d); dayTemps[s.rooms[i].name] = temps(r.json); }
     });
     if (Object.keys(day).length) {
-      out[d] = day;
-      if (d < today) await put(dayPath(d), JSON.stringify(day), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+      out[d] = day; temp[d] = dayTemps;
+      if (d < today) await put(dayPath(d), JSON.stringify({ v: 2, rooms: day, temps: dayTemps }), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
     }
   }
-  return { days: out, connected: true, rooms: s.rooms.map((r) => r.name), fetched: used, missing: dates.filter((d) => !out[d]).length, requestsLeft: left };
+  return { days: out, temps: temp, connected: true, rooms: s.rooms.map((r) => r.name), fetched: used, missing: dates.filter((d) => !out[d]).length, requestsLeft: left };
 }

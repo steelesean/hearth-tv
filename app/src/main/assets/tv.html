@@ -213,6 +213,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .energy .e-rooms td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 14px; }
 .energy .e-rooms .track i { display: block; height: 100%; border-radius: 6px; }
+.energy .eday .usual { position: absolute; left: -16px; right: -16px; height: 0; pointer-events: none; }
+.energy .eday .usual::before, .energy .eday .usual::after { content: ""; position: absolute; top: -2px; width: 12px; border-top: 4px solid var(--ink); }
+.energy .eday .usual::before { left: 0; } .energy .eday .usual::after { right: 0; }
+.energy .e-detail .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
+.energy .e-trend { display: flex; align-items: flex-end; height: 64px; margin-top: 12px; }
+.energy .e-trend i { flex: 1; margin: 0 4px; background: var(--line); border-radius: 5px 5px 2px 2px; }
+.energy .e-trend i.now { background: var(--focus); }
+.energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
+.energy .e-card p.two { -webkit-line-clamp: 2; }
+.energy .e-rooms td.cold { color: #B5542D; }
 .energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
 .energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
 [hidden] { display: none !important; }
@@ -1089,7 +1099,12 @@ body { color: var(--ink); font-family: var(--font-ui); }
     var name = new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
     var rank = { h: 0, g: 1, w: 2, c: 3, f: 4 };
     var parts = dayParts(x).slice().sort(function (a, b) { return rank[a[0]] - rank[b[0]]; });
-    return name + ': ' + money(dayTotal(x)) + '. ' + parts.map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+    var line = name + ': ' + money(dayTotal(x)) + '. ' + parts.map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+    if (x.usual) {
+      var own = dayTotal(x) - (x.car || 0), diff = own - x.usual;
+      line += '. Without the car, ' + (Math.abs(diff) < 0.1 ? 'about usual' : shortMoney(Math.abs(diff)) + (diff > 0 ? ' more' : ' less') + ' than a usual ' + x.day.replace(/^(\w{3}).*/, function (m) { return { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }[m] || m; }));
+    }
+    return line;
   }
   function openEnergy() {
     if (!energy) { say('Energy isn’t ready yet', 'It’s worked out each morning. Try again later.', true); return; }
@@ -1128,7 +1143,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
     // The chart: a £ scale with gridlines, one stacked bar a day.
     var plot = $('ePlot'), area = 320 - 38;            // leave room above for the day totals
-    var max = Math.max.apply(null, w.days.map(dayTotal).concat([0.5]));
+    var max = Math.max.apply(null, w.days.map(dayTotal).concat(w.days.map(function (x) { return x.usual || 0; }), [0.5]));
     var step = niceStep(max), top = Math.ceil(max / step) * step;
     [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
     for (var v = 0; v <= top + 1e-9; v += step) {
@@ -1144,6 +1159,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
         var h = Math.max(3, Math.round(p[1] / top * area));
         html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 30 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
       });
+      if (x.usual) html += '<span class="usual" style="bottom:' + Math.round(x.usual / top * area) + 'px"></span>';
       b.innerHTML = html;
       b.addEventListener('focus', function () { showDay(x); });
       b.addEventListener('click', function () { showDay(x); });
@@ -1152,14 +1168,30 @@ body { color: var(--ink); font-family: var(--font-ui); }
     $('eDays').innerHTML = w.days.map(function (x) { return '<span><b>' + esc(x.day) + '</b> ' + Number(x.date.slice(8, 10)) + '</span>'; }).join('');
     var odd = (note.odd_days || [])[0];
     $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
-    $('eDetail').textContent = odd ? odd.line : 'Select a day for its breakdown.';
+    var hasUsual = w.days.some(function (x) { return x.usual; });
+    if (odd) $('eDetail').textContent = odd.line;
+    else $('eDetail').innerHTML = (hasUsual ? '<span class="dash"></span>A usual day for that weekday: the last four weeks, without the car. ' : '') + 'Select a day for its breakdown.';
 
     // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
     var cards = $('eCards'); cards.innerHTML = '';
     var c1 = el('div', 'e-card');
-    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p></p>';
+    var tr = d.trend || [];
+    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
     c1.querySelector('h4').textContent = note.headline || '';
     c1.querySelector('p').textContent = note.summary || '';
+    if (tr.length > 2) {
+      var tmax = Math.max.apply(null, tr.map(function (t) { return t.total; }));
+      var avg = tr.reduce(function (a, t) { return a + t.total; }, 0) / tr.length;
+      var strip = el('div', 'e-trend');
+      tr.forEach(function (t, i) {
+        var bar = el('i', i === tr.length - 1 ? 'now' : '');
+        bar.style.height = Math.max(4, Math.round(t.total / tmax * 64)) + 'px';
+        strip.appendChild(bar);
+      });
+      c1.appendChild(strip);
+      var first = new Date(tr[0].from + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      c1.appendChild(el('div', 'e-trend-k', '<span>' + tr.length + ' weeks from ' + esc(first) + '</span><span>Average ' + money(avg) + ' · this week ' + money(tr[tr.length - 1].total) + '</span>'));
+    }
     cards.appendChild(c1);
 
     var action = (note.actions || [])[0];
@@ -1189,14 +1221,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (rooms && rooms.rooms.length) {
       var c3 = el('div', 'e-card'), list = rooms.rooms.slice(0, 4);
       var rmax = Math.max.apply(null, list.map(function (r) { return r.cost; }).concat([sums.w || rooms.hotWaterAndCooking, 0.01]));
-      var row = function (name, cost, hours, colour) {
-        return '<tr><td style="width:40%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
-          + '<td class="n" style="width:20%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
+      var row = function (name, cost, hours, colour, cold) {
+        return '<tr><td style="width:34%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
+          + '<td class="n' + (cold ? ' cold' : '') + '" style="width:26%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
+      };
+      var roomNote = function (r) {
+        var t = r.hoursPerDay + ' h';
+        if (r.temp != null) t += ' · ' + r.temp.toFixed(1) + '°' + (r.target != null ? '/' + Math.round(r.target) + '°' : '');
+        return t;
       };
       c3.innerHTML = '<div class="e-label">Gas this week, by room</div><table class="e-rooms">'
-        + list.map(function (r) { return row(r.room, r.cost, r.hoursPerDay + ' h a day', SEG.g[0]); }).join('')
+        + list.map(function (r) { return row(r.room, r.cost, roomNote(r), SEG.g[0], r.temp != null && r.target != null && r.temp < r.target - 1); }).join('')
         + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
-        + '<div class="how">An estimate: gas shared by when each room called for heat in Tado.</div>';
+        + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
       cards.appendChild(c3);
     }
   }
