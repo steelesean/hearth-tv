@@ -327,6 +327,15 @@ body { color: var(--ink); font-family: var(--font-ui); }
   </div>
 </div>
 
+<script>
+  // Browser previews only: show any script error on screen, so a broken preview says why.
+  if (!window.HearthNative) window.addEventListener('error', function (e) {
+    var d = document.getElementById('previewError') || document.body.appendChild(document.createElement('pre'));
+    d.id = 'previewError';
+    d.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;background:#B5542D;color:#fff;font:14px/1.4 monospace;padding:12px;border-radius:8px;white-space:pre-wrap';
+    d.textContent += (e.message || 'Error') + (e.filename ? '  [' + e.filename.split('/').pop() + ':' + e.lineno + ']' : (e.target && e.target.src ? '  [could not load ' + e.target.src + ']' : '')) + '\n';
+  }, true);
+</script>
 <script src="config.js"></script>
 <script src="qrcode.js"></script>
 <script>
