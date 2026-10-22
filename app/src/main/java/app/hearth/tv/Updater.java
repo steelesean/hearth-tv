@@ -62,7 +62,8 @@ final class Updater {
     /** Downloads the update and hands it to Fire TV's installer. Blocking. */
     static void install(Context context) throws Exception {
         JSONObject update = available;
-        if (update == null) throw new Exception("No update waiting");
+        if (update == null) { checkedAt = 0; update = check(context); }   // e.g. from the recovery screen
+        if (update == null) throw new Exception("Hearth is already on the latest version");
         PackageInstaller installer = context.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         int id = installer.createSession(params);

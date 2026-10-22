@@ -335,6 +335,29 @@ body { color: var(--ink); font-family: var(--font-ui); }
   </div>
 </div>
 
+<div id="recovery" hidden style="position:fixed;left:0;top:0;right:0;bottom:0;z-index:100;background:#ECEBE7;color:#1F2321;font:28px/1.4 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+  <div style="font-size:52px;margin-bottom:16px">Hearth hit a problem starting up</div>
+  <div style="color:#3A3F3C;max-width:1100px">Press OK to install the latest update, which usually fixes it. Your apps still work from the Fire TV home screen.</div>
+  <button id="recoveryBtn" type="button" style="margin-top:36px;font:600 30px system-ui,sans-serif;background:#1F2321;color:#F7F6F3;border:0;border-radius:999px;padding:18px 40px;box-shadow:0 0 0 6px #ECEBE7,0 0 0 11px #2F4A3F">Install the latest update</button>
+  <div id="recoveryMsg" style="margin-top:22px;font-size:20px;color:#6B706C"></div>
+</div>
+<script>
+  // On the TV: if the page fails while starting, show a way to install the latest update, so a
+  // broken release can always be fixed with the remote. hearthStarted is set at the end of start-up.
+  if (window.HearthNative) {
+    window.addEventListener('error', function (e) {
+      if (window.hearthStarted) return;
+      var r = document.getElementById('recovery'); if (!r) return;
+      r.hidden = false;
+      document.getElementById('recoveryMsg').textContent = (e.message || 'Error') + (e.lineno ? ' (line ' + e.lineno + ')' : '');
+      var b = document.getElementById('recoveryBtn');
+      b.onclick = function () { try { HearthNative.installUpdate(); b.textContent = 'Downloading… choose Install when asked'; } catch (x) {} };
+      try { b.focus(); } catch (x) {}
+      // The remote's keys come in through hearthKey: make OK press the button whatever else broke.
+      window.hearthKey = function (k) { if (k === 'ok') b.onclick(); };
+    });
+  }
+</script>
 <script>
   // Browser previews only: show any script error on screen, so a broken preview says why.
   if (!window.HearthNative) window.addEventListener('error', function (e) {
@@ -1354,6 +1377,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
   var preview = !window.HearthNative && /[?&]energy/.test(location.search);
   if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(homeTarget());
+  window.hearthStarted = true;
 })();
 </script>
 </body>
