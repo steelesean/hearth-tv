@@ -227,7 +227,8 @@ public class MainActivity extends Activity {
 
         /** The waiting update as JSON ({version}), or "" if Hearth is up to date. Never blocks. */
         @JavascriptInterface public String update() {
-            final JSONObject u = updateCache;
+            // The hourly background check may have found one since this screen last asked.
+            final JSONObject u = updateCache != null ? updateCache : Updater.waiting();
             return u == null ? "" : u.toString();
         }
 
