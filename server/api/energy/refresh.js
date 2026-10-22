@@ -14,6 +14,7 @@ export default async function handler(req, res) {
   try {
     const facts = await refresh();
     console.log("Energy: worked out", facts.week.label, facts.source, "Tado:", JSON.stringify(facts.tado), "heating:", !!facts.heating, "Ohme:", JSON.stringify(facts.ohme), "Polestar:", JSON.stringify(facts.polestar), "car:", JSON.stringify({ source: facts.car.source, kwh: facts.car.ohmeKwh, miles: facts.car.miles, milesFrom: facts.car.milesFrom, ohmeMiles: facts.car.ohmeMiles, ppm: facts.car.pencePerMile }), "slots:", JSON.stringify(facts.dispatches), "baseline:", JSON.stringify(facts.heating?.baseline));
+    console.log("Energy: heating efficiency", JSON.stringify(facts.efficiency));
     step = "saving to storage";
     await save(facts);
     step = "reading it back from storage";

@@ -75,6 +75,18 @@
         <div class="label">This week</div>
         <div class="row" style="align-items: baseline; gap: 14px; margin-top: 6px;"><span class="big" id="total"></span><span id="vs" class="muted"></span></div>
         <div class="muted" id="split" style="margin-top:6px;"></div>
+        <div class="card" style="margin-top: 18px;" id="monthcard" hidden>
+          <div class="row" style="justify-content:space-between;align-items:baseline;"><strong id="monthname"></strong><span class="muted" id="monthdays" style="font-size:13px;"></span></div>
+          <div class="row" style="align-items:baseline;gap:22px;margin-top:8px;">
+            <div><div class="key">So far</div><div style="font:400 34px/1.1 Georgia,serif;" id="monthsofar"></div></div>
+            <div><div class="key">Heading for about</div><div style="font:400 34px/1.1 Georgia,serif;color:var(--green);" id="monthto"></div></div>
+            <div><div class="key" id="lastname"></div><div style="font:400 34px/1.1 Georgia,serif;color:var(--muted);" id="lastval"></div></div>
+          </div>
+          <div id="monthbar" style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-top:14px;background:var(--line);"></div>
+          <div id="monthprog" style="position:relative;height:10px;margin-top:2px;"></div>
+          <table id="monthparts" style="margin-top:6px;"></table>
+          <div class="how" id="monthhow"></div>
+        </div>
         <div class="card" style="margin-top: 18px;">
           <div class="row" style="justify-content:space-between;"><strong>Each day</strong><span class="key"><span style="color:var(--bar)">■</span> House <span style="color:var(--gas)" id="gaskey">■</span><span id="gaskeyword"> Gas</span><span id="waterkey" hidden> <span style="color:var(--water)">■</span> Hot water and cooking</span><span id="fixedkey" hidden> <span style="color:var(--fixed)">■</span> <span id="fixedword">Standing charges</span></span> <span style="color:var(--car)">■</span> Car</span></div>
           <div class="bars" id="bars" style="height:300px;"></div>
@@ -95,6 +107,13 @@
           <div class="row" style="justify-content:space-between;"><strong>Heating by room</strong><span class="muted" id="heatwhen" style="font-size:13px;"></span></div>
           <table class="rooms" id="rooms"></table>
           <div class="how" id="heatnote"></div>
+        </div>
+        <div class="card" style="margin-top: 18px;" id="effcard" hidden>
+          <div class="row" style="justify-content:space-between;"><strong>Heating efficiency</strong><span class="muted" id="effwhen" style="font-size:13px;"></span></div>
+          <p id="effline" style="margin:8px 0 0;"></p>
+          <svg id="effchart" viewBox="0 0 440 250" style="width:100%;height:auto;margin-top:10px;" role="img"></svg>
+          <div class="key" id="effkey"></div>
+          <div class="how" id="effhow"></div>
         </div>
         <div class="card" style="margin-top: 18px;">
           <strong>Tariff fit</strong> <span class="muted" id="fitdays"></span>
@@ -212,6 +231,8 @@ function render(d) {
   }
   $("oddlines").innerHTML = (note.odd_days || []).map((o) => `<p style="margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px;color:var(--odd)">${esc(o.line)}</p><div class="how">${esc(o.how_we_know)}</div>${tell(o.id, "We know why")}`).join("");
   window.__days = w.days;
+  showEfficiency(d.efficiency);
+  showMonth(d.forecast, d.tariff?.incomplete);
   $("fitdays").textContent = "· last " + d.tariff.days + " days, electricity";
   $("tariffs").innerHTML = d.tariff.rows.map((t) => `<tr class="${t.yours ? "yours" : ""}"><td>${esc(t.name)}</td><td>£${Math.round(t.cost)}</td></tr>`).join("");
   $("actions").innerHTML = (note.actions || []).map((a) => `<div class="card action"><h3>${esc(a.title)}<span>${a.per_year_gbp ? "£" + a.per_year_gbp + " a year" : ""}</span></h3><p>${esc(a.detail)}</p><div class="how">How we know: ${esc(a.how_we_know)}</div>${tell(a.id, "Already doing this")}</div>`).join("") || '<p class="muted">Nothing worth changing this week.</p>';
@@ -236,6 +257,7 @@ function render(d) {
   if (d.car?.source === "Ohme") rows.push(["Car, from Ohme", d.car.ohmeKwh + " kWh on " + d.car.charges + " days · about " + d.car.miles + " miles · " + (d.car.pencePerMile ?? "–") + "p a mile (miles from " + (d.car.milesFrom || "Ohme's estimate") + (d.car.ohmeMiles != null ? "; Ohme estimated " + d.car.ohmeMiles : "") + ") · Ohme's own cost estimate £" + d.car.ohmeCost.toFixed(2) + (d.car.daytimeHours ? " · " + d.car.daytimeHours + " hours outside the cheap window" : "")]);
   else if (d.ohme?.error) rows.push(["Ohme", "problem: " + d.ohme.error]);
   if (d.polestar?.error) rows.push(["Polestar", "problem: " + d.polestar.error]);
+  if (d.efficiency) rows.push(["Gas history for efficiency", d.efficiency.historyFrom ? "from " + d.efficiency.historyFrom + " · " + d.efficiency.heatingDays.before + " cold days before the change, " + d.efficiency.heatingDays.after + " since" : d.efficiency.reason || "–"]);
   if (d.dispatches) rows.push(["Smart-charge slots", d.dispatches.available ? d.dispatches.stored + " confirmed by Octopus" + (d.dispatches.since ? " since " + d.dispatches.since : "") + (d.dispatches.inferredHours ? " · " + d.dispatches.inferredHours + " hours assumed from Ohme's pricing" : "") + " · " + d.dispatches.halfHoursRepriced + " half-hours at the cheap rate"
     : "Octopus didn't list them (" + (d.dispatches.error || "unknown") + ")" + (d.dispatches.stored ? " · using " + d.dispatches.stored + " kept earlier" : "")]);
   if (d.heating?.baseline) rows.push(["Hot water and cooking baseline", d.heating.baseline.kwhPerDay != null ? d.heating.baseline.kwhPerDay.toFixed(1) + " kWh a day, from " + d.heating.baseline.quietDays + " days with no heating" : "not yet: " + d.heating.baseline.quietDays + " days with no heating so far (needs 4)"]);
@@ -245,10 +267,56 @@ function render(d) {
   $("facts").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   $("headline").textContent = note.headline || "";
   $("summary").textContent = note.summary || "";
-  $("forecast").textContent = d.forecast ? d.forecast.month + " so far " + money(d.forecast.soFar) + ", heading for about " + money(d.forecast.projected) + "." : "";
+  $("forecast").textContent = "";
   $("made").textContent = "Worked out " + new Date(d.generatedAt).toLocaleString("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + (note.plain ? ". Claude wasn't available, so this is the plain version." : ". Figures calculated from your Octopus meter, then explained by Claude.");
 }
 
+function showMonth(f, incomplete) {
+  $("monthcard").hidden = !f || !f.parts;
+  if (!f || !f.parts) return;
+  $("monthname").textContent = f.month;
+  $("monthdays").textContent = f.daysWithData + " of " + f.daysInMonth + " days in" + (f.through ? ", to " + new Date(f.through + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "");
+  $("monthsofar").textContent = money(f.soFar);
+  $("monthto").textContent = money(f.projected);
+  $("lastname").textContent = f.lastMonth ? f.lastMonth.month : "";
+  $("lastval").textContent = f.lastMonth ? money(f.lastMonth.total) : "";
+  const parts = [["house", "House", "var(--bar)"], ["heating", "Gas", "var(--gas)"], ["car", "Car", "var(--car)"], ["standing", "Standing charges", "var(--fixed)"]].filter(([k]) => f.parts[k] && f.parts[k].projected > 0);
+  // The bar is the whole month heading in; the solid part of each colour is spent, the pale part still to come.
+  $("monthbar").innerHTML = parts.map(([k, , c]) => {
+    const p = f.parts[k], w = (p.projected / f.projected) * 100, done = p.projected ? (p.soFar / p.projected) * 100 : 0;
+    return `<div title="${esc(k)}" style="width:${w}%;display:flex;"><i style="width:${done}%;background:${c};"></i><i style="flex:1;background:${c};opacity:.35;"></i></div>`;
+  }).join("");
+  $("monthparts").innerHTML = "<tr><td></td><td class='n muted' style='font-weight:400'>So far</td><td class='n muted' style='font-weight:400'>Heading for</td></tr>"
+    + parts.map(([k, label, c]) => `<tr><td><span style="color:${c}">■</span> ${label}</td><td class="n">${money(f.parts[k].soFar)}</td><td class="n">${money(f.parts[k].projected)}</td></tr>`).join("");
+  $("monthhow").textContent = (incomplete ? "Electricity prices were incomplete, so this is too low. " : "")
+    + "How we know: what's been used so far this month, priced at your tariff, plus the rest of the month at each part's pace over the last " + f.paceDays + " days. Gas from " + f.gasFrom + (f.aheadTemp != null ? " (averaging " + f.aheadTemp + "°C)" : "") + ".";
+}
+function showEfficiency(ef) {
+  $("effcard").hidden = !ef;
+  if (!ef) return;
+  if (!ef.available) { $("effline").textContent = ef.reason || "Not enough history yet."; $("effchart").innerHTML = ""; $("effkey").textContent = ""; $("effhow").textContent = ""; return; }
+  const less = ef.change.pct <= 0;
+  const mon = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+  const at5 = (f) => Math.round(f.baseKwh + f.kwhPerDegreeDay * 10.5);       // a 5°C day is 10.5 degrees below 15.5
+  $("effwhen").textContent = "Since the " + ef.change.what;
+  $("effline").innerHTML = "<strong>The house needs " + Math.abs(ef.change.pct) + "% " + (less ? "less" : "more") + " gas to stay warm</strong> since the " + ef.change.what + " in January."
+    + "<br>On a 5°C day it now uses about " + at5(ef.after) + " kWh of gas, " + (less ? "down" : "up") + " from " + at5(ef.before) + " kWh."
+    + (ef.thisSeason?.savedGbp != null ? "<br>This autumn so far, that's saved about £" + ef.thisSeason.savedGbp + (ef.perYear?.gbp != null ? ", and it's worth about £" + ef.perYear.gbp + " over a year like the last one." : ".") : "");
+  // Each dot is a day: how cold it was against the gas used. Lines are the fitted trend.
+  const W = 440, H = 250, L = 40, B = 34, all = [...ef.points.before, ...ef.points.after];
+  const xmax = Math.ceil(Math.max(...all.map((p) => p[0]), 10)), ymax = Math.ceil(Math.max(...all.map((p) => p[1]), 10) / 10) * 10;
+  const x = (v) => L + (v / xmax) * (W - L - 8), y = (v) => H - B - (v / ymax) * (H - B - 8);
+  const dots = (ps, c) => ps.map(([a, b]) => `<circle cx="${x(a).toFixed(1)}" cy="${y(b).toFixed(1)}" r="2.6" fill="${c}" fill-opacity="0.55"></circle>`).join("");
+  const line = (f, c) => { const x0 = 2, x1 = xmax; return `<line x1="${x(x0)}" y1="${y(f.baseKwh + f.kwhPerDegreeDay * x0)}" x2="${x(x1)}" y2="${y(f.baseKwh + f.kwhPerDegreeDay * x1)}" stroke="${c}" stroke-width="2.5"></line>`; };
+  const grid = [0, ymax / 2, ymax].map((v) => `<line x1="${L}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"></line><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`).join("");
+  $("effchart").innerHTML = grid + dots(ef.points.before, "var(--fixed)") + dots(ef.points.after, "var(--gas)") + line(ef.before, "var(--muted)") + line(ef.after, "var(--gas)")
+    + [13, 8, 3, -2].filter((c) => 15.5 - c <= xmax).map((c) => `<text x="${x(15.5 - c)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${c}°</text>`).join("")
+    + `<text x="${W - 8}" y="${H - 1}" text-anchor="end" font-size="11" fill="var(--muted)">That day's average temperature →</text><text x="${L + 8}" y="24" font-size="11" fill="var(--muted)">Gas used that day (kWh)</text>`;
+  $("effchart").setAttribute("aria-label", "Daily gas against how cold it was, before and after the " + ef.change.what);
+  $("effkey").innerHTML = '<span style="color:var(--fixed)">●</span> Before, ' + mon(ef.before.from) + " to " + mon(ef.before.to) + ' &nbsp; <span style="color:var(--gas)">●</span> Since, ' + mon(ef.after.from) + " onwards";
+  $("effhow").textContent = "How we know: each dot is a day, with the gas your meter recorded and how cold it was in " + (ef.area || "your area") + ". Comparing days of the same cold means a colder winter can't make the house look worse. "
+    + ef.before.days + " cold days before the work and " + ef.after.days + " since. Days vary (sun, wind, who's at home), so treat the figure as a good estimate, not exact. Anything else that changed since January, like thermostat settings, shows up here too.";
+}
 function median(xs) { const a = [...xs].sort((p, q) => p - q); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
 function showDay(i) {
   const x = window.__days?.[i];
