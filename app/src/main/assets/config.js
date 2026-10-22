@@ -19,7 +19,8 @@
 // kids:     "url" plays the programme straight away (tested on the stick, October 2026).
 //           iPlayer programme IDs: The Gruffalo b00pk64x, Room on the Broom p0102qfj,
 //           Zog b0bwdw8y, Stick Man b06t09rk. If one leaves iPlayer, the tile will open
-//           iPlayer instead. Bluey (series m000vbrk) has no working series link yet.
+//           iPlayer instead. Bluey and Cars on the Road open their Disney+ series pages
+//           (Disney+ ids 1xy9TAOQ0M3r and 1xLouZmjyMHu), not yet tested on the stick.
 window.HEARTH_CONFIG = {
   "tvName": "Living room TV",
   "apps": [
@@ -36,6 +37,8 @@ window.HEARTH_CONFIG = {
       "packages": ["com.amazon.firebat", "com.amazon.avod"], "match": ["prime video"] },
     { "key": "appletv", "label": "Apple TV", "name": "Apple TV", "swatch": "#8E9290",
       "packages": ["com.apple.atve.amazon.appletv"], "match": ["apple tv"] },
+    { "key": "now", "label": "NOW", "name": "NOW", "swatch": "#1BB5A5",
+      "packages": ["com.bskyb.nowtv.beta", "com.nowtv.nowtv"], "match": ["now tv", "now"] },
     { "key": "youtube", "label": "YouTube", "name": "YouTube", "swatch": "#E3392E",
       "packages": ["com.amazon.firetv.youtube"], "match": ["youtube"],
       "searchUrl": "https://www.youtube.com/results?search_query={q}" }
@@ -56,8 +59,8 @@ window.HEARTH_CONFIG = {
   "kids": [
     { "key": "gruffalo", "title": "The Gruffalo", "app": "iplayer", "src": "iPlayer", "art": "k-gruffalo", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b00pk64x&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["gruffalo"], "bedtime": false },
     { "key": "broom", "title": "Room on the Broom", "app": "iplayer", "src": "iPlayer", "art": "k-broom", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/p0102qfj&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["room on the broom", "broom"], "bedtime": true },
-    { "key": "bluey", "title": "Bluey", "app": "iplayer", "src": "iPlayer", "art": "k-bluey", "url": "", "aliases": ["bluey"], "bedtime": false },
-    { "key": "cars", "title": "Cars", "app": "disney", "src": "Disney+", "art": "k-cars", "url": "", "aliases": ["cars", "lightning mcqueen", "mcqueen"], "bedtime": false },
+    { "key": "bluey", "title": "Bluey", "app": "disney", "src": "Disney+", "art": "k-bluey", "url": "https://www.disneyplus.com/series/bluey/1xy9TAOQ0M3r", "aliases": ["bluey"], "bedtime": false },
+    { "key": "cars", "title": "Cars", "app": "disney", "src": "On the Road · Disney+", "art": "k-cars", "url": "https://www.disneyplus.com/series/cars-on-the-road/1xLouZmjyMHu", "aliases": ["cars on the road", "cars", "lightning mcqueen", "mcqueen"], "bedtime": false },
     { "key": "zog", "title": "Zog", "app": "iplayer", "src": "iPlayer", "art": "k-zog", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b0bwdw8y&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["zog"], "bedtime": true },
     { "key": "stickman", "title": "Stick Man", "app": "iplayer", "src": "iPlayer", "art": "k-stickman", "url": "intent://www.live.bbctvapps.co.uk/tap/iplayer?deeplink=tv/playback/b06t09rk&campaign=catalogue&medium=referral&origin=portal_live&partner=com.amazon#Intent;scheme=https;component=uk.co.bbc.iplayer/uk.co.bbc.MainActivity;end", "aliases": ["stick man", "stickman"], "bedtime": true }
   ]

@@ -289,6 +289,18 @@ public class MainActivity extends Activity {
             }, "hearth-energy").start();
         }
 
+        /** What's on for the greeting, in the background; it arrives at hearthMoment(json). */
+        @JavascriptInterface public void moment(final String payload) {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    JSONObject answer;
+                    try { answer = assistant.moment(new JSONObject(payload)); } catch (Exception e) { answer = new JSONObject(); }
+                    final String js = "window.hearthMoment && hearthMoment(" + answer + ")";
+                    runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
+                }
+            }, "hearth-moment").start();
+        }
+
         /** The last energy week the stick fetched, for showing straight away. */
         @JavascriptInterface public String energyCached() { return assistant.energyCached(); }
 
