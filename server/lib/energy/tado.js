@@ -52,12 +52,15 @@ export async function finishSignIn() {
 }
 
 /** A fresh access token. Tado rotates the refresh token every time, so the new one is kept. */
+// The access token lasts about ten minutes; reusing it means the refresh token rotates rarely,
+// so two refreshes close together can't trip over each other's rotation.
 async function accessToken() {
   const s = await readState();
   if (!s.refresh) throw new Error("Tado isn't connected yet.");
+  if (s.access && s.accessUntil > Date.now() + 60000) return s.access;
   const r = await form(AUTH + "token", { client_id: CLIENT_ID, grant_type: "refresh_token", refresh_token: s.refresh });
   if (!r.ok) throw new Error("Tado sign-in has expired. Connect it again.");
-  await writeState({ ...s, refresh: r.json.refresh_token || s.refresh });
+  await writeState({ ...s, refresh: r.json.refresh_token || s.refresh, access: r.json.access_token, accessUntil: Date.now() + (r.json.expires_in || 600) * 1000 });
   return r.json.access_token;
 }
 
