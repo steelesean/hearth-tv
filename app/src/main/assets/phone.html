@@ -334,6 +334,13 @@ label { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transfor
     b.addEventListener('click', function () { send('app', a.key); });
     $('apps').appendChild(b);
   });
+  (function () {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'tile app';
+    b.innerHTML = '<span class="swatch" style="background:#2F4A3F"></span><span>Energy</span>';
+    b.addEventListener('click', function () { send('energy', ''); });
+    $('apps').appendChild(b);
+  })();
   C.channels.forEach(function (ch) {
     var b = document.createElement('button');
     b.type = 'button'; b.className = 'tile channel'; b.textContent = ch.name;

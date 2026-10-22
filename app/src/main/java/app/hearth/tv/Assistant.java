@@ -64,6 +64,24 @@ final class Assistant {
         return call("/api/upnext", payload);
     }
 
+    // ---------- Energy (see server/api/energy) ----------
+
+    /** The latest energy week from the service, kept on the stick for the morning card. Blocking. */
+    JSONObject energy() {
+        JSONObject week = request("GET", "/api/energy/week", null);
+        if (!week.has("error") && week.has("week")) prefs.edit().putString("energy", week.toString()).putLong("energyAt", System.currentTimeMillis()).apply();
+        return week;
+    }
+
+    /** The last energy week fetched, or "" if none yet. */
+    String energyCached() { return prefs.getString("energy", ""); }
+
+    /** "Already doing this" or "Not for us" on a suggestion. Blocking. */
+    JSONObject energyFeedback(String id, String verdict) {
+        try { return request("POST", "/api/energy/feedback", new JSONObject().put("id", id).put("verdict", verdict)); }
+        catch (Exception e) { return error("Couldn't save that."); }
+    }
+
     // ---------- Shows the household follows, and what the TV shows as "Watching" ----------
 
     /** JSON array of {title, app}; edited on the phone or with Follow on a suggestion. */
@@ -89,19 +107,27 @@ final class Assistant {
     }
 
     private JSONObject call(String path, JSONObject payload) {
-        HttpURLConnection conn = null;
         try {
             payload.put("taste", taste());
             payload.put("profile", profile());
+        } catch (Exception ignored) { }
+        return request("POST", path, payload);
+    }
+
+    private JSONObject request(String method, String path, JSONObject payload) {
+        HttpURLConnection conn = null;
+        try {
             conn = (HttpURLConnection) new URL(url() + path).openConnection();
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(25000);
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestMethod(method);
             conn.setRequestProperty("x-hearth-key", prefs.getString("key", ""));
-            try (OutputStream out = conn.getOutputStream()) {
-                out.write(payload.toString().getBytes(UTF8));
+            if (payload != null) {
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                try (OutputStream out = conn.getOutputStream()) {
+                    out.write(payload.toString().getBytes(UTF8));
+                }
             }
             int status = conn.getResponseCode();
             InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();

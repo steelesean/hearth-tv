@@ -87,6 +87,33 @@ final class HeatingReminder {
         }
     }
 
+    /** Mondays: last week's energy and the one thing most worth doing, from the stick's copy. */
+    private String energyLines() {
+        try {
+            if (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) != java.util.Calendar.MONDAY) return "";
+            String cached = context.getSharedPreferences("assistant", Context.MODE_PRIVATE).getString("energy", "");
+            if (cached.isEmpty()) return "";
+            JSONObject e = new JSONObject(cached);
+            JSONObject week = e.getJSONObject("week");
+            // Only a week that ended yesterday, so an old copy never reads as last week.
+            SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd", Locale.UK);
+            Date to = iso.parse(week.optString("to"));
+            if (System.currentTimeMillis() - to.getTime() > 3 * 86400000L) return "";
+            if (e.optJSONObject("tariff") != null && e.getJSONObject("tariff").optBoolean("incomplete")) return "";
+            StringBuilder out = new StringBuilder(String.format(Locale.UK, "\nEnergy last week: £%.2f", week.optDouble("total")));
+            JSONObject note = e.optJSONObject("note");
+            org.json.JSONArray actions = note == null ? null : note.optJSONArray("actions");
+            if (actions != null && actions.length() > 0) {
+                JSONObject a = actions.getJSONObject(0);
+                out.append("\nWorth doing: ").append(a.optString("title"));
+                if (a.optInt("per_year_gbp") > 0) out.append(" (£").append(a.optInt("per_year_gbp")).append(" a year)");
+            }
+            return out.toString();
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
     HeatingReminder(Context context, Tado tado, Weather weather) {
         this.context = context.getApplicationContext();
         this.tado = tado;
@@ -103,6 +130,7 @@ final class HeatingReminder {
                         w.optInt("now"), w.optString("desc").toLowerCase(Locale.UK), w.optInt("high"), w.optInt("low")));
                 if (w.optInt("rain") >= 50) body.append(String.format(Locale.UK, "\n%d%% chance of rain today.", w.optInt("rain")));
                 if (w.optInt("low") <= 0) body.append("\nFrosty this morning.");
+                body.append(energyLines());
                 body.append(episodeLines());
                 final String b = body.toString();
                 main.post(new Runnable() { @Override public void run() { show("GOOD MORNING", "Today", b); } });

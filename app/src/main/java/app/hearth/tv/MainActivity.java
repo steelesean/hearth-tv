@@ -279,6 +279,23 @@ public class MainActivity extends Activity {
             }, "hearth-upnext").start();
         }
 
+        /** The energy week, fetched in the background; it arrives at hearthEnergy(json). */
+        @JavascriptInterface public void energy() {
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    final String js = "window.hearthEnergy && hearthEnergy(" + assistant.energy() + ")";
+                    runOnUiThread(new Runnable() { @Override public void run() { web.evaluateJavascript(js, null); } });
+                }
+            }, "hearth-energy").start();
+        }
+
+        /** The last energy week the stick fetched, for showing straight away. */
+        @JavascriptInterface public String energyCached() { return assistant.energyCached(); }
+
+        @JavascriptInterface public void energyFeedback(final String id, final String verdict) {
+            new Thread(new Runnable() { @Override public void run() { assistant.energyFeedback(id, verdict); } }, "hearth-energy-feedback").start();
+        }
+
         /** Today's weather as JSON, or "" if no town is set. */
         @JavascriptInterface public String weather() {
             JSONObject w = weatherCache;
