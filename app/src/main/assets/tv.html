@@ -164,6 +164,67 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .stage.kids-mode .kids { grid-template-columns: repeat(3, 1fr); }
 .stage.kids-mode .kid { height: 250px; }
 .stage.kids-mode #modeBtn .dot { background: var(--focus); }
+/* Energy: a full screen of its own, opened from the Energy tile. Everything lines up on one
+   column grid: header, the five figures (which are also the chart key), the chart, three cards. */
+.energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
+.energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
+.energy .e-title { font-size: 30px; font-weight: 500; }
+.energy .e-title span { color: var(--ink-soft); font-size: 26px; margin-left: 18px; font-weight: 400; }
+.energy .e-made { font-size: 20px; color: var(--ink-soft); }
+.energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
+.energy .e-sum { display: flex; align-items: flex-end; margin-top: 18px; }
+.energy .e-total { width: 420px; flex: none; }
+.energy .e-total b { display: block; font: 400 96px/0.95 var(--font-display); letter-spacing: -0.02em; margin-top: 6px; font-weight: 400; }
+.energy .e-total small { display: block; font-size: 21px; color: var(--ink-2); margin-top: 10px; }
+.energy .e-figs { flex: 1; display: flex; }
+.energy .e-fig { flex: 1; border-left: 2px solid var(--line); padding: 2px 0 4px 22px; }
+.energy .e-fig .k { font-size: 19px; color: var(--ink-soft); white-space: nowrap; }
+.energy .e-fig .k i { display: inline-block; width: 16px; height: 16px; border-radius: 5px; margin-right: 10px; vertical-align: -2px; }
+.energy .e-fig .v { font: 500 40px/1.1 var(--font-ui); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.energy .e-chart { margin-top: 20px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 20px 32px 14px 28px; display: flex; flex-direction: column; }
+.energy .e-plot { position: relative; height: 320px; margin-left: 64px; }
+.energy .e-grid-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--line); }
+.energy .e-grid-line span { position: absolute; right: 100%; margin-right: 14px; top: -13px; font-size: 18px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.energy .e-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; }
+.energy .eday { flex: 1; margin: 0 30px; background: transparent; border: 0; border-radius: 12px; padding: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; font-family: var(--font-ui); color: var(--ink); position: relative; }
+.energy .eday .tot { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.energy .eday.odd .tot { color: #B5542D; }
+.energy .eday .seg { display: flex; align-items: center; justify-content: center; font-size: 19px; font-weight: 600; color: #1F2321; overflow: hidden; border-top: 2px solid var(--surface); }
+.energy .eday .seg:first-of-type { border-radius: 10px 10px 0 0; border-top: 0; }
+.energy .eday .seg:last-child { border-radius: 0 0 4px 4px; }
+.energy .eday.is-focus { transform: none; box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px var(--focus); }
+.energy .e-days { display: flex; margin-left: 64px; margin-top: 12px; }
+.energy .e-days span { flex: 1; margin: 0 30px; text-align: center; font-size: 21px; color: var(--ink-soft); }
+.energy .e-days span b { color: var(--ink); font-weight: 600; }
+.energy .e-detail { font-size: 22px; color: var(--ink-2); border-top: 2px solid var(--line); margin-top: 14px; padding-top: 12px; min-height: 30px; }
+.energy .e-detail.odd { color: #B5542D; }
+.energy .e-cards { display: flex; margin-top: 18px; flex: 1; min-height: 0; }
+.energy .e-card { flex: 1; min-width: 0; background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 18px 24px; text-align: left; font-family: var(--font-ui); color: var(--ink); overflow: hidden; display: flex; flex-direction: column; }
+.energy .e-card + .e-card { margin-left: 24px; }
+.energy .e-card h4 { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0; font: 500 30px/1.15 var(--font-display); }
+.energy .e-card h4 span { font: 600 24px var(--font-ui); color: var(--focus); white-space: nowrap; margin-left: 14px; }
+.energy .e-card p { margin: 8px 0 0; font-size: 21px; line-height: 1.38; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.energy .e-card .how { font-size: 17px; color: var(--ink-soft); margin-top: auto; padding-top: 8px; }
+.energy .e-verdicts { display: flex; margin-top: 12px; }
+.energy .e-verdicts > * + * { margin-left: 12px; }
+.energy .e-verdicts .verdict { height: 48px; font-size: 20px; }
+.energy .e-rooms { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.energy .e-rooms td { padding: 4px 0; font-size: 20px; white-space: nowrap; }
+.energy .e-rooms td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.energy .e-rooms .track { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 0 14px; }
+.energy .e-rooms .track i { display: block; height: 100%; border-radius: 6px; }
+.energy .eday .usual { position: absolute; left: -16px; right: -16px; height: 0; pointer-events: none; }
+.energy .eday .usual::before, .energy .eday .usual::after { content: ""; position: absolute; top: -2px; width: 12px; border-top: 4px solid var(--ink); }
+.energy .eday .usual::before { left: 0; } .energy .eday .usual::after { right: 0; }
+.energy .e-detail .dash { display: inline-block; width: 40px; height: 4px; vertical-align: middle; margin-right: 10px; background: linear-gradient(90deg, var(--ink) 0 12px, transparent 12px 28px, var(--ink) 28px); }
+.energy .e-trend { display: flex; align-items: flex-end; height: 64px; margin-top: 12px; }
+.energy .e-trend i { flex: 1; margin: 0 4px; background: var(--line); border-radius: 5px 5px 2px 2px; }
+.energy .e-trend i.now { background: var(--focus); }
+.energy .e-trend-k { display: flex; justify-content: space-between; font-size: 17px; color: var(--ink-soft); margin-top: 6px; }
+.energy .e-card p.two { -webkit-line-clamp: 2; }
+.energy .e-rooms td.cold { color: #B5542D; }
+.energy .e-warn { color: #B5542D; font-size: 21px; margin-top: 8px; }
+.energy .e-foot { font-size: 17px; color: var(--ink-soft); margin-top: 12px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -254,6 +315,25 @@ body { color: var(--ink); font-family: var(--font-ui); }
     </div>
   </div>
 
+  <div class="energy" id="energyPanel" hidden>
+    <div class="e-top">
+      <div class="e-title">Energy<span id="eRange"></span></div>
+      <div class="e-made" id="eMade"></div>
+    </div>
+    <div class="e-sum">
+      <div class="e-total"><div class="e-label">This week</div><b id="eTotal"></b><small id="eSub"></small></div>
+      <div class="e-figs" id="eFigs"></div>
+    </div>
+    <div class="e-warn" id="eWarn" hidden></div>
+    <div class="e-chart">
+      <div class="e-plot" id="ePlot"><div class="e-bars" id="eBars"></div></div>
+      <div class="e-days" id="eDays"></div>
+      <div class="e-detail" id="eDetail"></div>
+    </div>
+    <div class="e-cards" id="eCards"></div>
+    <div class="e-foot" id="eFoot"></div>
+  </div>
+
   <div class="overlay" id="livePanel" hidden>
     <div class="card live-card">
       <h2>Live TV</h2>
@@ -262,6 +342,40 @@ body { color: var(--ink); font-family: var(--font-ui); }
   </div>
 </div>
 
+<script>
+  // Browser previews only: show any script error on screen, so a broken preview says why.
+  if (!window.HearthNative) window.addEventListener('error', function (e) {
+    var d = document.getElementById('previewError') || document.body.appendChild(document.createElement('pre'));
+    d.id = 'previewError';
+    d.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;background:#B5542D;color:#fff;font:14px/1.4 monospace;padding:12px;border-radius:8px;white-space:pre-wrap';
+    d.textContent += (e.message || 'Error') + (e.filename ? '  [' + e.filename.split('/').pop() + ':' + e.lineno + ']' : (e.target && e.target.src ? '  [could not load ' + e.target.src + ']' : '')) + '\n';
+  }, true);
+</script>
+<div id="previewKeyBox" hidden style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:98;background:#F7F6F3;color:#1F2321;border:2px solid #D6D5CF;border-radius:20px;padding:28px;width:440px;font:18px/1.4 system-ui,sans-serif;box-shadow:0 30px 80px rgba(0,0,0,.2)">
+  <div style="font-weight:600;font-size:20px">Preview the Energy screen</div>
+  <p style="margin:8px 0 14px;color:#3A3F3C">Enter the Hearth password, the one the TV’s assistant uses. It’s kept in this browser only.</p>
+  <form id="previewKeyForm"><input id="previewKeyInput" type="password" autocomplete="current-password" aria-label="Hearth password" style="width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #D6D5CF">
+  <button style="margin-top:12px;font:inherit;font-weight:600;background:#1F2321;color:#F7F6F3;border:0;border-radius:999px;padding:10px 20px">Show my week</button></form>
+  <p id="previewKeyMsg" style="margin:10px 0 0;color:#B5542D"></p>
+</div>
+<script>
+  // Browser preview only: ask for the Hearth password on the page, then fetch the week.
+  window.previewKey = function (msg) {
+    var box = document.getElementById('previewKeyBox');
+    document.getElementById('previewKeyMsg').textContent = msg || '';
+    box.hidden = false;
+    setTimeout(function () { document.getElementById('previewKeyInput').focus(); }, 50);
+  };
+  document.getElementById('previewKeyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var key = document.getElementById('previewKeyInput').value.trim();
+    if (!key) return;
+    try { localStorage.setItem('hearthKey', key); } catch (err) {}
+    document.getElementById('previewKeyBox').hidden = true;
+    document.getElementById('previewKeyMsg').textContent = '';
+    window.HearthPreviewFetch && window.HearthPreviewFetch();
+  });
+</script>
 <script src="config.js"></script>
 <script src="qrcode.js"></script>
 <script>
@@ -292,6 +406,25 @@ body { color: var(--ink); font-family: var(--font-ui); }
         { title: 'The Gentlemen', app: 'netflix', found: true, season: 1, next: null, status: 'Returning Series' },
         { title: 'Bake Off', app: 'channel4', found: true, season: 16, next: { date: d(1), season: 16, episode: 6 }, status: 'Returning Series' }
       ] }); }, 300);
+    },
+    // In a browser preview served by the energy service, fetch the real week with the Hearth
+    // password, asked for in a box on the page (see previewKey below).
+    energy: function () {
+      if (!/^https?:/.test(location.protocol)) return;
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (!key) { window.previewKey(''); return; }
+      fetch('/api/energy/week', { headers: { 'x-hearth-key': key } }).then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+        .then(function (x) {
+          if (x.status === 401) { try { localStorage.removeItem('hearthKey'); } catch (e) {} window.previewKey('That password didn’t work. Check it in Vercel under HEARTH_ASSISTANT_KEY.'); }
+          else if (x.d.error) window.previewKey(x.d.error);
+          else window.hearthEnergy(x.d);
+        })
+        .catch(function () { window.previewKey('Couldn’t reach the energy service.'); });
+    },
+    energyCached: function () { try { return localStorage.getItem('dev.energy') || ''; } catch (e) { return ''; } },
+    energyFeedback: function (id, verdict) {
+      var key = ''; try { key = localStorage.getItem('hearthKey') || ''; } catch (e) {}
+      if (/^https?:/.test(location.protocol)) fetch('/api/energy/feedback', { method: 'POST', headers: { 'x-hearth-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, verdict: verdict }) });
     },
     learn: function (payload) { setTimeout(function () { window.hearthLearned({ profile: 'You like sharp British crime and warm comedies.' }); }, 500); },
     ask: function (id, payload) {
@@ -537,6 +670,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (!$('livePanel').hidden) return $('livePanel');
     if (!$('picksPanel').hidden) return $('picksPanel');
     if (!$('howPanel').hidden) return $('howPanel');
+    if (!$('energyPanel').hidden) return $('energyPanel');
     return stage;
   }
   function items() {
@@ -544,7 +678,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     for (var i = 0; i < list.length; i++) {
       var e = list[i];
       if (!visible(e)) continue;
-      if (root === stage && (e.closest('.overlay'))) continue;
+      if (root === stage && (e.closest('.overlay') || e.closest('.energy'))) continue;
       out.push(e);
     }
     return out;
@@ -621,7 +755,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     setTimeout(function () { if (N.openLink(k.app, k.url || '') === 'missing') missing(app); }, 700);
   }
   function openLive() { $('livePanel').hidden = false; setFocus(items()[0]); }
-  function closeOverlays() { $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
+  function closeOverlays() { $('energyPanel').hidden = true; $('livePanel').hidden = true; $('pairModal').hidden = true; $('picksPanel').hidden = true; $('howPanel').hidden = true; setFocus(ask); }
 
   // ---------- Backups: mirror the page's own data to the stick so the phone can save it ----------
   var PAGE_KEYS = ['hearth.history', 'hearth.feedback', 'hearth.shows', 'hearth.asked', 'hearth.sinceLearn', 'hearth.seenPairing'];
@@ -880,7 +1014,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   };
   function back() {
     if (sheet.classList.contains('show')) { sheet.classList.remove('show'); return; }
-    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden) { closeOverlays(); return; }
+    if (!$('pairModal').hidden || !$('livePanel').hidden || !$('picksPanel').hidden || !$('howPanel').hidden || !$('energyPanel').hidden) { closeOverlays(); return; }
     if (kidsMode) { setMode(false); return; }
     setFocus(ask);
   }
@@ -903,6 +1037,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (cmd.type === 'kid') { closeOverlays(); return openKid(cmd.value); }
     if (cmd.type === 'channel') { closeOverlays(); return openChannel(cmd.value); }
     if (cmd.type === 'mode') return setMode(!kidsMode);
+    if (cmd.type === 'energy') { closeOverlays(); return openEnergy(); }
     if (cmd.type === 'reload') return location.reload();
     if (cmd.type === 'restorePage') {
       try { var data = JSON.parse(cmd.value || '{}'); PAGE_KEYS.forEach(function (k) { if (data[k] !== undefined) localStorage.setItem(k, data[k]); }); } catch (e) {}
@@ -916,11 +1051,193 @@ body { color: var(--ink); font-family: var(--font-ui); }
   // Desktop testing: arrow keys and Enter behave like the remote
   document.addEventListener('keydown', function (e) {
     if (window.HearthNative) return;   // on the TV, the Android side sends keys
+    if (e.target && e.target.closest && e.target.closest('#previewKeyBox')) return;
     var map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'back' };
     if (document.activeElement === ask && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     if (map[e.key]) { e.preventDefault(); window.hearthKey(map[e.key]); }
     else if (e.key === 'Enter' && document.activeElement !== ask) { e.preventDefault(); select(); }
   });
+
+  // ---------- Energy: the week from the energy service, kept on the stick ----------
+  // The service does every sum; this only lays it out. Nothing shows if pricing was incomplete.
+  var energy = null, energyTile = null;
+  function money(x) { return '£' + Number(x).toFixed(2); }
+  function shortMoney(x) { return x < 1 ? Math.round(x * 100) + 'p' : money(x); }
+  function setEnergy(d) {
+    if (!d || !d.week || !d.week.days) return;
+    energy = d;
+    if (!energyTile) {
+      energyTile = el('button', 'app focusable', '<span class="swatch" style="background:#2F4A3F"></span><span class="name">Energy</span>');
+      energyTile.type = 'button';
+      energyTile.addEventListener('click', openEnergy);
+      $('apps').appendChild(energyTile);
+      $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
+    }
+    if (!$('energyPanel').hidden) renderEnergy();
+  }
+  window.hearthEnergy = function (d) { if (d && !d.error) setEnergy(d); };
+  try { var ec = N.energyCached ? N.energyCached() : ''; if (ec) setEnergy(JSON.parse(ec)); } catch (e) {}
+  function fetchEnergy() { if (N.energy) N.energy(); }
+  window.HearthPreviewFetch = fetchEnergy;
+  setTimeout(fetchEnergy, window.HearthNative ? 4000 : 0); setInterval(fetchEnergy, 3 * 3600 * 1000);
+  // Browser preview: tv.html?energy opens the Energy screen as soon as the week arrives.
+  if (!window.HearthNative && /[?&]energy/.test(location.search)) {
+    var opener = setInterval(function () { if (energy) { clearInterval(opener); openEnergy(); } }, 300);
+  }
+
+  var SEG = { f: ['#B9BDB8', 'Standing charges'], h: ['#7C9488', 'House'], g: ['#6F7FA8', 'Heating'], w: ['#A9B7D6', 'Hot water and cooking'], c: ['#C9A227', 'Car'] };
+  function dayParts(x) {
+    var split = x.gasHeating !== undefined && x.gasHeating !== null;
+    var parts = [['c', x.car]];
+    if (split) { parts.push(['w', x.gasOther]); parts.push(['g', x.gasHeating]); } else parts.push(['g', x.gas]);
+    parts.push(['h', x.houseUse !== undefined ? x.houseUse : x.houseElec]);
+    if (x.standing !== undefined) parts.push(['f', x.standing]);
+    return parts.filter(function (p) { return p[1] > 0; });
+  }
+  function dayTotal(x) { return dayParts(x).reduce(function (a, p) { return a + p[1]; }, 0); }
+  function dayLine(x) {
+    var name = new Date(x.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var rank = { h: 0, g: 1, w: 2, c: 3, f: 4 };
+    var parts = dayParts(x).slice().sort(function (a, b) { return rank[a[0]] - rank[b[0]]; });
+    var line = name + ': ' + money(dayTotal(x)) + '. ' + parts.map(function (p) { return SEG[p[0]][1] + ' ' + shortMoney(p[1]); }).join(' · ');
+    if (x.usual) {
+      var own = dayTotal(x) - (x.car || 0), diff = own - x.usual;
+      line += '. Without the car, ' + (Math.abs(diff) < 0.1 ? 'about usual' : shortMoney(Math.abs(diff)) + (diff > 0 ? ' more' : ' less') + ' than a usual ' + x.day.replace(/^(\w{3}).*/, function (m) { return { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }[m] || m; }));
+    }
+    return line;
+  }
+  function openEnergy() {
+    if (!energy) { say('Energy isn’t ready yet', 'It’s worked out each morning. Try again later.', true); return; }
+    renderEnergy();
+    $('energyPanel').hidden = false;
+    setFocus($('eBars').children[$('eBars').children.length - 1] || items()[0]);
+    fetchEnergy();
+  }
+  function niceStep(max) {
+    var steps = [0.5, 1, 2, 2.5, 5, 10, 20], i;
+    for (i = 0; i < steps.length; i++) if (max / steps[i] <= 5) return steps[i];
+    return 50;
+  }
+  function renderEnergy() {
+    var d = energy, w = d.week, note = d.note || {};
+    $('eRange').textContent = w.label;
+    $('eMade').textContent = 'Worked out ' + new Date(d.generatedAt).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    // The five figures: the same parts as the bars, so they add up to the total exactly.
+    var sums = {}, order = ['h', 'g', 'w', 'c', 'f'];
+    w.days.forEach(function (x) { dayParts(x).forEach(function (p) { sums[p[0]] = (sums[p[0]] || 0) + p[1]; }); });
+    var total = order.reduce(function (a, k) { return a + (sums[k] || 0); }, 0);
+    $('eTotal').textContent = money(total);
+    $('eSub').textContent = w.usualElec ? 'Electricity ' + money(Math.abs(w.elec - w.usualElec)) + (w.elec <= w.usualElec ? ' less' : ' more') + ' than a usual week' : '';
+    $('eFigs').innerHTML = order.filter(function (k) { return sums[k] > 0; }).map(function (k) {
+      var name = k === 'g' && !sums.w ? 'Gas' : SEG[k][1];
+      return '<div class="e-fig"><div class="k"><i style="background:' + SEG[k][0] + '"></i>' + esc(name) + '</div><div class="v">' + money(sums[k]) + '</div></div>';
+    }).join('');
+    var rooms = d.heating && d.heating.week;
+    var sources = ['your Octopus meter'];
+    if (rooms) sources.push('Tado');
+    if (d.car && d.car.source === 'Ohme') sources.push('Ohme');
+    $('eFoot').textContent = 'Every figure is calculated from ' + sources.join(', ').replace(/, ([^,]*)$/, ' and $1') + ' first, then explained by Claude. Press Back to return.';
+    $('eWarn').hidden = !(d.tariff && d.tariff.incomplete);
+    $('eWarn').textContent = 'Octopus didn’t have prices for all of your half-hours, so electricity here is too low.';
+
+    // The chart: a £ scale with gridlines, one stacked bar a day.
+    var plot = $('ePlot'), area = 320 - 38;            // leave room above for the day totals
+    var max = Math.max.apply(null, w.days.map(dayTotal).concat(w.days.map(function (x) { return x.usual || 0; }), [0.5]));
+    var step = niceStep(max), top = Math.ceil(max / step) * step;
+    [].slice.call(plot.querySelectorAll('.e-grid-line')).forEach(function (g) { g.parentNode.removeChild(g); });
+    for (var v = 0; v <= top + 1e-9; v += step) {
+      var g = el('div', 'e-grid-line'); g.style.bottom = Math.round(v / top * area) + 'px';
+      g.innerHTML = '<span>£' + (step < 1 ? v.toFixed(2) : v) + '</span>';
+      plot.insertBefore(g, $('eBars'));
+    }
+    var bars = $('eBars'); bars.innerHTML = '';
+    w.days.forEach(function (x) {
+      var b = el('button', 'eday focusable' + (x.odd ? ' odd' : '')); b.type = 'button';
+      var html = '<span class="tot">' + money(dayTotal(x)) + '</span>';
+      dayParts(x).forEach(function (p) {
+        var h = Math.max(3, Math.round(p[1] / top * area));
+        html += '<span class="seg" style="height:' + h + 'px;background:' + SEG[p[0]][0] + '">' + (h >= 30 && p[0] !== 'f' ? shortMoney(p[1]) : '') + '</span>';
+      });
+      if (x.usual) html += '<span class="usual" style="bottom:' + Math.round(x.usual / top * area) + 'px"></span>';
+      b.innerHTML = html;
+      b.addEventListener('focus', function () { showDay(x); });
+      b.addEventListener('click', function () { showDay(x); });
+      bars.appendChild(b);
+    });
+    $('eDays').innerHTML = w.days.map(function (x) { return '<span><b>' + esc(x.day) + '</b> ' + Number(x.date.slice(8, 10)) + '</span>'; }).join('');
+    var odd = (note.odd_days || [])[0];
+    $('eDetail').className = 'e-detail' + (odd ? ' odd' : '');
+    var hasUsual = w.days.some(function (x) { return x.usual; });
+    if (odd) $('eDetail').textContent = odd.line;
+    else $('eDetail').innerHTML = (hasUsual ? '<span class="dash"></span>A usual day for that weekday: the last four weeks, without the car. ' : '') + 'Select a day for its breakdown.';
+
+    // Three cards along the bottom: the week, what's worth doing (or good to know), the rooms.
+    var cards = $('eCards'); cards.innerHTML = '';
+    var c1 = el('div', 'e-card');
+    var tr = d.trend || [];
+    c1.innerHTML = '<div class="e-label">The week</div><h4></h4><p' + (tr.length > 2 ? ' class="two"' : '') + '></p>';
+    c1.querySelector('h4').textContent = note.headline || '';
+    c1.querySelector('p').textContent = note.summary || '';
+    if (tr.length > 2) {
+      var tmax = Math.max.apply(null, tr.map(function (t) { return t.total; }));
+      var avg = tr.reduce(function (a, t) { return a + t.total; }, 0) / tr.length;
+      var strip = el('div', 'e-trend');
+      tr.forEach(function (t, i) {
+        var bar = el('i', i === tr.length - 1 ? 'now' : '');
+        bar.style.height = Math.max(4, Math.round(t.total / tmax * 64)) + 'px';
+        strip.appendChild(bar);
+      });
+      c1.appendChild(strip);
+      var first = new Date(tr[0].from + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      c1.appendChild(el('div', 'e-trend-k', '<span>' + tr.length + ' weeks from ' + esc(first) + '</span><span>Average ' + money(avg) + ' · this week ' + money(tr[tr.length - 1].total) + '</span>'));
+    }
+    cards.appendChild(c1);
+
+    var action = (note.actions || [])[0];
+    var c2 = el('div', 'e-card');
+    if (action) {
+      c2.innerHTML = '<div class="e-label">Worth doing</div><h4></h4><p></p><div class="e-verdicts"></div>';
+      c2.querySelector('h4').innerHTML = esc(action.title) + (action.per_year_gbp ? '<span>£' + action.per_year_gbp + ' a year</span>' : '');
+      c2.querySelector('p').textContent = action.detail;
+      [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
+        var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
+        b.addEventListener('click', function () {
+          N.energyFeedback(action.id, v[0]);
+          note.actions = note.actions.filter(function (x) { return x.id !== action.id; });
+          say('Thanks', 'We’ll leave that out for the next 90 days.');
+          renderEnergy(); setFocus($('eBars').children[0]);
+        });
+        c2.querySelector('.e-verdicts').appendChild(b);
+      });
+    } else {
+      var good = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.id.indexOf('odd-') !== 0 && c.id !== 'rooms-info' && c.id !== 'peak-info'; })[0];
+      c2.innerHTML = '<div class="e-label">Good to know</div><p></p><div class="how"></div>';
+      c2.querySelector('p').textContent = good ? good.facts : 'Nothing worth changing this week.';
+      c2.querySelector('.how').textContent = good ? good.how_we_know : '';
+    }
+    cards.appendChild(c2);
+
+    if (rooms && rooms.rooms.length) {
+      var c3 = el('div', 'e-card'), list = rooms.rooms.slice(0, 4);
+      var rmax = Math.max.apply(null, list.map(function (r) { return r.cost; }).concat([sums.w || rooms.hotWaterAndCooking, 0.01]));
+      var row = function (name, cost, hours, colour, cold) {
+        return '<tr><td style="width:34%">' + esc(name) + '</td><td><div class="track"><i style="width:' + Math.round(cost / rmax * 100) + '%;background:' + colour + '"></i></div></td>'
+          + '<td class="n' + (cold ? ' cold' : '') + '" style="width:26%">' + hours + '</td><td class="n" style="width:16%"><b>' + money(cost) + '</b></td></tr>';
+      };
+      var roomNote = function (r) {
+        var t = r.hoursPerDay + ' h';
+        if (r.temp != null) t += ' · ' + r.temp.toFixed(1) + '°' + (r.target != null ? '/' + Math.round(r.target) + '°' : '');
+        return t;
+      };
+      c3.innerHTML = '<div class="e-label">Gas this week, by room</div><table class="e-rooms">'
+        + list.map(function (r) { return row(r.room, r.cost, roomNote(r), SEG.g[0], r.temp != null && r.target != null && r.temp < r.target - 1); }).join('')
+        + row('Hot water, cooking', sums.w || rooms.hotWaterAndCooking, '', SEG.w[0]) + '</table>'
+        + '<div class="how">' + (list.some(function (r) { return r.temp != null; }) ? 'Hours heating a day · average temperature/target. ' : '') + 'An estimate: gas shared by when each room called for heat in Tado.</div>';
+      cards.appendChild(c3);
+    }
+  }
+  function showDay(x) { $('eDetail').className = 'e-detail'; $('eDetail').textContent = dayLine(x); }
 
   // ---------- Start ----------
   markKids(); checkUpdate(); renderWatching(); fetchUpnext(false); tick(); mirror();
@@ -928,7 +1245,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
   setPaired(!!p0.paired);
   var seen = false;
   try { seen = localStorage.getItem('hearth.seenPairing') === '1'; localStorage.setItem('hearth.seenPairing', '1'); } catch (e) {}
-  if (!seen && !p0.paired && p0.address) openPairing(); else setFocus(ask);
+  var preview = !window.HearthNative && /[?&]energy/.test(location.search);
+  if (!seen && !p0.paired && p0.address && !preview) openPairing(); else setFocus(ask);
 })();
 </script>
 </body>
