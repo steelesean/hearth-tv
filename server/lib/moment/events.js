@@ -17,8 +17,8 @@ async function f1() {
   const out = [];
   for (const race of d?.MRData?.RaceTable?.Races || []) {
     const add = (session, x) => x?.date && out.push({ kind: "f1", name: race.raceName, session, start: Date.parse(x.date + "T" + (x.time || "12:00:00Z")) });
-    add("first practice", race.FirstPractice); add("second practice", race.SecondPractice); add("third practice", race.ThirdPractice);
-    add("sprint qualifying", race.SprintQualifying || race.SprintShootout); add("sprint", race.Sprint);
+    // Practice is left out: only the sessions worth sitting down for.
+    add("sprint", race.Sprint);
     add("qualifying", race.Qualifying); add("race", { date: race.date, time: race.time });
   }
   return out;
@@ -66,9 +66,12 @@ export function facts(events, now) {
         : "starts at " + time + " " + whichDay(e.start, now);
       return { kind: "f1", text: "Formula 1, " + e.name + ": " + e.session + " " + when + ".", minsAway: mins, plain: "F1 " + e.session + " " + (mins > 0 && mins <= 90 ? "in " + mins + " minutes" : mins <= 0 ? "is on now" : "at " + time + " " + whichDay(e.start, now)) };
     }
-    const started = e.start <= now, ends = e.end || e.start;
-    const text = started ? "Golf, PGA Tour: " + e.name + " is on now (until " + local(ends, { weekday: "long" }) + ")."
-      : "Golf, PGA Tour: " + e.name + " starts " + whichDay(e.start, now) + ".";
-    return { kind: "golf", text, minsAway: Math.round((e.start - now) / 60000), plain: started ? e.name + " is on" : e.name + " starts " + whichDay(e.start, now) };
-  });
+    // Golf runs four days: only the day before, the first day and the final round are mentioned.
+    const ends = e.end || e.start, startDay = whichDay(e.start, now), lastDay = whichDay(ends, now);
+    if (startDay === "today" || startDay === "tomorrow") {
+      return { kind: "golf", text: "Golf, PGA Tour: " + e.name + " starts " + startDay + ".", minsAway: Math.round((e.start - now) / 60000), plain: e.name + " starts " + startDay };
+    }
+    if (lastDay === "today") return { kind: "golf", text: "Golf, PGA Tour: " + e.name + ", final round today.", minsAway: 0, plain: e.name + ": final round today" };
+    return null;
+  }).filter(Boolean);
 }
