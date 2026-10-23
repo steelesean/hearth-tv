@@ -1,6 +1,7 @@
 // Works out the energy week again. Vercel's cron calls it each morning at 5:30 (vercel.json);
 // the dashboard can call it with the Hearth key. Anyone else can only trigger it if the stored
-// week is over 20 hours old, so the cron needs no secret and nobody can run up the Claude bill.
+// figures are over 3 hours old, so the cron needs no secret (a late-evening refresh no longer
+// makes the 4:30 run skip) and nobody can run it often enough to run up the Claude bill.
 // Needs OCTOPUS_API_KEY and OCTOPUS_ACCOUNT in Vercel, and the Blob store connected.
 
 import { refresh } from "../../lib/energy/run.js";
@@ -9,7 +10,7 @@ import { save, age, load } from "../../lib/energy/store.js";
 export default async function handler(req, res) {
   const hearth = process.env.HEARTH_ASSISTANT_KEY && req.headers["x-hearth-key"] === process.env.HEARTH_ASSISTANT_KEY;
   const cron = process.env.CRON_SECRET && req.headers.authorization === "Bearer " + process.env.CRON_SECRET;
-  if (!hearth && !cron && (await age()) < 20 * 3600 * 1000) return res.status(200).json({ ok: true, skipped: "Already up to date." });
+  if (!hearth && !cron && (await age()) < 3 * 3600 * 1000) return res.status(200).json({ ok: true, skipped: "Already up to date." });
   let step = "reading Octopus";
   try {
     const facts = await refresh();
