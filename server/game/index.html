@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<base href="/game/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hedgerows near Carentan</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #EDE8DA; }
+  canvas { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .hud { position: absolute; left: 20px; top: 16px; background: rgba(20,20,16,.75); border: 1px solid rgba(237,232,218,.2); border-radius: 12px; padding: 10px 16px; font-size: 15px; line-height: 1.45; pointer-events: none; }
+  .hud b { font: 500 20px Georgia, serif; display: block; }
+  .help { position: absolute; left: 20px; bottom: 16px; background: rgba(20,20,16,.75); border: 1px solid rgba(237,232,218,.2); border-radius: 12px; padding: 8px 14px; font-size: 14px; color: #CFC9B8; pointer-events: none; }
+  .end { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,10,8,.55); }
+  .end div { background: rgba(28,28,22,.95); border: 1px solid rgba(237,232,218,.25); border-radius: 18px; padding: 28px 40px; text-align: center; }
+  .end b { font: 400 38px Georgia, serif; display: block; margin-bottom: 8px; }
+  .end button { margin-top: 18px; font: inherit; padding: 10px 22px; border-radius: 999px; border: 0; background: #EDE8DA; color: #1b1b16; cursor: pointer; }
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #CFC9B8; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<div class="hud" id="hud"></div>
+<div class="help">Click a Sherman (or drag a box round both), then click where to go. Drag the map, or use the arrow keys, to look around. Hedgerows block tanks and sight. Halt to shoot straight, pin infantry with the MGs, and keep your thick front armour towards the hedges.</div>
+<div class="end" id="end"><div><b id="endTitle"></b><span id="endText"></span><br><button onclick="location.reload()">Play again</button></div></div>
+<div class="loading" id="loading">Loading the battlefield…</div>
+<script src="game.js"></script>
+</body>
+</html>
