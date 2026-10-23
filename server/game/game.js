@@ -8,7 +8,7 @@
   var VW = 1920, VH = 1080;
   var LEVEL, CAM, SPR, TILES, imgTank, imgInf, tiles = {}, heights = {};
   var oc = document.createElement('canvas'), octx = oc.getContext('2d');   // scratch canvas for hiding parts of units
-  var units = [], fx = [], selected = [], over = false, lastT = 0, clock = 0;
+  var units = [], fx = [], marks = [], selected = [], over = false, lastT = 0, clock = 0;
   var view = { x: 0, y: 0 };                         // top-left of the screen, in background pixels
   var block, tankBlock, G, CELL, HALF;
 
@@ -130,6 +130,7 @@
     return true;
   }
 
+  function mark(m) { marks.push(m); if (marks.length > 500) marks.shift(); }   // craters and track marks stay on the ground
   function boom(x, y, size, smoke) { fx.push({ t: 0, life: smoke ? 3 : 0.7, x: x, y: y, size: size, kind: smoke ? 'smoke' : 'boom' }); }
   function tracer(a, b, col) { fx.push({ t: 0, life: 0.12, ax: a.x, ay: a.y, az: a.kind === 'tank' ? 2.2 : 1.4, bx: b.x, by: b.y, bz: b.kind === 'tank' ? 1.2 : 1.0, col: col, kind: 'line' }); }
   var radio = [], log = window.__radio = []; function say(t) { log.push(Math.round(clock) + 's ' + t); radio.unshift({ t: clock, text: t }); radio = radio.slice(0, 3); }
@@ -173,12 +174,22 @@
     var allies = units.filter(function (u) { return u.side === 'allies' && alive(u); });
     var axis = units.filter(function (u) { return u.side === 'axis' && alive(u); });
     // spotting: a German is only on your screen while a Sherman can see him, or for a moment after he fires
-    axis.forEach(function (s) { if (s.fired > 0 || allies.some(function (a) { return dist(a, s) < 160 && seeLine(a.x, a.y, s.x, s.y); })) s.seenT = clock; });
+    var sees = function (s) { return allies.some(function (a) { return dist(a, s) < 160 && seeLine(a.x, a.y, s.x, s.y); }); };
+    axis.forEach(function (s) { if (s.fired > 0 || sees(s)) { s.seenT = clock; s.last = { x: s.x, y: s.y, h: s.h, pose: s.pose }; } });
+    units.forEach(function (s) { if (s.side === 'axis' && !alive(s) && !s.bodySeen && (clock - s.seenT < 0.5 || sees(s))) s.bodySeen = true; });
     units.forEach(function (u) {
       if (!alive(u)) { if (u.kind === 'tank' && Math.random() < dt * 3) boom(u.x + Math.random() - .5, u.y + Math.random() - .5, 2, true); return; }
       if (u.kind === 'tank') {
         var moving = move(u, 5.0, 0.9, dt) && !!u.path;
         u.state = moving ? 'move' : 'halted';
+        if (moving) {
+          // two track marks every couple of metres, and dust off the lane
+          if (!u.lastMark || Math.sqrt((u.x - u.lastMark[0]) * (u.x - u.lastMark[0]) + (u.y - u.lastMark[1]) * (u.y - u.lastMark[1])) > 2) {
+            if (u.lastMark) mark({ kind: 'track', ax: u.lastMark[0], ay: u.lastMark[1], bx: u.x, by: u.y, h: u.h });
+            u.lastMark = [u.x, u.y];
+          }
+          if (Math.random() < dt * 6) fx.push({ t: 0, life: 2.6, x: u.x - Math.cos(u.h) * 3.5 + Math.random() - .5, y: u.y - Math.sin(u.h) * 3.5 + Math.random() - .5, size: 2.5, kind: 'dust' });
+        } else u.lastMark = null;
         var aim = moving ? 0.6 : 1;                     // firing on the move is far less accurate
         u.gun -= dt; u.mg -= dt;
         var seen = axis.filter(function (s) { return dist(u, s) < 160 && seeLine(u.x, u.y, s.x, s.y); });
@@ -191,7 +202,8 @@
         if (seen.length && u.gun <= 0) {                // 76 mm high explosive into the thickest group
           var tg = seen[Math.floor(Math.random() * Math.min(3, seen.length))]; u.gun = 5.5;
           var sc = moving ? 6 : 2, ang = Math.random() * 6.28, bx = tg.x + Math.cos(ang) * sc * Math.random(), by = tg.y + Math.sin(ang) * sc * Math.random();
-          tracer(u, { x: bx, y: by, kind: 'inf' }, 'rgba(255,240,200,1)'); boom(bx, by, 6, false);
+          tracer(u, { x: bx, y: by, kind: 'inf' }, 'rgba(255,240,200,1)'); boom(bx, by, 6, false); mark({ kind: 'crater', x: bx, y: by, r: 1.6 + Math.random() * .6 });
+          fx.push({ t: 0, life: 1.8, x: u.x + Math.cos(u.h) * 5.5, y: u.y + Math.sin(u.h) * 5.5, size: 2.2, kind: 'smoke' });
           axis.forEach(function (s) {
             var d = Math.sqrt((s.x - bx) * (s.x - bx) + (s.y - by) * (s.y - by));
             if (d < 14) suppress(s, 70 - d * 3);
@@ -223,6 +235,7 @@
             u.path = null; u.pose = 'aim'; turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 4, dt);
             if (u.shot <= 0) {
               u.pf = 0; u.fired = 0.25; u.pose = 'fire'; tracer(u, tgt, 'rgba(255,160,80,1)'); boom(tgt.x, tgt.y, 3, false);
+              fx.push({ t: 0, life: 2.2, x: u.x - Math.cos(u.h) * 2, y: u.y - Math.sin(u.h) * 2, size: 2, kind: 'dust' });   // the back-blast kicks up dirt
               var chance = 0.85 * (tgt.state === 'move' ? 0.8 : 1) * (1 - u.supp / 300);
               if (Math.random() < chance) {
                 var arm = armour(tgt, u); tgt.hp -= arm[1];
@@ -280,6 +293,23 @@
         if (tiles[k].complete) ctx.drawImage(tiles[k], c * T - view.x, r * T - view.y);
         if (!heights[k]) loadHeights(k);
       }
+    marks.forEach(function (m) {
+      if (m.kind === 'crater') {
+        var c = proj(m.x, m.y, 0), cx = c[0] - view.x, cy = c[1] - view.y, rx = m.r / CAM.mPerPx;
+        if (cx < -40 || cy < -40 || cx > VW + 40 || cy > VH + 40 || heightAt(Math.floor(c[0]), Math.floor(c[1])) > 0.4) return;
+        var gr = ctx.createRadialGradient(cx, cy, 1, cx, cy, rx * 1.6);
+        gr.addColorStop(0, 'rgba(28,24,18,.75)'); gr.addColorStop(0.45, 'rgba(45,38,28,.5)'); gr.addColorStop(1, 'rgba(60,50,36,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, rx * 1.6, rx * 1.6 * CAM.up[2], 0, 0, 6.3); ctx.fill();
+      } else {
+        var nx = -Math.sin(m.h) * 1.1, ny = Math.cos(m.h) * 1.1;
+        ctx.strokeStyle = 'rgba(40,34,24,.22)'; ctx.lineWidth = 4; ctx.beginPath();
+        [-1, 1].forEach(function (sd) {
+          var a = proj(m.ax + nx * sd, m.ay + ny * sd, 0), b = proj(m.bx + nx * sd, m.by + ny * sd, 0);
+          ctx.moveTo(a[0] - view.x, a[1] - view.y); ctx.lineTo(b[0] - view.x, b[1] - view.y);
+        });
+        ctx.stroke();
+      }
+    });
     // selection rings and routes under the units
     selected.forEach(function (u) {
       if (!alive(u)) return;
@@ -304,8 +334,9 @@
       } else {
         p = proj(u.x, u.y, SPR.infantryLookZ);
         var s2 = SPR.infantry, d = ((Math.round(u.h / (Math.PI / 4)) % 8) + 8) % 8;
-        var vis = 1 - (clock - u.seenT) / 1.5; if (vis <= 0 && alive(u)) return;
-        if (!alive(u)) { var g = proj(u.x, u.y, 0); if (heightAt(Math.floor(g[0]), Math.floor(g[1])) > 0.4) return; ctx.fillStyle = 'rgba(30,28,22,.75)'; ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 6, 3, 0, 0, 6.3); ctx.fill(); return; }
+        var vis = 1 - (clock - u.seenT) / 1.5;
+        if (vis <= 0 && alive(u)) { lastSeen(u, s2); return; }
+        if (!alive(u)) { if (!u.bodySeen) return; var g = proj(u.x, u.y, 0); if (heightAt(Math.floor(g[0]), Math.floor(g[1])) > 0.4) return; ctx.fillStyle = 'rgba(30,28,22,.75)'; ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 6, 3, 0, 0, 6.3); ctx.fill(); return; }
         ctx.globalAlpha = Math.min(1, vis);
         var gp = proj(u.x, u.y, 0);
         if (heightAt(Math.floor(gp[0]), Math.floor(gp[1])) < 0.4) { ctx.fillStyle = 'rgba(214,80,60,.35)'; ctx.beginPath(); ctx.ellipse(gp[0] - view.x, gp[1] - view.y, 9, 5, 0, 0, 6.3); ctx.fill(); }
@@ -326,9 +357,10 @@
       } else if (f.kind === 'spark') {
         var q = proj(f.x, f.y, 1.5); ctx.fillStyle = 'rgba(255,230,160,' + (1 - k) + ')'; ctx.fillRect(q[0] - view.x - 2, q[1] - view.y - 2, 4, 4);
       } else {
-        var z = f.kind === 'smoke' ? 1 + k * 8 : 0.5, q2 = proj(f.x, f.y, z), rad = f.size * (f.kind === 'smoke' ? (0.6 + k) : (0.4 + k * 0.8)) / CAM.mPerPx;
+        var z = f.kind === 'smoke' ? 1 + k * 8 : f.kind === 'dust' ? 0.6 + k * 1.5 : 0.5, q2 = proj(f.x, f.y, z), rad = f.size * (f.kind === 'smoke' || f.kind === 'dust' ? (0.6 + k * 1.4) : (0.4 + k * 0.8)) / CAM.mPerPx;
         var gr = ctx.createRadialGradient(q2[0] - view.x, q2[1] - view.y, 1, q2[0] - view.x, q2[1] - view.y, rad);
         if (f.kind === 'smoke') { gr.addColorStop(0, 'rgba(70,68,62,' + 0.45 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(70,68,62,0)'); }
+        else if (f.kind === 'dust') { gr.addColorStop(0, 'rgba(150,132,104,' + 0.32 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(150,132,104,0)'); }
         else { gr.addColorStop(0, 'rgba(255,230,170,' + (1 - k) + ')'); gr.addColorStop(0.4, 'rgba(240,140,50,' + 0.8 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(80,60,40,0)'); }
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(q2[0] - view.x, q2[1] - view.y, rad, 0, 6.3); ctx.fill();
       }
@@ -376,6 +408,17 @@
     ctx.drawImage(oc, dx, dy);
   }
 
+  function lastSeen(u, s2) {
+    // where you last saw him: a faded figure and a dashed ring, fading over 25 seconds. He may well have moved.
+    var age = clock - u.seenT; if (!u.last || age > 25) return;
+    var a = 1 - age / 25, g = proj(u.last.x, u.last.y, 0), p = proj(u.last.x, u.last.y, SPR.infantryLookZ);
+    var d = ((Math.round(u.last.h / (Math.PI / 4)) % 8) + 8) % 8, i = Math.max(0, SPR.poses.indexOf(u.last.pose === 'walk' ? 'idle' : u.last.pose));
+    ctx.globalAlpha = 0.28 * a;
+    ctx.drawImage(imgInf, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2);
+    ctx.globalAlpha = 0.7 * a; ctx.strokeStyle = '#D6503C'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 12, 7, 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
   function badge(u, x, y) {
     // cover: a green shield; pinned: amber chevrons; assault: red arrow; retreat: grey arrow; open ground: nothing
     ctx.lineWidth = 2;
@@ -469,7 +512,7 @@
     view.x = (c0[0] + c1[0]) / 2 - VW / 2; view.y = (c0[1] + c1[1]) / 2 - VH / 2; clampView();
     document.getElementById('loading').style.display = 'none';
     say('Two Shermans in the lane. Germans reported around the farm.');
-    window.__game = { units: units, update: update, draw: function () { draw(); }, order: order, proj: proj, view: view, selected: function () { return selected; } };
+    window.__game = { clock: function () { return clock; }, units: units, update: update, draw: function () { draw(); }, order: order, proj: proj, view: view, selected: function () { return selected; } };
     requestAnimationFrame(frame);
   });
 })();
