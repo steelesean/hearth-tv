@@ -24,24 +24,28 @@
   .panel button:hover { background: rgba(237,232,218,.2); }
   .panel button.on { background: #EDE8DA; color: #1b1b16; }
   kbd { font: 11px system-ui, sans-serif; opacity: .65; margin-left: 4px; }
-  .help { left: 20px; bottom: 16px; padding: 8px 14px; font-size: 13px; color: #CFC9B8; pointer-events: none; max-width: 760px; line-height: 1.45; }
+  .help { left: 20px; bottom: 16px; padding: 8px 40px 8px 14px; font-size: 13px; color: #CFC9B8; max-width: 760px; line-height: 1.45; }
+  .help .x { position: absolute; right: 8px; top: 6px; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(237,232,218,.12); color: #EDE8DA; font: 16px/24px system-ui, sans-serif; cursor: pointer; padding: 0; }
+  .help .x:hover { background: rgba(237,232,218,.25); }
   .over { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,10,8,.55); }
   .over > div { background: rgba(28,28,22,.95); border: 1px solid rgba(237,232,218,.25); border-radius: 18px; padding: 28px 40px; text-align: center; max-width: 640px; line-height: 1.5; }
   .over b { font: 400 38px Georgia, serif; display: block; margin-bottom: 8px; }
   .over button { margin: 18px 6px 0; font: inherit; padding: 10px 22px; border-radius: 999px; border: 0; background: #EDE8DA; color: #1b1b16; cursor: pointer; }
   .over button small { display: block; font-size: 12px; opacity: .7; }
+  body.tv .help, body.tv .panel { display: none; }   /* on the TV: no mouse, so no buttons; the remote's menu does it all */
+  body.tv .hud { font-size: 17px; max-width: 760px; }
   .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #CFC9B8; }
 </style>
 </head>
 <body>
 <canvas id="c" width="1920" height="1080"></canvas>
 <div class="box hud" id="hud"></div>
-<div class="box help">Click a Sherman, or one of your riflemen to take the whole squad; shift-drag to box several. Click the ground to move, a German to target him. Drag the map or use the arrow keys. Hedgerows block sight; tanks need a gap (or can crash through, slowly), and infantry can climb the banks.</div>
+<div class="box help" id="help"><button class="x" id="helpClose" aria-label="Hide help" title="Hide help">×</button>Click a Sherman, or one of your riflemen to take the whole squad; shift-drag to box several. Click the ground to move, a German to target him. Drag the map or use the arrow keys. Riflemen take a point by standing on it. Hedgerows block sight; tanks need a gap (or can crash through, slowly), and infantry can climb the banks. With the TV remote: arrows move the cursor, OK gives orders, Back pauses.</div>
 <div class="box panel" id="panel"></div>
 <div class="over" id="start"><div>
   <b>Hedgerows near Carentan</b>
-  Normandy, June 1944. Two Shermans and a rifle squad have to clear Germans out of a farm in the bocage. They have Panzerfausts, and the hedges are thick.
-  <br><span class="dim">Sound on is best.</span><br>
+  Normandy, June 1944. Two Shermans and 1st Squad have to take a farm and a crossroads in the bocage, then hold both when the Germans counter-attack. The Germans have Panzerfausts and an MG42, and the hedges are thick.
+  <br><span class="dim">Sound on is best. On the TV, use left and right, then OK.</span><br>
   <button data-time="mist">Morning mist<small>06:10, sight 55 m and lifting</small></button>
   <button data-time="day">Afternoon<small>13:05, clear</small></button>
   <button data-time="dusk">Dusk<small>21:15, light fading</small></button>
