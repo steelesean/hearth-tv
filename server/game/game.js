@@ -6,7 +6,8 @@
   'use strict';
   var cv = document.getElementById('c'), ctx = cv.getContext('2d');
   var VW = 1920, VH = 1080;
-  var LEVEL, CAM, SPR, TILES, imgTank, imgInf, tiles = {};
+  var LEVEL, CAM, SPR, TILES, imgTank, imgInf, tiles = {}, heights = {};
+  var oc = document.createElement('canvas'), octx = oc.getContext('2d');   // scratch canvas for hiding parts of units
   var units = [], fx = [], selected = [], over = false, lastT = 0, clock = 0;
   var view = { x: 0, y: 0 };                         // top-left of the screen, in background pixels
   var block, tankBlock, G, CELL, HALF;
@@ -105,7 +106,7 @@
 
   // ------------------------------------------------------------------ units
   function tank(x, y) { return { kind: 'tank', side: 'allies', x: x, y: y, h: 0, hp: 100, path: null, gun: 2, mg: 0, smoke: 0, name: 'Sherman', state: 'halted' }; }
-  function soldier(x, y, squad, at) { return { kind: 'inf', side: 'axis', x: x, y: y, h: Math.random() * 6.28, hp: 100, path: null, squad: squad, at: at, shot: 1 + Math.random() * 3, anim: 0, pose: 'idle', fired: 0, pf: at ? 1 : 0, home: [x, y], state: 'exposed', supp: 0, suppT: -9, pinned: false, sought: -99 }; }
+  function soldier(x, y, squad, at) { return { kind: 'inf', side: 'axis', x: x, y: y, h: Math.random() * 6.28, hp: 100, path: null, squad: squad, at: at, shot: 1 + Math.random() * 3, anim: 0, pose: 'idle', fired: 0, pf: at ? 1 : 0, home: [x, y], state: 'exposed', seenT: -99, supp: 0, suppT: -9, pinned: false, sought: -99 }; }
   function dist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
   function alive(u) { return u.hp > 0; }
   function enemies(u) { return units.filter(function (v) { return v.side !== u.side && alive(v); }); }
@@ -171,6 +172,8 @@
     clock += dt;
     var allies = units.filter(function (u) { return u.side === 'allies' && alive(u); });
     var axis = units.filter(function (u) { return u.side === 'axis' && alive(u); });
+    // spotting: a German is only on your screen while a Sherman can see him, or for a moment after he fires
+    axis.forEach(function (s) { if (s.fired > 0 || allies.some(function (a) { return dist(a, s) < 160 && seeLine(a.x, a.y, s.x, s.y); })) s.seenT = clock; });
     units.forEach(function (u) {
       if (!alive(u)) { if (u.kind === 'tank' && Math.random() < dt * 3) boom(u.x + Math.random() - .5, u.y + Math.random() - .5, 2, true); return; }
       if (u.kind === 'tank') {
@@ -275,6 +278,7 @@
         var k = c + '_' + r;
         if (!tiles[k]) { tiles[k] = new Image(); tiles[k].src = 'tiles/' + k + '.jpg'; }
         if (tiles[k].complete) ctx.drawImage(tiles[k], c * T - view.x, r * T - view.y);
+        if (!heights[k]) loadHeights(k);
       }
     // selection rings and routes under the units
     selected.forEach(function (u) {
@@ -294,20 +298,24 @@
         var k = ((Math.round(u.h / (Math.PI / 8)) % 16) + 16) % 16, s = SPR.tank;
         p = proj(u.x, u.y, SPR.tankLookZ);
         if (!alive(u)) ctx.filter = 'brightness(0.35) saturate(0.3)';
-        ctx.drawImage(imgTank, k * s, 0, s, s, p[0] - view.x - s / 2, p[1] - view.y - s / 2, s, s);
+        blit(imgTank, k * s, 0, s, s, p[0] - view.x - s / 2, p[1] - view.y - s / 2, s, s, proj(u.x, u.y, 0)[1], [159, 194, 230]);
         ctx.filter = 'none';
         if (alive(u)) bar(u, p, s);
       } else {
         p = proj(u.x, u.y, SPR.infantryLookZ);
         var s2 = SPR.infantry, d = ((Math.round(u.h / (Math.PI / 4)) % 8) + 8) % 8;
-        if (!alive(u)) { var g = proj(u.x, u.y, 0); ctx.fillStyle = 'rgba(30,28,22,.75)'; ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 6, 3, 0, 0, 6.3); ctx.fill(); return; }
-        var gp = proj(u.x, u.y, 0); ctx.fillStyle = 'rgba(214,80,60,.35)'; ctx.beginPath(); ctx.ellipse(gp[0] - view.x, gp[1] - view.y, 9, 5, 0, 0, 6.3); ctx.fill();
+        var vis = 1 - (clock - u.seenT) / 1.5; if (vis <= 0 && alive(u)) return;
+        if (!alive(u)) { var g = proj(u.x, u.y, 0); if (heightAt(Math.floor(g[0]), Math.floor(g[1])) > 0.4) return; ctx.fillStyle = 'rgba(30,28,22,.75)'; ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 6, 3, 0, 0, 6.3); ctx.fill(); return; }
+        ctx.globalAlpha = Math.min(1, vis);
+        var gp = proj(u.x, u.y, 0);
+        if (heightAt(Math.floor(gp[0]), Math.floor(gp[1])) < 0.4) { ctx.fillStyle = 'rgba(214,80,60,.35)'; ctx.beginPath(); ctx.ellipse(gp[0] - view.x, gp[1] - view.y, 9, 5, 0, 0, 6.3); ctx.fill(); }
         var pose = u.pose === 'walk' ? 'walk' + (Math.floor(u.anim * 9) % 6) : u.pose;
         var i = SPR.poses.indexOf(pose); if (i < 0) i = 0;
-        if (u.pinned && !u.fallback) ctx.drawImage(imgInf, i * s2, d * s2, s2, s2 * 0.62, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2 + s2 * 0.38, s2, s2 * 0.62);
-        else ctx.drawImage(imgInf, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2);
+        if (u.pinned && !u.fallback) blit(imgInf, i * s2, d * s2, s2, Math.round(s2 * 0.62), p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2 + s2 * 0.38, s2, Math.round(s2 * 0.62), gp[1], [214, 80, 60]);
+        else blit(imgInf, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2, gp[1], [214, 80, 60]);
         if (u.at && u.pf) { ctx.fillStyle = '#E0604A'; ctx.fillRect(p[0] - view.x - 2, p[1] - view.y - s2 / 2 - 4, 4, 4); }
         badge(u, p[0] - view.x, p[1] - view.y - s2 / 2 - 12);
+        ctx.globalAlpha = 1;
       }
     });
     fx.forEach(function (f) {
@@ -328,6 +336,46 @@
     if (drag && drag.box) { ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
     hud();
   }
+  // ------------------------------------------------------------------ hiding units behind buildings and trees
+  // The background is one flat picture, so a unit behind a farmhouse would be painted over its roof. Blender
+  // also rendered a height map (h_*.png: the height of whatever the camera sees at each pixel, 0 to 15.3 m).
+  // Any pixel of a unit that sits lower than the scene in front of it is hidden, and shown as a faint outline.
+  function loadHeights(k) {
+    heights[k] = { data: null };
+    var im = new Image();
+    im.onload = function () {
+      var c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+      var x = c.getContext('2d'); x.drawImage(im, 0, 0);
+      heights[k] = { w: im.width, data: x.getImageData(0, 0, im.width, im.height).data };
+    };
+    im.src = 'tiles/h_' + k + '.png';
+  }
+  function heightAt(X, Y) {
+    var T = TILES.size, t = heights[Math.floor(X / T) + '_' + Math.floor(Y / T)];
+    if (!t || !t.data) return 0;
+    return t.data[((Y % T) * t.w + (X % T)) * 4] * 15.3 / 255;
+  }
+  function blit(img, sx, sy, sw, sh, dx, dy, dw, dh, footY, tint) {
+    // footY: the unit's ground point, in background pixels. A pixel r rows above it is (footY - r) * m / up.z metres up.
+    dx = Math.round(dx); dy = Math.round(dy);
+    oc.width = dw; oc.height = dh; octx.clearRect(0, 0, dw, dh); octx.drawImage(img, sx, sy, sw, sh, 0, 0, dw, dh);
+    var id = octx.getImageData(0, 0, dw, dh), px = id.data, k = CAM.mPerPx / CAM.up[2], hid = false;
+    for (var j = 0; j < dh; j++) {
+      var Y = view.y + dy + j, zu = Math.max(0, (footY - Y) * k);
+      for (var i = 0; i < dw; i++) {
+        var o = (j * dw + i) * 4;
+        if (!px[o + 3]) continue;
+        if (heightAt(Math.floor(view.x + dx + i), Math.floor(Y)) > zu + 0.4) {
+          // the soft shadow baked into the sprite just disappears; the unit itself becomes an outline
+          if (px[o + 3] < 120 || px[o] + px[o + 1] + px[o + 2] < 6) px[o + 3] = 0; else { px[o] = tint[0]; px[o + 1] = tint[1]; px[o + 2] = tint[2]; px[o + 3] = 100; }
+          hid = true;
+        }
+      }
+    }
+    if (hid) octx.putImageData(id, 0, 0);
+    ctx.drawImage(oc, dx, dy);
+  }
+
   function badge(u, x, y) {
     // cover: a green shield; pinned: amber chevrons; assault: red arrow; retreat: grey arrow; open ground: nothing
     ctx.lineWidth = 2;
@@ -343,12 +391,11 @@
     ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(237,232,218,.85)'; ctx.fillText(u.state === 'move' ? 'Moving' : 'Halted', x + w / 2, y - 4);
   }
   function hud() {
-    var axis = units.filter(function (u) { return u.side === 'axis' && alive(u); }).length;
+    var axis = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5; }).length;
     var tanks = units.filter(function (u) { return u.side === 'allies' && alive(u); }).length;
-    var pf = units.filter(function (u) { return u.side === 'axis' && alive(u) && u.at && u.pf; }).length;
-    var pin = units.filter(function (u) { return u.side === 'axis' && alive(u) && u.state === 'pinned'; }).length;
-    var cov = units.filter(function (u) { return u.side === 'axis' && alive(u) && u.state === 'cover'; }).length;
-    document.getElementById('hud').innerHTML = '<b>Hedgerows near Carentan</b>Clear the Germans from the hamlet.<br>Shermans: ' + tanks + ' · Germans: ' + axis + ' (Panzerfausts: ' + pf + ')<br><span style="color:#CFC9B8">In cover ' + cov + ' · Pinned ' + pin + '</span>'
+    var pin = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5 && u.state === 'pinned'; }).length;
+    var cov = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5 && u.state === 'cover'; }).length;
+    document.getElementById('hud').innerHTML = '<b>Hedgerows near Carentan</b>Clear the Germans from the hamlet.<br>Shermans: ' + tanks + ' · Germans in sight: ' + axis + '<br><span style="color:#CFC9B8">In cover ' + cov + ' · Pinned ' + pin + '</span>'
       + radio.filter(function (r) { return clock - r.t < 8; }).map(function (r) { return '<br><span style="color:#E2B25A">Radio:</span> ' + r.text; }).join('');
   }
 
@@ -422,7 +469,7 @@
     view.x = (c0[0] + c1[0]) / 2 - VW / 2; view.y = (c0[1] + c1[1]) / 2 - VH / 2; clampView();
     document.getElementById('loading').style.display = 'none';
     say('Two Shermans in the lane. Germans reported around the farm.');
-    window.__game = { units: units, update: update, draw: draw, order: order, proj: proj, view: view, selected: function () { return selected; } };
+    window.__game = { units: units, update: update, draw: function () { draw(); }, order: order, proj: proj, view: view, selected: function () { return selected; } };
     requestAnimationFrame(frame);
   });
 })();
