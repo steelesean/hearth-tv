@@ -1,4 +1,5 @@
-// Hedgerows near Carentan: a first test. Two Shermans against a German rifle platoon in the bocage.
+// Hedgerows near Carentan: a test of the WW2 game. Two Shermans and a US rifle squad against a German
+// rifle platoon in the bocage.
 // Everything happens in world metres (x east, y north); the screen is the same orthographic view
 // Blender rendered the map and sprites with, so a unit drawn at project(x, y) sits where it should.
 // Plain ES5 so it can later run in the Fire TV's older WebView.
@@ -6,11 +7,20 @@
   'use strict';
   var cv = document.getElementById('c'), ctx = cv.getContext('2d');
   var VW = 1920, VH = 1080;
-  var LEVEL, CAM, SPR, TILES, imgTank, imgInf, tiles = {}, heights = {};
+  var LEVEL, CAM, SPR, TILES, TILES_DUSK, imgTank, sheets = {}, tiles = {}, heights = {};
   var oc = document.createElement('canvas'), octx = oc.getContext('2d');   // scratch canvas for hiding parts of units
-  var units = [], fx = [], marks = [], selected = [], over = false, lastT = 0, clock = 0;
+  var units = [], fx = [], marks = [], clouds = [], heard = [], pendingCrew = [], selected = [];
+  var over = false, started = false, lastT = 0, clock = 0;
   var view = { x: 0, y: 0 };                         // top-left of the screen, in background pixels
-  var block, tankBlock, G, CELL, HALF;
+  var block, kindGrid, hedgeCell, tankBlock, tankSoft, G, CELL, HALF, rally;
+  var charges = { '1st Squad': 2 };   // demolition charges for blowing gaps in hedgerows
+  var flats = [];                     // breaches in hedges: where the height map has to be flattened
+  var tally = { crewOut: 0, crewSaved: 0, prisoners: 0, withdrew: 0 };
+  var params = {}; location.search.replace(/[?&](\w+)=?([^&]*)/g, function (_, k, v) { params[k] = v || '1'; });
+  var TIME = 'day';            // 'mist', 'day' or 'dusk': chosen on the start screen
+  var command = null;          // 'smoke', 'demo' or 'area' while waiting for the player to click where
+  var WIND = [0.35, 0.12];     // metres a second; smoke and mist drift with it
+  var mistPatches = [];
 
   function fit() {
     var k = Math.min(window.innerWidth / VW, window.innerHeight / VH);
@@ -23,7 +33,32 @@
       var x = new XMLHttpRequest(); x.open('GET', url); x.onload = function () { x.status < 300 ? ok(JSON.parse(x.responseText)) : no(url); }; x.onerror = function () { no(url); }; x.send();
     });
   }
-  function image(url) { return new Promise(function (ok) { var i = new Image(); i.onload = function () { ok(i); }; i.src = url; }); }
+  function maybe(url) { return get(url).then(null, function () { return null; }); }
+  function image(url) { return new Promise(function (ok) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = function () { ok(null); }; i.src = url; }); }
+
+  // ------------------------------------------------------------------ the hour and the weather
+  // Morning mist limits sight to about 55 m and burns off over four minutes; dusk is 110 m; a clear day 160 m.
+  function sightRange() {
+    if (TIME === 'mist') return 55 + Math.min(1, clock / 240) * 105;
+    if (TIME === 'dusk') return 110;
+    return 160;
+  }
+  function mistLeft() { return TIME === 'mist' ? Math.max(0, 1 - clock / 240) : 0; }
+  function hourText() {
+    var start = { mist: 6 * 60 + 10, day: 13 * 60 + 5, dusk: 21 * 60 + 15 }[TIME], m = Math.floor(start + clock / 60);
+    var hh = Math.floor(m / 60) % 24, mm = m % 60;
+    return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+  function weatherText() {
+    if (TIME === 'mist') return mistLeft() > 0.05 ? 'ground mist, you can see about ' + Math.round(sightRange()) + ' m' : 'the mist has lifted';
+    if (TIME === 'dusk') return 'dusk, light fading';
+    return 'clear';
+  }
+  function cloudR(cl) {
+    // smoke billows out over five seconds, hangs, then thins over its last ten
+    var a = clock - cl.t0; if (a < 0) return 0;
+    return cl.r * Math.min(1, a / 5) * (a > cl.life - 10 ? Math.max(0, (cl.life - a) / 10) : 1);
+  }
 
   // ------------------------------------------------------------------ projection
   function proj(x, y, z) {
@@ -48,26 +83,40 @@
       var t = i / n, c = cellOf(ax + (bx - ax) * t, ay + (by - ay) * t);
       if (blocked(block, c[0], c[1])) return false;
     }
+    // so does smoke, unless you're almost on top of each other
+    if (d > 8) for (var k = 0; k < clouds.length; k++) {
+      var cl = clouds[k], r = cloudR(cl); if (r < 1) continue;
+      var f = Math.max(0, Math.min(1, ((cl.x - ax) * (bx - ax) + (cl.y - ay) * (by - ay)) / (d * d)));
+      var px = ax + (bx - ax) * f - cl.x, py = ay + (by - ay) * f - cl.y;
+      if (px * px + py * py < r * r) return false;
+    }
     return true;
   }
-  function path(grid, from, to) {
-    // A* over 2 m cells, eight directions, no corner cutting.
-    var s = nearestOpen(grid, cellOf(from[0], from[1])), e = cellOf(to[0], to[1]);
+  function path(grid, from, to, soft, cost) {
+    // A* over 2 m cells, eight directions, no corner cutting. Cells marked in soft (hedgerows) can be crossed, but
+    // each counts as `cost` cells of open ground, so a route only goes over a hedge when it saves a long way round.
+    var pass = function (c, r) { if (c < 0 || r < 0 || c >= G || r >= G) return 0; var i = r * G + c; return !grid[i] ? 1 : soft && soft[i] ? cost : 0; };
+    var s = cellOf(from[0], from[1]); if (!pass(s[0], s[1])) s = nearestOpen(grid, s);
+    var e = cellOf(to[0], to[1]);
     if (!s) return null;
-    if (blocked(grid, e[0], e[1])) {              // a blocked target: aim for the nearest open cell
+    if (pass(e[0], e[1]) !== 1) {                   // a blocked target: aim for the nearest open cell
       var best = null, bd = 1e9;
-      for (var rr = -6; rr <= 6; rr++) for (var cc = -6; cc <= 6; cc++) if (!blocked(grid, e[0] + cc, e[1] + rr) && cc * cc + rr * rr < bd) { bd = cc * cc + rr * rr; best = [e[0] + cc, e[1] + rr]; }
+      for (var rr = -6; rr <= 6; rr++) for (var cc = -6; cc <= 6; cc++) if (pass(e[0] + cc, e[1] + rr) === 1 && cc * cc + rr * rr < bd) { bd = cc * cc + rr * rr; best = [e[0] + cc, e[1] + rr]; }
       if (!best) return null; e = best;
     }
-    var key = function (c, r) { return r * G + c; };
-    var open = [[0, s[0], s[1]]], g = {}, came = {}, closed = {};
-    g[key(s[0], s[1])] = 0;
+    var heap = [], g = {}, came = {}, closed = {};
+    function push(f, k) { heap.push([f, k]); var i = heap.length - 1; while (i) { var p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; var t = heap[p]; heap[p] = heap[i]; heap[i] = t; i = p; } }
+    function pop() {
+      var top = heap[0], last = heap.pop();
+      if (heap.length) { heap[0] = last; var i = 0; for (;;) { var l = 2 * i + 1, r = l + 1, m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; var t = heap[m]; heap[m] = heap[i]; heap[i] = t; i = m; } }
+      return top;
+    }
     var h = function (c, r) { var dx = Math.abs(c - e[0]), dy = Math.abs(r - e[1]); return Math.max(dx, dy) + 0.414 * Math.min(dx, dy); };
+    var k0 = s[1] * G + s[0]; g[k0] = 0; push(h(s[0], s[1]), k0);
     var steps = 0;
-    while (open.length && steps++ < 40000) {
-      var bi = 0; for (var i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
-      var cur = open.splice(bi, 1)[0], c = cur[1], r = cur[2], k = key(c, r);
-      if (closed[k]) continue; closed[k] = 1;
+    while (heap.length && steps++ < 60000) {
+      var k = pop()[1]; if (closed[k]) continue; closed[k] = 1;
+      var c = k % G, r = Math.floor(k / G);
       if (c === e[0] && r === e[1]) {
         var out = [], kk = k;
         while (kk !== undefined) { out.unshift(centre(kk % G, Math.floor(kk / G))); kk = came[kk]; }
@@ -75,10 +124,10 @@
       }
       for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
         if (!dc && !dr) continue;
-        var nc = c + dc, nr = r + dr;
-        if (blocked(grid, nc, nr) || (dc && dr && (blocked(grid, c + dc, r) || blocked(grid, c, r + dr)))) continue;
-        var nk = key(nc, nr), ng = g[k] + (dc && dr ? 1.414 : 1);
-        if (g[nk] === undefined || ng < g[nk]) { g[nk] = ng; came[nk] = k; open.push([ng + h(nc, nr), nc, nr]); }
+        var nc = c + dc, nr = r + dr, w = pass(nc, nr);
+        if (!w || (dc && dr && (!pass(c + dc, r) || !pass(c, r + dr)))) continue;
+        var nk = nr * G + nc, ng = g[k] + w * (dc && dr ? 1.414 : 1);
+        if (g[nk] === undefined || ng < g[nk]) { g[nk] = ng; came[nk] = k; push(ng + h(nc, nr), nk); }
       }
     }
     return null;
@@ -105,15 +154,55 @@
   }
 
   // ------------------------------------------------------------------ units
-  function tank(x, y) { return { kind: 'tank', side: 'allies', x: x, y: y, h: 0, hp: 100, path: null, gun: 2, mg: 0, smoke: 0, name: 'Sherman', state: 'halted' }; }
-  function soldier(x, y, squad, at) { return { kind: 'inf', side: 'axis', x: x, y: y, h: Math.random() * 6.28, hp: 100, path: null, squad: squad, at: at, shot: 1 + Math.random() * 3, anim: 0, pose: 'idle', fired: 0, pf: at ? 1 : 0, home: [x, y], state: 'exposed', seenT: -99, supp: 0, suppT: -9, pinned: false, sought: -99 }; }
+  var CALL = ['Able', 'Baker'];
+  var HE_LOAD = 15, SMOKE_LOAD = 6;   // high-explosive rounds kept for this fight, and bombs for the turret's 2-inch smoke mortar
+  function tank(x, y, i) {
+    return { kind: 'tank', side: 'allies', name: CALL[i], x: x, y: y, h: 0, hp: 100, path: null, gun: 2, mg: 0, state: 'halted',
+      he: HE_LOAD, smoke: SMOKE_LOAD, heMode: 'auto', target: null, kills: 0, vet: 0, dmg: {}, repair: 0, crew: 5 };
+  }
+  // kit: 'rifle' (German), 'us' (American rifleman) or 'tanker' (a Sherman's crew). role: 'rifle', 'pf', 'nco' or 'crew'.
+  function soldier(x, y, side, kit, squad, role) {
+    var heart = { nco: 88, pf: 74, rifle: 68, crew: 42 }[role] + Math.random() * 14;
+    return { kind: 'inf', side: side, kit: kit, role: role, squad: squad, x: x, y: y, h: Math.random() * 6.28, hp: 100, path: null,
+      shot: 1 + Math.random() * 3, anim: Math.random(), pose: 'idle', fired: 0, pf: role === 'pf' ? 1 : 0, state: 'exposed',
+      seenT: -99, supp: 0, suppT: -9, pinned: false, sought: -99, morale: heart, heart: heart, kills: 0, vet: role === 'nco' ? 1 : 0,
+      assault: false, retreating: false, broken: false };
+  }
+  // how each small arm behaves: effective range, seconds between shots, hit chance at point-blank
+  var WEAPON = { rifle: { range: 150, every: [2.4, 4.4], acc: 0.2 },     // Kar98k, bolt action
+                 us: { range: 150, every: [1.5, 2.8], acc: 0.2 },        // M1 Garand, semi-automatic
+                 tanker: { range: 55, every: [0.8, 1.6], acc: 0.15 } };  // M3 grease gun
   function dist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
-  function alive(u) { return u.hp > 0; }
-  function enemies(u) { return units.filter(function (v) { return v.side !== u.side && alive(v); }); }
+  function alive(u) { return u.hp > 0 && !u.gone; }
+  function team(s) { return units.filter(function (u) { return u.side === s && alive(u); }); }
+  function isTank(u) { return u.kind === 'tank'; }
+  function squadOf(u) { return units.filter(function (v) { return v.kind === 'inf' && v.squad === u.squad && alive(v); }); }
+  function squadName(u) { return u.role === 'crew' ? u.squad + '’s crew' : u.squad; }
 
   function order(u, x, y) {
-    var p = path(u.kind === 'tank' ? tankBlock : block, [u.x, u.y], [x, y]);
-    u.path = p ? p.slice(1) : null;
+    // infantry will climb a hedgerow bank if it saves a long way round; a tank only crashes through one if told to
+    var p = u.kind === 'tank' ? path(tankBlock, [u.x, u.y], [x, y], u.crash ? tankSoft : null, 10)
+                              : path(block, [u.x, u.y], [x, y], hedgeCell, 8);
+    u.path = p ? p.slice(1) : null; u.wait = 0;
+    return !!p;
+  }
+  function orderGroup(list, x, y) {
+    var tanks = list.filter(isTank), men = list.filter(function (u) { return !isTank(u); });
+    tanks.forEach(function (t, i) {
+      if (t.dmg.track) { say(t.name + ' can’t move: the track is broken.'); return; }
+      if (!i) { order(t, x, y); return; }
+      // the second tank pulls up beside the first if there's room, otherwise behind it
+      var a = Math.atan2(y - tanks[0].y, x - tanks[0].x), s = Math.sin(a), c = Math.cos(a);
+      var spots = [[x - s * 8, y + c * 8], [x + s * 8, y - c * 8], [x - c * 12, y - s * 12], [x - c * 20, y - s * 20]];
+      for (var k = 0; k < spots.length; k++) { var q = cellOf(spots[k][0], spots[k][1]); if (!blocked(tankBlock, q[0], q[1])) { order(t, spots[k][0], spots[k][1]); return; } }
+      order(t, x - c * 12, y - s * 12);
+    });
+    if (!men.length) return;
+    if (men.some(function (m) { return m.broken; })) { say(squadName(men[0]) + ' won’t go. They’re shaken and pulling back.'); men = men.filter(function (m) { return !m.broken; }); }
+    // the squad spreads out in a line across the direction of travel, 3 m apart, and takes cover when it gets there
+    var cx = 0, cy = 0; men.forEach(function (m) { cx += m.x / men.length; cy += m.y / men.length; });
+    var a = Math.atan2(y - cy, x - cx), nx = -Math.sin(a), ny = Math.cos(a);
+    men.forEach(function (m, i) { var o = (i - (men.length - 1) / 2) * 3; order(m, x + nx * o, y + ny * o); m.arrive = true; m.retreating = false; });
   }
 
   function turnTo(u, ang, rate, dt) {
@@ -124,22 +213,102 @@
   function move(u, speed, turn, dt) {
     if (!u.path || !u.path.length) { u.path = null; return false; }
     var w = u.path[0], dx = w[0] - u.x, dy = w[1] - u.y, d = Math.sqrt(dx * dx + dy * dy);
-    if (d < 1.2) { u.path.shift(); return true; }
-    var off = turnTo(u, Math.atan2(dy, dx), turn, dt);
-    if (off < 0.6) { var k = Math.min(d, speed * dt * (1 - off / 0.6 * 0.5)); u.x += dx / d * k; u.y += dy / d * k; }
+    if (d < 1.2) { u.path.shift(); if (!u.path.length) u.path = null; return true; }
+    var off = turnTo(u, Math.atan2(dy, dx), turn, dt), slow = terrain(u);
+    u.climbing = slow < 1;
+    if (off < 0.6) { var k = Math.min(d, speed * slow * dt * (1 - off / 0.6 * 0.5)); u.x += dx / d * k; u.y += dy / d * k; }
     return true;
   }
+  function terrain(u) {
+    // over a hedgerow bank: a soldier scrambles at a third of his pace; a Sherman grinds through at about a metre a second
+    var c = cellOf(u.x, u.y), i = c[1] * G + c[0];
+    if (c[0] < 0 || c[1] < 0 || c[0] >= G || c[1] >= G) return 1;
+    return u.kind === 'tank' ? (tankBlock[i] ? 0.2 : 1) : (block[i] ? 0.35 : 1);
+  }
+  function separate(u) {
+    // nobody shares space: tanks keep about a tank's width apart, soldiers step out of a tank's way and off each other's toes
+    units.forEach(function (o) {
+      if (o === u || o.gone || (o.kind === 'inf' && o.hp <= 0)) return;
+      var gap = isTank(u) && isTank(o) ? 6 : isTank(u) || isTank(o) ? 3.4 : 0.9, d = dist(u, o);
+      if (d >= gap || d < 0.01) return;
+      if (isTank(u) && !isTank(o)) return;                        // soldiers get out of a tank's way, not the other way round
+      {
+        var push = (gap - d) * ((isTank(o) && !isTank(u)) || o.hp <= 0 ? 1 : 0.5), nx = u.x + (u.x - o.x) / d * push, ny = u.y + (u.y - o.y) / d * push, c = cellOf(nx, ny);
+        if (!blocked(isTank(u) ? tankBlock : block, c[0], c[1])) { u.x = nx; u.y = ny; }
+      }
+    });
+  }
+  function tankAhead(u) {
+    // another tank (or a wreck) within 9 m, more or less dead ahead
+    return units.filter(function (o) {
+      if (o === u || !isTank(o) || dist(u, o) > 9) return false;
+      var a = Math.atan2(o.y - u.y, o.x - u.x); return Math.abs(Math.atan2(Math.sin(a - u.h), Math.cos(a - u.h))) < 0.7;
+    })[0];
+  }
+  function routeAround(u, other) {
+    // a halted tank or a wreck in the way: find a route that keeps clear of it
+    var tmp = tankBlock.slice(), c0 = cellOf(other.x, other.y);
+    for (var dr = -3; dr <= 3; dr++) for (var dc = -3; dc <= 3; dc++) { var c = c0[0] + dc, r = c0[1] + dr; if (c >= 0 && r >= 0 && c < G && r < G && dc * dc + dr * dr <= 9) tmp[r * G + c] = 1; }
+    var end = u.path[u.path.length - 1], p = path(tmp, [u.x, u.y], end, u.crash ? tankSoft : null, 10);
+    if (p) { u.path = p.slice(1); return true; }
+    return false;
+  }
 
-  function mark(m) { marks.push(m); if (marks.length > 500) marks.shift(); }   // craters and track marks stay on the ground
+  // ------------------------------------------------------------------ changing the ground: gaps in hedges, wrecks in lanes
+  function rebuildTank(c0, R) {
+    // after the ground changes, work out again where a tank fits nearby
+    for (var dr = -R; dr <= R; dr++) for (var dc = -R; dc <= R; dc++) {
+      var c = c0[0] + dc, r = c0[1] + dr; if (c < 1 || r < 1 || c >= G - 1 || r >= G - 1) continue;
+      var any = 0, bld = 0;
+      for (var y = -1; y <= 1; y++) for (var x = -1; x <= 1; x++) { var k = kindGrid[(r + y) * G + c + x]; if (k) any = 1; if (k >= 2) bld = 1; }
+      tankBlock[r * G + c] = any; tankSoft[r * G + c] = any && !bld ? 1 : 0;
+    }
+  }
+  function breach(x, y, r) {
+    // open a gap: the hedge cells go, the height map there is flattened, and the picture gets torn earth over the hedge
+    var c0 = cellOf(x, y), R = Math.ceil(r / CELL), changed = false;
+    for (var dr = -R; dr <= R; dr++) for (var dc = -R; dc <= R; dc++) {
+      var c = c0[0] + dc, rr = c0[1] + dr; if (c < 0 || rr < 0 || c >= G || rr >= G || dc * dc + dr * dr > R * R) continue;
+      var i = rr * G + c; if (kindGrid[i] === 1) { kindGrid[i] = 0; block[i] = 0; hedgeCell[i] = 0; changed = true; }
+    }
+    if (!changed) return false;
+    rebuildTank(c0, R + 2);
+    var f = { x: x, y: y, r: r }; flats.push(f); flatten(f); mark({ kind: 'breach', x: x, y: y, r: r, seed: Math.random() * 1000 });
+    return true;
+  }
+  function flatten(f) {
+    // every pixel the gap's bushes covered, from the ground up to 7 m, now shows ground: nothing there to hide behind
+    for (var gx = -f.r; gx <= f.r; gx += 0.5) for (var gy = -f.r; gy <= f.r; gy += 0.5) {
+      if (gx * gx + gy * gy > f.r * f.r) continue;
+      var p0 = proj(f.x + gx, f.y + gy, 0), p1 = proj(f.x + gx, f.y + gy, 7), X = Math.floor(p0[0]);
+      for (var Y = Math.floor(p1[1]); Y <= Math.ceil(p0[1]); Y++) {
+        var T = TILES.size, t = heights[Math.floor(X / T) + '_' + Math.floor(Y / T)];
+        if (t && t.data) t.data[((Y % T) * t.w + (X % T)) * 4] = 0;
+      }
+    }
+  }
+  function wreckBlocks(t) {
+    // a knocked-out Sherman is 30 tons of steel in the lane
+    var c0 = cellOf(t.x, t.y);
+    for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) { var c = c0[0] + dc, r = c0[1] + dr; if (c >= 0 && r >= 0 && c < G && r < G) { kindGrid[r * G + c] = 3; block[r * G + c] = 1; hedgeCell[r * G + c] = 0; } }
+    rebuildTank(c0, 3);
+  }
+
+  // ------------------------------------------------------------------ effects
+  function mark(m) { marks.push(m); paintMark(m); }   // craters, track marks and gaps stay on the ground
   function boom(x, y, size, smoke) { fx.push({ t: 0, life: smoke ? 3 : 0.7, x: x, y: y, size: size, kind: smoke ? 'smoke' : 'boom' }); }
   function tracer(a, b, col) { fx.push({ t: 0, life: 0.12, ax: a.x, ay: a.y, az: a.kind === 'tank' ? 2.2 : 1.4, bx: b.x, by: b.y, bz: b.kind === 'tank' ? 1.2 : 1.0, col: col, kind: 'line' }); }
-  var radio = [], log = window.__radio = []; function say(t) { log.push(Math.round(clock) + 's ' + t); radio.unshift({ t: clock, text: t }); radio = radio.slice(0, 3); }
+  function muzzle(u, big) { fx.push({ t: 0, life: big ? 0.12 : 0.07, x: u.x + Math.cos(u.h) * (u.kind === 'tank' ? 5.5 : 0.8), y: u.y + Math.sin(u.h) * (u.kind === 'tank' ? 5.5 : 0.8), z: u.kind === 'tank' ? 2.3 : 1.3, size: big ? 1.6 : 0.5, kind: 'flash' }); }
+  var radio = [], log = window.__radio = [];
+  function say(t) { log.push(Math.round(clock) + 's ' + t); radio.unshift({ t: clock, text: t }); radio = radio.slice(0, 3); }
+  function compass(dx, dy) { return ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'][(Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) + 8) % 8]; }
+  function words(n) { return ['No one', 'One', 'Two', 'Three', 'Four', 'Five'][n] || String(n); }
 
   // ------------------------------------------------------------------ states: how exposed a unit is
   // Infantry: exposed (standing in the open), moving, in cover (a hedgerow bank between them and the
   // shooter), pinned (suppressed, face down), assault (sprinting at the enemy) and retreat.
   // Each changes how likely incoming fire is to hit. Tanks: halted or moving, plus armour facing.
-  var EXPOSE = { exposed: 1, move: 1.15, cover: 1, pinned: 1, assault: 1.4, retreat: 0.85 };
+  var EXPOSE = { exposed: 1, move: 1.15, cover: 1, pinned: 1, assault: 1.4, retreat: 0.85, crossing: 1.6 };   // crossing: up on a hedgerow bank, against the sky
   function coverAgainst(u, from) {
     // a hedge or wall within 5 m of the soldier, on the line towards whoever is shooting
     var dx = from.x - u.x, dy = from.y - u.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -148,16 +317,16 @@
   }
   function exposure(t, from, weapon) {
     var m = EXPOSE[t.state] || 1;
-    if (t.pinned) m *= weapon === 'mg' ? 0.5 : 0.7;               // face down in the dirt
-    if (coverAgainst(t, from)) m *= weapon === 'mg' ? 0.35 : 0.6; // bocage banks stop bullets better than blast
+    if (t.pinned) m *= weapon === 'bullet' ? 0.5 : 0.7;               // face down in the dirt
+    if (coverAgainst(t, from)) m *= weapon === 'bullet' ? 0.35 : 0.6; // bocage banks stop bullets better than blast
     return m;
   }
   function suppress(t, amt) { t.supp = Math.min(100, t.supp + amt * (t.state === 'assault' ? 0.5 : 1)); t.suppT = clock; }
-  function findCover(u, threat) {
-    // nearest open cell within 14 m that puts a hedge between this soldier and the threat
-    var c0 = cellOf(u.x, u.y), best = null, bd = 1e9;
-    for (var dr = -7; dr <= 7; dr++) for (var dc = -7; dc <= 7; dc++) {
-      if (blocked(block, c0[0] + dc, c0[1] + dr) || dc * dc + dr * dr > 49) continue;
+  function findCover(u, threat, reach) {
+    // nearest open cell within reach that puts a hedge between this soldier and the threat
+    var c0 = cellOf(u.x, u.y), best = null, bd = 1e9, R = Math.round((reach || 14) / CELL);
+    for (var dr = -R; dr <= R; dr++) for (var dc = -R; dc <= R; dc++) {
+      if (blocked(block, c0[0] + dc, c0[1] + dr) || dc * dc + dr * dr > R * R) continue;
       var w = centre(c0[0] + dc, c0[1] + dr);
       if (coverAgainst({ x: w[0], y: w[1] }, threat) && dc * dc + dr * dr < bd) { bd = dc * dc + dr * dr; best = w; }
     }
@@ -168,205 +337,821 @@
     var a = Math.abs(Math.atan2(Math.sin(Math.atan2(from.y - tk.y, from.x - tk.x) - tk.h), Math.cos(Math.atan2(from.y - tk.y, from.x - tk.x) - tk.h)));
     return a < 0.8 ? ['front', 40] : a < 2.3 ? ['side', 65] : ['rear', 100];
   }
+  function vetAcc(u) { return 1 + 0.12 * (u.vet || 0); }
 
+  // ------------------------------------------------------------------ casualties, morale and experience
+  function killed(v, by) {
+    v.hp = 0;
+    if (by && alive(by)) { by.kills++; promote(by); }
+    if (v.kind !== 'inf') return;
+    // everyone nearby on his side sees him fall; losing the sergeant shakes the whole squad
+    units.forEach(function (w) {
+      if (w === v || w.kind !== 'inf' || !alive(w) || w.side !== v.side) return;
+      if (v.role === 'nco' && w.squad === v.squad) w.morale -= 25;
+      else if (dist(w, v) < 25) w.morale -= 15;
+    });
+    if (v.role === 'nco' && v.side === 'axis' && clock - v.seenT < 2) say('German NCO down. His squad is wavering.');
+  }
+  function promote(u) {
+    var lv = u.kind === 'tank' ? (u.kills >= 7 ? 2 : u.kills >= 3 ? 1 : 0) : (u.kills >= 5 ? 2 : u.kills >= 2 ? 1 : u.vet);
+    if (lv <= u.vet) return;
+    u.vet = lv; if (u.kind === 'inf') u.heart = Math.min(100, u.heart + 10);
+    if (u.side === 'allies') say((u.kind === 'tank' ? u.name + '’s crew are' : 'A man in ' + squadName(u) + ' is') + (lv === 2 ? ' veterans now.' : ' finding their feet.'));
+  }
+
+  function rifleShot(s, t) {
+    // a rifle or SMG shot at whoever he can see; at a tank it just sparks off the armour
+    var w = WEAPON[s.kit], d = dist(s, t);
+    s.fired = 0.2; s.shot = w.every[0] + Math.random() * (w.every[1] - w.every[0]);
+    tracer(s, t, s.side === 'axis' ? 'rgba(255,220,150,.55)' : 'rgba(215,232,255,.55)'); muzzle(s); sound.rifle(s);
+    if (s.side === 'axis' && clock - s.seenT > 1.5) hear(s, 'rifle');
+    if (t.kind === 'tank') { fx.push({ t: 0, life: .15, x: t.x, y: t.y, kind: 'spark' }); return; }
+    suppress(t, 7);
+    units.forEach(function (o) { if (o !== t && o.kind === 'inf' && o.side === t.side && alive(o) && dist(o, t) < 4) suppress(o, 3); });
+    var p = w.acc * Math.max(0.15, 1 - d / w.range) * vetAcc(s) * (s.assault && s.path ? 0.5 : 1) * exposure(t, s, 'bullet');
+    if (Math.random() < p) killed(t, s);
+  }
+  function blast(x, y, by, power) {
+    // high explosive: kills close in, pins and frightens further out. It doesn't care whose side you're on.
+    boom(x, y, 6 * power, false); mark({ kind: 'crater', x: x, y: y, r: (1.6 + Math.random() * .6) * power }); sound.boom(x, y, power > 1.2);
+    units.forEach(function (s) {
+      if (s.kind !== 'inf' || !alive(s)) return;
+      var d = Math.sqrt((s.x - x) * (s.x - x) + (s.y - y) * (s.y - y));
+      if (d < 14 * power) { suppress(s, 70 - d * 3 / power); s.morale -= 8; }
+      if (d < 7 * power && Math.random() < (0.6 - d / (12 * power)) * exposure(s, by || { x: x + 1, y: y }, 'blast')) killed(s, by);
+    });
+  }
+  function hitTank(t, from) {
+    var arm = t.climbing ? ['belly', 100] : armour(t, from);   // nose-up on a hedge bank, the thin belly is showing
+    t.hp -= arm[1];
+    if (t.hp <= 0) { knockOut(t, arm[0]); return; }
+    // short of a kill, something inside breaks
+    var r = Math.random(), what;
+    if (r < 0.35 && !t.dmg.track) { t.dmg.track = true; t.repair = 0; t.path = null; what = 'a track is broken'; }
+    else if (r < 0.55 && !t.dmg.gun) { t.dmg.gun = true; what = 'the main gun is out'; }
+    else if (r < 0.8 && !t.dmg.gunner) { t.dmg.gunner = true; what = 'the gunner is wounded'; }
+    else { t.dmg.engine = true; what = 'the engine is damaged'; }
+    say(t.name + ' hit in the ' + arm[0] + ': ' + what + '.');
+  }
+  function knockOut(t, where) {
+    // a penetration kills some of the five crew; the rest bail out over the next few seconds and run for it
+    t.hp = 0; t.burnT = clock; t.cook = Math.random() < 0.6 ? clock + 8 + Math.random() * 17 : 0; t.path = null;
+    var lost = where === 'front' ? (Math.random() < .5 ? 0 : 1) : where === 'side' ? 1 + Math.floor(Math.random() * 2) : 2 + Math.floor(Math.random() * 2);
+    var out = Math.max(0, t.crew - lost);
+    for (var i = 0; i < out; i++) pendingCrew.push({ t: clock + 1.2 + i * 0.8 + Math.random() * 0.5, tank: t });
+    clouds.push({ x: t.x, y: t.y, r: 4, t0: clock, life: 150, kind: 'wreck' });
+    wreckBlocks(t);
+    tally.crewOut += out;
+    say(t.name + ' knocked out by a Panzerfaust to the ' + where + '. ' + (out ? words(out) + ' of the crew getting out.' : 'No one got out.'));
+    sound.boom(t.x, t.y, true);
+    selected = selected.filter(alive);
+  }
+
+  // ------------------------------------------------------------------ the simulation
+  var OBJ, RALLY;   // the farm the Germans hold, and the spot back down the lane where your crews are safe
   function update(dt) {
     clock += dt;
-    var allies = units.filter(function (u) { return u.side === 'allies' && alive(u); });
-    var axis = units.filter(function (u) { return u.side === 'axis' && alive(u); });
-    // spotting: a German is only on your screen while a Sherman can see him, or for a moment after he fires
-    var sees = function (s) { return allies.some(function (a) { return dist(a, s) < 160 && seeLine(a.x, a.y, s.x, s.y); }); };
-    axis.forEach(function (s) { if (s.fired > 0 || sees(s)) { s.seenT = clock; s.last = { x: s.x, y: s.y, h: s.h, pose: s.pose }; } });
-    units.forEach(function (s) { if (s.side === 'axis' && !alive(s) && !s.bodySeen && (clock - s.seenT < 0.5 || sees(s))) s.bodySeen = true; });
+    var allies = team('allies'), axis = team('axis'), R = sightRange();
+    // spotting: a German is on your screen only while one of your men or tanks can see him
+    var sees = function (s) { return allies.some(function (a) { return dist(a, s) < R && seeLine(a.x, a.y, s.x, s.y); }); };
+    axis.forEach(function (s) { if (sees(s)) { s.seenT = clock; s.last = { x: s.x, y: s.y, h: s.h, pose: s.pose }; } });
+    units.forEach(function (s) { if (s.side === 'axis' && s.hp <= 0 && !s.bodySeen && (clock - s.seenT < 0.5 || sees(s))) s.bodySeen = true; });
+    // crews climbing out of knocked-out tanks
+    pendingCrew = pendingCrew.filter(function (p) {
+      if (clock < p.t) return true;
+      var a = Math.random() * 6.28, c = nearestOpen(block, cellOf(p.tank.x + Math.cos(a) * 2.5, p.tank.y + Math.sin(a) * 2.5)) || cellOf(p.tank.x, p.tank.y), w = centre(c[0], c[1]);
+      var m = soldier(w[0], w[1], 'allies', 'tanker', p.tank.name, 'crew');
+      units.push(m); order(m, RALLY.x + (Math.random() - .5) * 8, RALLY.y + (Math.random() - .5) * 8); m.retreating = true;
+      return false;
+    });
+    allies = team('allies');
     units.forEach(function (u) {
-      if (!alive(u)) { if (u.kind === 'tank' && Math.random() < dt * 3) boom(u.x + Math.random() - .5, u.y + Math.random() - .5, 2, true); return; }
-      if (u.kind === 'tank') {
-        var moving = move(u, 5.0, 0.9, dt) && !!u.path;
-        u.state = moving ? 'move' : 'halted';
-        if (moving) {
-          // two track marks every couple of metres, and dust off the lane
-          if (!u.lastMark || Math.sqrt((u.x - u.lastMark[0]) * (u.x - u.lastMark[0]) + (u.y - u.lastMark[1]) * (u.y - u.lastMark[1])) > 2) {
-            if (u.lastMark) mark({ kind: 'track', ax: u.lastMark[0], ay: u.lastMark[1], bx: u.x, by: u.y, h: u.h });
-            u.lastMark = [u.x, u.y];
-          }
-          if (Math.random() < dt * 6) fx.push({ t: 0, life: 2.6, x: u.x - Math.cos(u.h) * 3.5 + Math.random() - .5, y: u.y - Math.sin(u.h) * 3.5 + Math.random() - .5, size: 2.5, kind: 'dust' });
-        } else u.lastMark = null;
-        var aim = moving ? 0.6 : 1;                     // firing on the move is far less accurate
-        u.gun -= dt; u.mg -= dt;
-        var seen = axis.filter(function (s) { return dist(u, s) < 160 && seeLine(u.x, u.y, s.x, s.y); });
-        seen.sort(function (a, b) { return dist(u, a) - dist(u, b); });
-        if (seen.length && u.mg <= 0) {                 // bow and coax MGs: bursts at the nearest, pinning those around it
-          var t = seen[0]; u.mg = 0.9; tracer(u, t, 'rgba(255,215,120,.9)');
-          axis.forEach(function (s) { var d = dist(s, t); if (d < 5) suppress(s, d < 1 ? 22 : 8); });
-          if (Math.random() < Math.max(0.08, 0.4 - dist(u, t) / 400) * aim * exposure(t, u, 'mg')) t.hp = 0;
-        }
-        if (seen.length && u.gun <= 0) {                // 76 mm high explosive into the thickest group
-          var tg = seen[Math.floor(Math.random() * Math.min(3, seen.length))]; u.gun = 5.5;
-          var sc = moving ? 6 : 2, ang = Math.random() * 6.28, bx = tg.x + Math.cos(ang) * sc * Math.random(), by = tg.y + Math.sin(ang) * sc * Math.random();
-          tracer(u, { x: bx, y: by, kind: 'inf' }, 'rgba(255,240,200,1)'); boom(bx, by, 6, false); mark({ kind: 'crater', x: bx, y: by, r: 1.6 + Math.random() * .6 });
-          fx.push({ t: 0, life: 1.8, x: u.x + Math.cos(u.h) * 5.5, y: u.y + Math.sin(u.h) * 5.5, size: 2.2, kind: 'smoke' });
-          axis.forEach(function (s) {
-            var d = Math.sqrt((s.x - bx) * (s.x - bx) + (s.y - by) * (s.y - by));
-            if (d < 14) suppress(s, 70 - d * 3);
-            if (d < 7 && Math.random() < (0.6 - d / 12) * exposure(s, u, 'he')) s.hp = 0;
-          });
-        }
-        if (u.hp < 50 && Math.random() < dt * 1.5) boom(u.x, u.y, 1.5, true);
-      } else {
-        // German infantry
-        u.shot -= dt; u.anim += dt;
-        if (clock - u.suppT > 2) u.supp = Math.max(0, u.supp - 12 * dt);
-        if (u.supp >= 75) u.pinned = true; else if (u.supp < 35) u.pinned = false;
-        var near = allies.filter(function (a) { return seeLine(u.x, u.y, a.x, a.y) && dist(u, a) < 170; });
-        near.sort(function (a, b) { return dist(u, a) - dist(u, b); });
-        var tgt = near[0], assault = false;
-        if (u.fallback && u.path) {
-          // retreating: running for the farm, not stopping for anything
-          u.pose = 'walk'; move(u, 3.2, 6, dt);
-        } else if (u.pinned) {
-          // pinned: heads down, no moving, no firing
-          u.pose = 'aim';
-        } else if (u.at && u.pf && tgt) {
-          // the Panzerfaust man stalks the tank using the hedgerows, sprints the last stretch, then fires at 38 m
-          if (dist(u, tgt) > 38) {
-            assault = dist(u, tgt) < 80;
-            if (!u.path || u.repath <= 0) { order(u, tgt.x, tgt.y); u.repath = 3; }
-            u.repath -= dt; u.pose = 'walk'; move(u, assault ? 3.4 : 2.6, 6, dt);
-          } else {
-            u.path = null; u.pose = 'aim'; turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 4, dt);
-            if (u.shot <= 0) {
-              u.pf = 0; u.fired = 0.25; u.pose = 'fire'; tracer(u, tgt, 'rgba(255,160,80,1)'); boom(tgt.x, tgt.y, 3, false);
-              fx.push({ t: 0, life: 2.2, x: u.x - Math.cos(u.h) * 2, y: u.y - Math.sin(u.h) * 2, size: 2, kind: 'dust' });   // the back-blast kicks up dirt
-              var chance = 0.85 * (tgt.state === 'move' ? 0.8 : 1) * (1 - u.supp / 300);
-              if (Math.random() < chance) {
-                var arm = armour(tgt, u); tgt.hp -= arm[1];
-                say(tgt.hp > 0 ? 'Panzerfaust hit the Sherman’s ' + arm[0] + ' armour!' : 'Sherman knocked out by a Panzerfaust to the ' + arm[0] + '.');
-              } else say('Panzerfaust missed!');
-            }
-          }
-        } else if (u.path) {
-          u.pose = 'walk'; if (!move(u, 2.2, 6, dt)) u.pose = 'idle';
-        } else if (tgt) {
-          // riflemen under threat get behind a hedge first, then return fire
-          if (!coverAgainst(u, tgt) && clock - u.sought > 12) {
-            u.sought = clock; var cw = findCover(u, tgt);
-            if (cw) { u.path = path(block, [u.x, u.y], cw); if (u.path) u.path = u.path.slice(1); }
-          }
-          u.pose = 'aim'; turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 4, dt);
-          if (u.shot <= 0 && !u.at) { u.shot = 2.5 + Math.random() * 2; u.fired = 0.2; tracer(u, tgt, 'rgba(255,220,150,.6)'); fx.push({ t: 0, life: .15, x: tgt.x, y: tgt.y, kind: 'spark' }); }
-        } else u.pose = 'idle';
-        if (u.fired > 0) { u.fired -= dt; if (u.fired > 0.1) u.pose = 'fire'; }
-        if (u.shot <= 0 && u.at) u.shot = 1.2;
-        var threat = tgt || allies[0];
-        u.state = u.fallback && u.path ? 'retreat' : u.pinned ? 'pinned' : assault ? 'assault' : u.path ? 'move'
-          : threat && coverAgainst(u, threat) ? 'cover' : 'exposed';
-      }
+      if (u.kind === 'tank') { if (alive(u)) updateTank(u, dt, axis, R); else updateWreck(u, dt); }
+      else if (alive(u)) updateMan(u, dt, u.side === 'axis' ? allies : axis, R);
     });
-    // German commander: once a tank is spotted, each squad's Panzerfaust man goes hunting; squads
-    // under fire with no anti-tank weapon left fall back towards the farm.
-    var squads = {};
-    axis.forEach(function (s) { (squads[s.squad] = squads[s.squad] || []).push(s); });
-    Object.keys(squads).forEach(function (k) {
-      var sq = squads[k], hasPF = sq.some(function (s) { return s.at && s.pf; });
-      var threatened = allies.some(function (a) { return sq.some(function (s) { return dist(a, s) < 35; }); });
-      if (threatened && !hasPF && !sq[0].fallback) {
-        sq.forEach(function (s) { s.fallback = true; order(s, LEVEL.objective[0] + (Math.random() - .5) * 20, LEVEL.objective[1] + (Math.random() - .5) * 20); });
-        say('German squad falling back to the farm.');
-      }
-    });
+    squadOrders(allies);
+    burnFuses();
+    clouds.forEach(function (cl) { if (cl.kind === 'smoke') { cl.x += WIND[0] * dt; cl.y += WIND[1] * dt; } });
+    clouds = clouds.filter(function (cl) { return clock - cl.t0 < cl.life; });
+    heard = heard.filter(function (h) { return clock - h.t < 4; });
     fx = fx.filter(function (f) { f.t += dt; return f.t < f.life; });
     if (!over) {
-      if (!axis.length) end('Hamlet cleared', 'The farm is yours. Both commanders would like a word about those hedgerows.');
-      else if (!allies.length) end('Shermans lost', 'The Panzerfausts got you in the bocage. Try the other lane, and keep your distance.');
+      var foes = team('axis'), fighting = team('allies').filter(function (u) { return u.role !== 'crew'; });
+      if (!foes.length) end('Hamlet cleared', summary());
+      else if (!fighting.length) end('Beaten back', summary());
     }
   }
-  function end(t, s) { over = true; document.getElementById('endTitle').textContent = t; document.getElementById('endText').textContent = s; document.getElementById('end').style.display = 'flex'; }
+  function summary() {
+    var dead = units.filter(function (u) { return u.side === 'axis' && u.hp <= 0; }).length;
+    var tanksLost = units.filter(function (u) { return isTank(u) && u.hp <= 0; }).length;
+    var rifles = units.filter(function (u) { return u.kit === 'us'; }), riflesLost = rifles.filter(function (u) { return u.hp <= 0; }).length;
+    return 'Germans killed: ' + dead + (tally.prisoners ? ', taken prisoner: ' + tally.prisoners : '') + (tally.withdrew ? ', slipped away: ' + tally.withdrew : '') + '. Shermans lost: ' + tanksLost + ' of 2'
+      + (tally.crewOut ? ', crew saved: ' + tally.crewSaved + ' of ' + tally.crewOut + ' who got out' : '') + '. Riflemen lost: ' + riflesLost + ' of ' + rifles.length + '.';
+  }
+
+  function updateTank(u, dt, axis, R) {
+    var speed = u.dmg.track ? 0 : u.dmg.engine ? 2.5 : 5.0;
+    if (u.dmg.track) u.path = null;
+    var other = u.path && tankAhead(u);
+    if (other) {
+      // a tank in the way: wait for it to move on; if it's halted or knocked out, go round it
+      u.wait = (u.wait || 0) + dt; speed = 0;
+      if (u.wait > 1 && alive(other) && !other.path && !other.dmg.track && makeWay(other, u)) u.wait = 0;
+      else if (u.wait > 2.5 && (other.hp <= 0 || !other.path)) { if (!routeAround(u, other) && u.wait > 6) { u.path = null; say(u.name + ': can’t get past ' + other.name + '.'); } else u.wait = 0; }
+    } else u.wait = 0;
+    var moving = !!u.path && speed > 0 && move(u, speed, u.dmg.engine ? 0.6 : 0.9, dt);
+    if (!moving) u.climbing = false;
+    separate(u);
+    if (u.climbing && (!u.lastBreach || dist(u, u.lastBreach) > 1.5)) { breach(u.x, u.y, 2.4); u.lastBreach = { x: u.x, y: u.y }; }
+    u.state = moving ? 'move' : 'halted';
+    if (moving) {
+      // two track marks every couple of metres, and dust off the lane
+      if (!u.lastMark || Math.sqrt((u.x - u.lastMark[0]) * (u.x - u.lastMark[0]) + (u.y - u.lastMark[1]) * (u.y - u.lastMark[1])) > 2) {
+        if (u.lastMark) mark({ kind: 'track', ax: u.lastMark[0], ay: u.lastMark[1], bx: u.x, by: u.y, h: u.h });
+        u.lastMark = [u.x, u.y];
+      }
+      if (Math.random() < dt * 6) fx.push({ t: 0, life: 2.6, x: u.x - Math.cos(u.h) * 3.5 + Math.random() - .5, y: u.y - Math.sin(u.h) * 3.5 + Math.random() - .5, size: 2.5, kind: 'dust' });
+    } else u.lastMark = null;
+    if (u.dmg.engine && Math.random() < dt * 2) boom(u.x - Math.cos(u.h) * 3, u.y - Math.sin(u.h) * 3, 1.2, true);
+    if (u.hp < 50 && Math.random() < dt * 1.5) boom(u.x, u.y, 1.5, true);
+    // a broken track: the crew climb out and fix it, as long as nothing hostile is in sight within 60 m
+    if (u.dmg.track && !axis.some(function (s) { return clock - s.seenT < 3 && dist(u, s) < 60; })) {
+      u.repair += dt / 40;
+      if (u.repair >= 1) { u.dmg.track = false; u.repair = 0; say(u.name + ': track repaired, ready to move.'); }
+    }
+    var aim = (moving ? 0.6 : 1) * (u.dmg.gunner ? 0.6 : 1) * vetAcc(u);   // firing on the move is far less accurate
+    u.gun -= dt; u.mg -= dt;
+    if (u.climbing) return;                         // nose in the air on a hedge bank: no shooting
+    if (u.area && clock > u.area.until) u.area = null;
+    if (u.area && seeLine(u.x, u.y, u.area.x, u.area.y)) { areaFire(u, axis); return; }
+    if (u.target && (!alive(u.target) || clock - u.target.seenT > 5)) u.target = null;
+    var seen = axis.filter(function (s) { return dist(u, s) < R && seeLine(u.x, u.y, s.x, s.y); });
+    seen.sort(function (a, b) { return dist(u, a) - dist(u, b); });
+    var onTarget = u.target && seen.indexOf(u.target) >= 0;
+    if (seen.length && u.mg <= 0) {                 // bow and coax MGs: bursts at the target or the nearest, pinning those around it
+      var t = onTarget ? u.target : seen[0]; u.mg = 0.9; tracer(u, t, 'rgba(255,215,120,.9)'); sound.mg(u);
+      axis.forEach(function (s) { var d = dist(s, t); if (d < 5) suppress(s, d < 1 ? 22 : 8); });
+      if (Math.random() < Math.max(0.08, 0.4 - dist(u, t) / 400) * aim * exposure(t, u, 'bullet')) killed(t, u);
+    }
+    // 76 mm high explosive: on its own at whatever it sees, unless you've told it to hold; always at a target you've given it
+    if (u.he > 0 && !u.dmg.gun && u.gun <= 0 && (onTarget || (u.heMode === 'auto' && seen.length))) {
+      var tg = onTarget ? u.target : seen[Math.floor(Math.random() * Math.min(3, seen.length))];
+      u.gun = 5.5 * (u.dmg.gunner ? 1.5 : 1) * (1 - 0.1 * u.vet); u.he--;
+      var sc = (moving ? 6 : 2) * (u.dmg.gunner ? 1.6 : 1) / vetAcc(u), ang = Math.random() * 6.28, r = sc * Math.random();
+      var bx = tg.x + Math.cos(ang) * r, by = tg.y + Math.sin(ang) * r;
+      tracer(u, { x: bx, y: by, kind: 'inf' }, 'rgba(255,240,200,1)'); muzzle(u, true); sound.gun(u);
+      fx.push({ t: 0, life: 1.8, x: u.x + Math.cos(u.h) * 5.5, y: u.y + Math.sin(u.h) * 5.5, size: 2.2, kind: 'smoke' });
+      blast(bx, by, u, 1);
+      if (u.he === 5) say(u.name + ': five rounds of HE left.'); else if (!u.he) say(u.name + ': out of HE. Machine guns only now.');
+    }
+  }
+
+  function updateWreck(u, dt) {
+    // a knocked-out Sherman burns for two minutes, and more often than not its ammunition goes up
+    var age = clock - (u.burnT || 0);
+    if (age < 120) {
+      if (Math.random() < dt * 9) fx.push({ t: 0, life: 0.6, x: u.x + (Math.random() - .5) * 2.4, y: u.y + (Math.random() - .5) * 2.4, size: 1 + Math.random() * (age < 60 ? 1.4 : 0.6), kind: 'fire' });
+      if (Math.random() < dt * 4) fx.push({ t: 0, life: 6, x: u.x, y: u.y, size: 3 + Math.random() * 2, kind: 'black' });
+    } else if (Math.random() < dt * 1.2) boom(u.x, u.y, 2, true);
+    if (u.cook && clock > u.cook) {
+      u.cook = 0; say(u.name + '’s ammunition has cooked off.');
+      blast(u.x, u.y, null, 1.5);
+      for (var i = 0; i < 6; i++) fx.push({ t: 0, life: 1.2, x: u.x + (Math.random() - .5) * 3, y: u.y + (Math.random() - .5) * 3, size: 3, kind: 'fire' });
+    }
+  }
+
+  function updateMan(u, dt, foes, R) {
+    u.shot -= dt; u.anim += dt;
+    if (clock - u.suppT > 2) u.supp = Math.max(0, u.supp - 12 * dt);
+    if (u.supp >= 75) u.pinned = true; else if (u.supp < 35) u.pinned = false;
+    // morale: pinned men lose heart; quiet moments, and a sergeant close by, bring it back
+    var sgt = u.role !== 'nco' && units.some(function (v) { return v.role === 'nco' && alive(v) && v.squad === u.squad && dist(v, u) < 30; });
+    if (u.pinned) u.morale -= 3 * dt; else if (u.supp < 10) u.morale += (1.5 + (sgt ? 1.5 : 0)) * dt;
+    u.morale = Math.max(0, Math.min(u.heart, u.morale));
+    var vis = foes.filter(function (a) { return dist(u, a) < R && seeLine(u.x, u.y, a.x, a.y); });
+    vis.sort(function (a, b) { return dist(u, a) - dist(u, b); });
+    var men = vis.filter(function (a) { return a.kind === 'inf'; });
+    var tgt = u.target && vis.indexOf(u.target) >= 0 ? u.target : men[0] || vis[0];
+    var w = WEAPON[u.kit], inRange = tgt && dist(u, tgt) < w.range, st = null;
+    if (u.area && clock > u.area.until) u.area = null;
+    if (u.task && !u.pinned) {
+      sapper(u, dt);
+    } else if (u.retreating && u.path) {
+      // running back: not stopping for anything
+      u.pose = 'walk'; move(u, 3.2, 6, dt); u.aiming = false;
+      if (!u.path) arrived(u);
+    } else if (u.pinned) {
+      u.pose = 'prone';                               // heads down: no moving, no firing
+    } else if (u.side === 'axis' && u.pf && (st = stalk(u, dt, foes))) {
+      // the Panzerfaust man is hunting
+    } else if (u.path) {
+      u.pose = 'walk'; u.aiming = false; move(u, u.assault ? 3.4 : u.role === 'crew' ? 3.0 : 2.2, 6, dt);
+      if (u.assault && tgt && inRange && u.shot <= 0) rifleShot(u, tgt);   // an assault fires from the hip on the run
+      if (!u.path) arrived(u);
+    } else if (u.area && !tgt && seeLine(u.x, u.y, u.area.x, u.area.y)) {
+      u.pose = 'aim'; turnTo(u, Math.atan2(u.area.y - u.y, u.area.x - u.x), 4, dt);
+      if (u.shot <= 0) areaFire(u, foes);
+    } else if (tgt) {
+      // under threat: get a hedge between you and them first, then return fire
+      if (!coverAgainst(u, tgt) && clock - u.sought > 12 && u.role !== 'crew') {
+        u.sought = clock; var cw = findCover(u, tgt, 14);
+        if (cw) { u.path = path(block, [u.x, u.y], cw); if (u.path) u.path = u.path.slice(1); }
+      }
+      u.pose = 'aim'; turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 4, dt);
+      if (u.shot <= 0 && inRange && !u.pf) rifleShot(u, tgt);
+    } else u.pose = 'idle';
+    if (u.fired > 0) { u.fired -= dt; if (u.fired > 0.1 && !u.pinned) u.pose = 'fire'; }
+    if (!u.path) u.climbing = false;
+    separate(u);
+    var threat = tgt || foes[0];
+    u.state = u.climbing ? 'crossing' : u.retreating && u.path ? 'retreat' : u.pinned ? 'pinned' : st === 'assault' || (u.assault && u.path) ? 'assault' : u.path ? 'move'
+      : threat && coverAgainst(u, threat) ? 'cover' : 'exposed';
+  }
+  function arrived(u) {
+    if (u.retreating) { u.retreating = false; if (u.broken) { u.broken = false; u.morale = Math.max(u.morale, 45); } }
+    if (u.role === 'crew' && dist(u, RALLY) < 16) {
+      u.gone = true; tally.crewSaved++;
+      say('One of ' + u.squad + '’s crew is safe behind the line (' + tally.crewSaved + ' so far).');
+      return;
+    }
+    // at the end of a move, get into cover facing the nearest German you know about
+    if (u.arrive && u.side === 'allies') {
+      u.arrive = false;
+      var known = team('axis').filter(function (s) { return clock - s.seenT < 30 && dist(u, s.last || s) < 160; });
+      known.sort(function (a, b) { return dist(u, a.last) - dist(u, b.last); });
+      if (known.length) { var cw = findCover(u, known[0].last, 8); if (cw) { u.path = path(block, [u.x, u.y], cw); if (u.path) u.path = u.path.slice(1); } }
+    }
+  }
+  function stalk(u, dt, foes) {
+    // the Panzerfaust man goes after a tank he can see, or one he can hear: a moving Sherman is loud within 120 m
+    var R = sightRange();
+    var known = foes.filter(function (a) { return a.kind === 'tank' && ((dist(u, a) < R && seeLine(u.x, u.y, a.x, a.y)) || (a.state === 'move' && dist(u, a) < 120)); });
+    if (!known.length) return null;
+    known.sort(function (a, b) { return dist(u, a) - dist(u, b); });
+    var tk = known[0], d = dist(u, tk), see = d < R && seeLine(u.x, u.y, tk.x, tk.y);
+    if (d > 38 || !see) {
+      var sprint = see && d < 80;
+      if (!u.path || u.repath <= 0) { order(u, tk.x, tk.y); u.repath = 3; }
+      u.repath -= dt; u.pose = 'walk'; u.aiming = false; move(u, sprint ? 3.4 : 2.6, 6, dt);
+      return sprint ? 'assault' : 'stalk';
+    }
+    u.path = null; u.pose = 'aim'; turnTo(u, Math.atan2(tk.y - u.y, tk.x - u.x), 4, dt);
+    if (!u.aiming) { u.aiming = true; u.shot = 1.2 + Math.random(); }   // a moment to aim
+    if (u.shot <= 0) {
+      u.pf = 0; u.fired = 0.25; u.pose = 'fire'; u.aiming = false; u.shot = 2;
+      tracer(u, tk, 'rgba(255,160,80,1)'); boom(tk.x, tk.y, 3, false); muzzle(u, true); sound.pf(u, tk);
+      fx.push({ t: 0, life: 2.2, x: u.x - Math.cos(u.h) * 2, y: u.y - Math.sin(u.h) * 2, size: 2, kind: 'dust' });   // the back-blast kicks up dirt
+      if (clock - u.seenT > 1.5) hear(u, 'pf');
+      if (Math.random() < 0.85 * (tk.state === 'move' ? 0.8 : 1) * (1 - u.supp / 300)) hitTank(tk, u); else say('Panzerfaust missed ' + tk.name + '!');
+    }
+    return 'aim';
+  }
+  function hear(s, kind) {
+    // you hear what you can't see: a rough marker where the shot came from. At dusk the flash gives him away more precisely.
+    var j = TIME === 'dusk' ? 4 : 12;
+    heard.push({ x: s.x + (Math.random() - .5) * 2 * j, y: s.y + (Math.random() - .5) * 2 * j, t: clock, kind: kind });
+    if (heard.length > 40) heard.shift();
+    if (clock - (hear.said || -99) < 15 && kind !== 'pf') return;
+    var near = team('allies').sort(function (a, b) { return dist(a, s) - dist(b, s); })[0]; if (!near) return;
+    hear.said = clock;
+    say((kind === 'pf' ? 'Panzerfaust fired' : 'Rifle fire') + ' from the hedges ' + compass(s.x - near.x, s.y - near.y) + ' of ' + (isTank(near) ? near.name : squadName(near)) + '.');
+  }
+
+  function squadOrders(allies) {
+    // German commander: squads under fire with no Panzerfaust left fall back to the farm; squads whose morale
+    // breaks run for it, and if they break again at the farm they give up. Your squad can break too.
+    var squads = {};
+    units.forEach(function (s) { if (s.kind === 'inf' && alive(s)) (squads[s.squad] = squads[s.squad] || []).push(s); });
+    Object.keys(squads).forEach(function (k) {
+      var sq = squads[k], m = 0, seen = sq.some(function (s) { return clock - s.seenT < 3; });
+      sq.forEach(function (s) { m += s.morale / sq.length; });
+      if (sq[0].side === 'axis') {
+        var threatened = allies.some(function (a) { return sq.some(function (s) { return dist(a, s) < 35; }); });
+        if (m < 22 && !sq[0].broken) {
+          if (sq[0].brokeOnce) {
+            // broken a second time: they give up if your men are close, otherwise they slip away for good
+            var close = allies.some(function (a) { return sq.some(function (s) { return dist(a, s) < 70; }); }), n = words(sq.length).toLowerCase();
+            sq.forEach(function (s) { s.gone = true; if (close) tally.prisoners++; else tally.withdrew++; });
+            say(close ? 'Germans coming out with their hands up: ' + n + (sq.length === 1 ? ' prisoner.' : ' prisoners.') : 'A broken German squad has slipped away across the fields.');
+          } else {
+            // broken once: they abandon the position and fall back, away from whoever is pressing them
+            var cx = 0, cy = 0; sq.forEach(function (s) { cx += s.x / sq.length; cy += s.y / sq.length; });
+            var foe = allies.slice().sort(function (a, b) { return dist(a, { x: cx, y: cy }) - dist(b, { x: cx, y: cy }); })[0];
+            var ax = foe ? cx - foe.x : cx - RALLY.x, ay = foe ? cy - foe.y : cy - RALLY.y, al = Math.sqrt(ax * ax + ay * ay) || 1;
+            var fc = nearestOpen(block, cellOf(cx + ax / al * 60, cy + ay / al * 60)) || cellOf(cx, cy), fw = centre(fc[0], fc[1]);
+            sq.forEach(function (s) { s.broken = s.brokeOnce = s.fallback = s.retreating = true; order(s, fw[0] + (Math.random() - .5) * 14, fw[1] + (Math.random() - .5) * 14); });
+            if (seen) say('A German squad is breaking and falling back!');
+          }
+        } else if (threatened && !sq.some(function (s) { return s.pf; }) && !sq[0].fallback) {
+          sq.forEach(function (s) { s.fallback = s.retreating = true; order(s, OBJ.x + (Math.random() - .5) * 20, OBJ.y + (Math.random() - .5) * 20); });
+          if (seen) say('German squad falling back to the farm.');
+        }
+      } else if (sq[0].role !== 'crew' && m < 25 && !sq[0].broken) {
+        sq.forEach(function (s) { s.broken = s.retreating = true; s.assault = false; order(s, RALLY.x + (Math.random() - .5) * 10, RALLY.y + (Math.random() - .5) * 10); });
+        say(k + ' has had enough and is falling back down the lane!');
+      }
+    });
+  }
+
+  function fireSmoke(x, y) {
+    // the Sherman's 2-inch smoke mortar: a bomb lands up to 140 m away and makes a wall of smoke for about 50 seconds
+    var ts = selected.filter(function (u) { return isTank(u) && alive(u) && u.smoke > 0; });
+    if (!ts.length) { say('No smoke left on the tanks you have selected.'); return; }
+    var p = { x: x, y: y }; ts.sort(function (a, b) { return dist(a, p) - dist(b, p); });
+    var t = ts[0];
+    if (dist(t, p) > 140) { say(t.name + ': that’s too far for the smoke mortar. 140 m at most.'); return; }
+    t.smoke--; sound.thunk(t);
+    var puffs = []; for (var i = 0; i < 10; i++) puffs.push({ a: Math.random() * 6.28, d: Math.sqrt(Math.random()), s: Math.random() });
+    clouds.push({ x: x, y: y, r: 12, t0: clock + 1.2, life: 50, kind: 'smoke', puffs: puffs });
+    say(t.name + ': smoke on the way. ' + t.smoke + ' left.');
+  }
+
+  function areaFire(u, foes) {
+    // firing at a position you can't see into: a hedge where you heard shots. Pins whoever's there, and sometimes hits.
+    var a = u.area, spot = { x: a.x + (Math.random() - .5) * 6, y: a.y + (Math.random() - .5) * 6, kind: 'inf' };
+    var hit = function (r, pin, kill) { foes.forEach(function (s) { if (s.kind !== 'inf') return; var d = dist(s, a); if (d < r) { suppress(s, pin); if (Math.random() < kill * exposure(s, u, 'bullet')) killed(s, u); } }); };
+    if (isTank(u)) {
+      if (u.mg <= 0) { u.mg = 0.9; tracer(u, spot, 'rgba(255,215,120,.9)'); sound.mg(u); hit(6, 15, 0.04); }
+      if (u.he > 0 && !u.dmg.gun && u.gun <= 0) {
+        u.gun = 5.5 * (u.dmg.gunner ? 1.5 : 1) * (1 - 0.1 * u.vet); u.he--;
+        var r = (u.state === 'move' ? 6 : 3) * Math.random(), an = Math.random() * 6.28;
+        tracer(u, spot, 'rgba(255,240,200,1)'); muzzle(u, true); sound.gun(u); blast(a.x + Math.cos(an) * r, a.y + Math.sin(an) * r, u, 1);
+        if (u.he === 5) say(u.name + ': five rounds of HE left.'); else if (!u.he) say(u.name + ': out of HE. Machine guns only now.');
+      }
+    } else {
+      var w = WEAPON[u.kit]; u.shot = w.every[0] + Math.random() * (w.every[1] - w.every[0]); u.fired = 0.2;
+      tracer(u, spot, 'rgba(215,232,255,.55)'); muzzle(u); sound.rifle(u); hit(4, 6, 0.02);
+    }
+  }
+  function sapper(u, dt) {
+    // blowing a gap: get to the hedge, set the charge (8 s), run, and it goes 10 s later
+    var t = u.task;
+    if (t.state === 'go') {
+      if (u.path) { u.pose = 'walk'; move(u, 2.6, 6, dt); return; }
+      if (dist(u, t) > 6) { say('Couldn’t reach the hedge to set the charge.'); u.task = null; charges[u.squad]++; return; }
+      t.state = 'set'; t.until = clock + 8; say('Setting the charge…');
+    }
+    if (t.state === 'set') {
+      u.pose = 'prone';
+      if (clock > t.until) {
+        t.state = 'run'; t.fuse = clock + 10; say('Charge set! Take cover!'); fuses.push(t);
+        var a = Math.atan2(u.y - t.y, u.x - t.x);
+        squadOf(u).forEach(function (m) { if (dist(m, t) < 20) { order(m, t.x + Math.cos(a) * 24 + (Math.random() - .5) * 6, t.y + Math.sin(a) * 24 + (Math.random() - .5) * 6); m.retreating = true; } });
+        u.task = null;
+      }
+    }
+  }
+  var fuses = [];
+  function burnFuses() {
+    fuses = fuses.filter(function (t) {
+      if (clock < t.fuse) return true;
+      blast(t.x, t.y, null, 1.3); breach(t.x, t.y, 4.5);
+      say('The charge has blown a gap in the hedge, wide enough for a Sherman.');
+      return false;
+    });
+  }
+  function plantCharge(x, y) {
+    var men = selected.filter(function (u) { return alive(u) && u.kit === 'us' && !u.broken; });
+    if (!men.length) { say('Select 1st Squad to blow a gap.'); return; }
+    if (!charges[men[0].squad]) { say(men[0].squad + ' has no demolition charges left.'); return; }
+    // the nearest hedge cell to where you clicked
+    var c0 = cellOf(x, y), best = null, bd = 1e9;
+    for (var dr = -3; dr <= 3; dr++) for (var dc = -3; dc <= 3; dc++) { var c = c0[0] + dc, r = c0[1] + dr; if (c >= 0 && r >= 0 && c < G && r < G && hedgeCell[r * G + c] && dc * dc + dr * dr < bd) { bd = dc * dc + dr * dr; best = centre(c, r); } }
+    if (!best) { say('Click on a hedgerow to blow a gap in it.'); return; }
+    var p = { x: best[0], y: best[1] }; men.sort(function (a, b) { return dist(a, p) - dist(b, p); });
+    var u = men[0]; if (dist(u, p) > 120) { say('That hedge is too far away. Move 1st Squad closer first.'); return; }
+    charges[u.squad]--;
+    u.task = { state: 'go', x: p.x, y: p.y }; u.path = path(block, [u.x, u.y], [p.x, p.y]); if (u.path) u.path = u.path.slice(1);
+    say('A man from ' + u.squad + ' is going forward with a charge. ' + charges[u.squad] + ' left.');
+  }
+
+  function makeWay(t, u) {
+    // a halted Sherman in the way pulls over to one side, or failing that backs up, to let the other through
+    var s = Math.sin(u.h), c = Math.cos(u.h);
+    var spots = [[t.x - s * 8, t.y + c * 8], [t.x + s * 8, t.y - c * 8], [t.x + c * 14 - s * 6, t.y + s * 14 + c * 6], [t.x + c * 14 + s * 6, t.y + s * 14 - c * 6], [t.x - c * 12, t.y - s * 12]];
+    for (var i = 0; i < spots.length; i++) {
+      var q = cellOf(spots[i][0], spots[i][1]);
+      if (blocked(tankBlock, q[0], q[1]) || dist({ x: spots[i][0], y: spots[i][1] }, u) < 8) continue;
+      if (order(t, spots[i][0], spots[i][1]) && t.path.length < 6) { if (clock - (makeWay.said || -99) > 10) { makeWay.said = clock; say(t.name + ' pulling over to let ' + u.name + ' past.'); } return true; }
+    }
+    t.path = null;
+    return false;
+  }
+
+  // ------------------------------------------------------------------ sound, all synthesised: no recordings to download
+  // Every sound is placed in the world: quieter and duller with distance, panned left or right by where it is on
+  // screen, and delayed by the speed of sound, so you see a distant shell land before you hear it. Birdsong
+  // (crickets at dusk) carries on until the shooting starts, and comes back after 40 quiet seconds.
+  var sound = (function () {
+    var A = null, master, noise, on = !params.quiet, calm = 0, engines = {};
+    function start() {
+      if (A || !on) return;
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      A = new C(); master = A.createGain(); master.gain.value = 0.8; master.connect(A.destination);
+      noise = A.createBuffer(1, A.sampleRate * 2, A.sampleRate);
+      var d = noise.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      wind(); setTimeout(birds, 1200); setTimeout(artillery, 9000);
+    }
+    function toggle() { on = !on; if (on && !A) start(); if (master) master.gain.value = on ? 0.8 : 0; return on; }
+    function where(x, y) {
+      var L = unproj(view.x + VW / 2, view.y + VH / 2), d = Math.sqrt((x - L[0]) * (x - L[0]) + (y - L[1]) * (y - L[1]));
+      var p = proj(x, y, 0);
+      return { g: 1 / (1 + d / 45), pan: Math.max(-1, Math.min(1, (p[0] - view.x - VW / 2) / (VW * 0.6))), cut: Math.max(600, 16000 / (1 + d / 50)), delay: d / 340 };
+    }
+    function chain(pl, vol, pan) {
+      // distance muffling, then volume, then left/right
+      var f = A.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = pl.cut;
+      var g = A.createGain(); g.gain.value = vol * pl.g; f.connect(g);
+      if (A.createStereoPanner) { var pn = A.createStereoPanner(); pn.pan.value = pan === undefined ? pl.pan : pan; g.connect(pn); pn.connect(master); } else g.connect(master);
+      return f;
+    }
+    function hiss(dest, t, dur, type, freq, q, attack) {
+      // a slice of noise through a filter, shaped by a fast attack and a decay
+      var s = A.createBufferSource(); s.buffer = noise;
+      var f = A.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+      var e = A.createGain(); e.gain.setValueAtTime(0.0001, t); e.gain.exponentialRampToValueAtTime(1, t + (attack || 0.003)); e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(f); f.connect(e); e.connect(dest); s.start(t, Math.random() * 1.5, dur + 0.05);
+      return f;
+    }
+    function thump(dest, t, f0, f1, dur, vol, type) {
+      var o = A.createOscillator(); o.type = type || 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      var e = A.createGain(); e.gain.setValueAtTime(vol, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(e); e.connect(dest); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function hush() { if (A) calm = A.currentTime + 40; }
+    function live() { return A && on; }
+    function rifle(u) {
+      if (!live()) return; var pl = where(u.x, u.y), t = A.currentTime + pl.delay, d = chain(pl, u.kit === 'tanker' ? 0.3 : 0.5);
+      hiss(d, t, 0.07, 'highpass', 1400); hiss(d, t + 0.005, 0.28, 'lowpass', 520); hush();
+    }
+    function mg(u) {
+      // a Browning .30 burst: about eight rounds a second
+      if (!live()) return; var pl = where(u.x, u.y), t = A.currentTime + pl.delay, d = chain(pl, 0.38);
+      for (var i = 0; i < 6; i++) { hiss(d, t + i * 0.085, 0.045, 'highpass', 1200); hiss(d, t + i * 0.085, 0.12, 'lowpass', 420); }
+      hush();
+    }
+    function gun(u) {
+      if (!live()) return; var pl = where(u.x, u.y), t = A.currentTime + pl.delay, d = chain(pl, 1.0);
+      thump(d, t, 80, 26, 0.8, 1.0); hiss(d, t, 1.1, 'lowpass', 1500); hiss(d, t, 0.06, 'highpass', 2500); hush();
+    }
+    function boomAt(x, y, big) {
+      if (!live()) return; var pl = where(x, y), t = A.currentTime + pl.delay, d = chain(pl, big ? 1.3 : 0.85);
+      thump(d, t, 60, 20, big ? 1.8 : 1.0, 1.0); hiss(d, t, big ? 2.6 : 1.3, 'lowpass', big ? 650 : 950); hush();
+      if (big) for (var i = 0; i < 5; i++) hiss(d, t + 0.3 + Math.random() * 1.6, 0.15, 'bandpass', 900 + Math.random() * 900, 2);   // rounds going off inside
+    }
+    function pf(u, tk) {
+      // the launch, a whoosh, and the strike
+      if (!live()) return; var pl = where(u.x, u.y), t = A.currentTime + pl.delay, d = chain(pl, 0.7);
+      thump(d, t, 120, 40, 0.3, 0.6); var w = hiss(d, t + 0.03, 0.45, 'bandpass', 500, 3, 0.05); w.frequency.exponentialRampToValueAtTime(2400, t + 0.45);
+      boomAt(tk.x, tk.y, false);
+    }
+    function thunk(u) {
+      if (!live()) return; var pl = where(u.x, u.y), t = A.currentTime + pl.delay, d = chain(pl, 0.6);
+      thump(d, t, 180, 60, 0.18, 0.7); hiss(d, t, 0.2, 'lowpass', 800);
+      var pl2 = where(u.x, u.y), d2 = chain(pl2, 0.35); hiss(d2, t + 1.2, 1.4, 'lowpass', 600, 0, 0.2);   // the soft pop and hiss of the bomb
+    }
+    function engine(u) {
+      // each Sherman has a running engine: a low growl, louder when moving, plus the squeal of the tracks
+      if (!live()) return;
+      var e = engines[u.name];
+      if (!e) {
+        e = engines[u.name] = {};
+        e.f = A.createBiquadFilter(); e.f.type = 'lowpass'; e.f.frequency.value = 240;
+        e.g = A.createGain(); e.g.gain.value = 0; e.f.connect(e.g);
+        e.pn = A.createStereoPanner ? A.createStereoPanner() : null; if (e.pn) { e.g.connect(e.pn); e.pn.connect(master); } else e.g.connect(master);
+        [31, 46.5, 62].forEach(function (hz, i) { var o = A.createOscillator(); o.type = i ? 'square' : 'sawtooth'; o.frequency.value = hz; var og = A.createGain(); og.gain.value = i ? 0.25 : 0.6; o.connect(og); og.connect(e.f); o.start(); (e.osc = e.osc || []).push(o); });
+        var s = A.createBufferSource(); s.buffer = noise; s.loop = true;
+        var sf = A.createBiquadFilter(); sf.type = 'bandpass'; sf.frequency.value = 2600; sf.Q.value = 7;
+        e.sq = A.createGain(); e.sq.gain.value = 0; s.connect(sf); sf.connect(e.sq); e.sq.connect(e.g); s.start();
+      }
+      var pl = where(u.x, u.y), on2 = alive(u), mv = u.state === 'move', t = A.currentTime;
+      e.g.gain.setTargetAtTime(on2 ? (mv ? 0.2 : 0.07) * pl.g * 2 : 0, t, 0.3);
+      e.sq.gain.setTargetAtTime(on2 && mv ? 0.5 + 0.3 * Math.sin(t * 9) : 0, t, 0.1);
+      e.osc.forEach(function (o, i) { o.frequency.setTargetAtTime([31, 46.5, 62][i] * (mv ? 1.25 : 1), t, 0.6); });
+      e.f.frequency.setTargetAtTime(Math.min(pl.cut, mv ? 420 : 240), t, 0.3);
+      if (e.pn) e.pn.pan.setTargetAtTime(pl.pan, t, 0.1);
+    }
+    function wind() {
+      var s = A.createBufferSource(); s.buffer = noise; s.loop = true;
+      var f = A.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380;
+      var g = A.createGain(); g.gain.value = 0.035; s.connect(f); f.connect(g); g.connect(master); s.start();
+      var lfo = A.createOscillator(); lfo.frequency.value = 0.08; var lg = A.createGain(); lg.gain.value = 0.02; lfo.connect(lg); lg.connect(g.gain); lfo.start();
+    }
+    function birds() {
+      if (live() && A.currentTime > calm && !over) {
+        var t = A.currentTime, pan = Math.random() * 2 - 1, d = chain({ g: 1, cut: 12000 }, 0.022, pan);
+        if (TIME === 'dusk') {
+          for (var i = 0; i < 8; i++) thump(d, t + i * 0.045, 4700, 4600, 0.025, 0.8);   // a cricket
+        } else {
+          var n = 2 + Math.floor(Math.random() * 4), base = 2400 + Math.random() * 1400;
+          for (var j = 0; j < n; j++) thump(d, t + j * 0.12, base, base * (1.3 + Math.random() * 0.4), 0.08, 1);
+        }
+      }
+      setTimeout(birds, (TIME === 'dusk' ? 300 : 600) + Math.random() * 2200);
+    }
+    function artillery() {
+      // somebody else's battle, a few miles off
+      if (live() && !over) {
+        var t = A.currentTime, pan = Math.random() * 1.6 - 0.8, d = chain({ g: 1, cut: 260 }, 0.22, pan), n = 2 + Math.floor(Math.random() * 3);
+        for (var i = 0; i < n; i++) { thump(d, t + i * (0.5 + Math.random() * 0.5), 45, 20, 1.6, 1); hiss(d, t + i * 0.7, 2, 'lowpass', 200, 0, 0.05); }
+      }
+      setTimeout(artillery, 25000 + Math.random() * 45000);
+    }
+    return { start: start, toggle: toggle, on: function () { return on; }, rifle: rifle, mg: mg, gun: gun, boom: boomAt, pf: pf, thunk: thunk, engine: engine };
+  })();
 
   // ------------------------------------------------------------------ drawing
+  var unitFilter = 'none', hover = null;
+  // soft round puffs, pre-drawn once per kind: drawing these is far cheaper than a fresh gradient for every puff
+  var PUFF = { smoke: [[0, '70,68,62', 1], [1, '70,68,62', 0]], black: [[0, '24,22,20', 1], [1, '24,22,20', 0]], dust: [[0, '150,132,104', 1], [1, '150,132,104', 0]],
+               fire: [[0, '255,220,120', 1], [0.35, '240,120,40', 0.78], [1, '160,50,20', 0]], boom: [[0, '255,230,170', 1], [0.4, '240,140,50', 0.8], [1, '80,60,40', 0]],
+               flash: [[0, '255,245,210', 1], [0.4, '255,190,90', 0.8], [1, '255,150,60', 0]], white: [[0, '214,214,206', 1], [0.6, '214,214,206', 0.52], [1, '214,214,206', 0]],
+               dusksmoke: [[0, '150,146,150', 1], [0.6, '150,146,150', 0.52], [1, '150,146,150', 0]], mist: [[0, '220,222,218', 1], [0.55, '220,222,218', 0.47], [1, '220,222,218', 0]] };
+  var puffs = {};
+  function puff(kind) {
+    if (puffs[kind]) return puffs[kind];
+    var c = document.createElement('canvas'); c.width = c.height = 64; var g2 = c.getContext('2d'), gr = g2.createRadialGradient(32, 32, 0, 32, 32, 32);
+    PUFF[kind].forEach(function (s) { gr.addColorStop(s[0], 'rgba(' + s[1] + ',' + s[2] + ')'); });
+    g2.fillStyle = gr; g2.fillRect(0, 0, 64, 64);
+    return (puffs[kind] = c);
+  }
+  function drawPuff(kind, X, Y, rad, alpha, squash) {
+    if (alpha <= 0.01 || X < -rad || Y < -rad || X > VW + rad || Y > VH + rad) return;
+    ctx.globalAlpha = Math.min(1, alpha); ctx.drawImage(puff(kind), X - rad, Y - rad * (squash || 1), rad * 2, rad * 2 * (squash || 1)); ctx.globalAlpha = 1;
+  }
+  var DUSK = 'brightness(0.82) saturate(0.85) sepia(0.15)';
   function draw() {
     ctx.fillStyle = '#1b1c16'; ctx.fillRect(0, 0, VW, VH);
-    var T = TILES.size;
+    var T = TILES.size, dir = tileDir();
     for (var r = Math.floor(view.y / T); r <= Math.floor((view.y + VH) / T); r++)
       for (var c = Math.floor(view.x / T); c <= Math.floor((view.x + VW) / T); c++) {
         if (c < 0 || r < 0 || c >= TILES.cols || r >= TILES.rows) continue;
-        var k = c + '_' + r;
-        if (!tiles[k]) { tiles[k] = new Image(); tiles[k].src = 'tiles/' + k + '.jpg'; }
-        if (tiles[k].complete) ctx.drawImage(tiles[k], c * T - view.x, r * T - view.y);
+        var k = c + '_' + r, key = dir + k;
+        if (!tiles[key]) { tiles[key] = new Image(); tiles[key].src = dir + k + '.jpg'; }
+        if (pendingMarks[k] && tiles[key].complete) { var pm = pendingMarks[k]; delete pendingMarks[k]; pm.forEach(paintMark); }
+        if (decals[k]) ctx.drawImage(decals[k], c * T - view.x, r * T - view.y);
+        else if (tiles[key].complete) ctx.drawImage(tiles[key], c * T - view.x, r * T - view.y);
         if (!heights[k]) loadHeights(k);
       }
-    marks.forEach(function (m) {
-      if (m.kind === 'crater') {
-        var c = proj(m.x, m.y, 0), cx = c[0] - view.x, cy = c[1] - view.y, rx = m.r / CAM.mPerPx;
-        if (cx < -40 || cy < -40 || cx > VW + 40 || cy > VH + 40 || heightAt(Math.floor(c[0]), Math.floor(c[1])) > 0.4) return;
-        var gr = ctx.createRadialGradient(cx, cy, 1, cx, cy, rx * 1.6);
-        gr.addColorStop(0, 'rgba(28,24,18,.75)'); gr.addColorStop(0.45, 'rgba(45,38,28,.5)'); gr.addColorStop(1, 'rgba(60,50,36,0)');
-        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, rx * 1.6, rx * 1.6 * CAM.up[2], 0, 0, 6.3); ctx.fill();
-      } else {
-        var nx = -Math.sin(m.h) * 1.1, ny = Math.cos(m.h) * 1.1;
-        ctx.strokeStyle = 'rgba(40,34,24,.22)'; ctx.lineWidth = 4; ctx.beginPath();
-        [-1, 1].forEach(function (sd) {
-          var a = proj(m.ax + nx * sd, m.ay + ny * sd, 0), b = proj(m.bx + nx * sd, m.by + ny * sd, 0);
-          ctx.moveTo(a[0] - view.x, a[1] - view.y); ctx.lineTo(b[0] - view.x, b[1] - view.y);
-        });
-        ctx.stroke();
-      }
-    });
-    // selection rings and routes under the units
+    if (TIME === 'dusk' && !TILES_DUSK) { ctx.fillStyle = 'rgba(30,24,50,.45)'; ctx.fillRect(0, 0, VW, VH); }
+    if (TIME === 'dusk' && TILES_DUSK) { ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'rgba(70,58,64,.55)'; ctx.fillRect(0, 0, VW, VH); ctx.globalCompositeOperation = 'source-over'; }
+    // selection rings, routes and targets under the units
     selected.forEach(function (u) {
       if (!alive(u)) return;
-      var p = proj(u.x, u.y, 0); ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.ellipse(p[0] - view.x, p[1] - view.y, 34, 21, 0, 0, 6.3); ctx.stroke();
+      var p = proj(u.x, u.y, 0), big = isTank(u); ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(p[0] - view.x, p[1] - view.y, big ? 34 : 13, big ? 21 : 8, 0, 0, 6.3); ctx.stroke();
       if (u.path && u.path.length) {
         ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(p[0] - view.x, p[1] - view.y);
         u.path.forEach(function (w) { var q = proj(w[0], w[1], 0); ctx.lineTo(q[0] - view.x, q[1] - view.y); });
         ctx.stroke(); ctx.setLineDash([]);
       }
+      if (u.target && alive(u.target) && clock - u.target.seenT < 1.5) crosshair(u.target);
     });
     var list = units.slice().sort(function (a, b) { return proj(a.x, a.y, 0)[1] - proj(b.x, b.y, 0)[1]; });
-    list.forEach(function (u) {
-      var p;
-      if (u.kind === 'tank') {
-        var k = ((Math.round(u.h / (Math.PI / 8)) % 16) + 16) % 16, s = SPR.tank;
-        p = proj(u.x, u.y, SPR.tankLookZ);
-        if (!alive(u)) ctx.filter = 'brightness(0.35) saturate(0.3)';
-        blit(imgTank, k * s, 0, s, s, p[0] - view.x - s / 2, p[1] - view.y - s / 2, s, s, proj(u.x, u.y, 0)[1], [159, 194, 230]);
-        ctx.filter = 'none';
-        if (alive(u)) bar(u, p, s);
-      } else {
-        p = proj(u.x, u.y, SPR.infantryLookZ);
-        var s2 = SPR.infantry, d = ((Math.round(u.h / (Math.PI / 4)) % 8) + 8) % 8;
-        var vis = 1 - (clock - u.seenT) / 1.5;
-        if (vis <= 0 && alive(u)) { lastSeen(u, s2); return; }
-        if (!alive(u)) { if (!u.bodySeen) return; var g = proj(u.x, u.y, 0); if (heightAt(Math.floor(g[0]), Math.floor(g[1])) > 0.4) return; ctx.fillStyle = 'rgba(30,28,22,.75)'; ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 6, 3, 0, 0, 6.3); ctx.fill(); return; }
-        ctx.globalAlpha = Math.min(1, vis);
-        var gp = proj(u.x, u.y, 0);
-        if (heightAt(Math.floor(gp[0]), Math.floor(gp[1])) < 0.4) { ctx.fillStyle = 'rgba(214,80,60,.35)'; ctx.beginPath(); ctx.ellipse(gp[0] - view.x, gp[1] - view.y, 9, 5, 0, 0, 6.3); ctx.fill(); }
-        var pose = u.pose === 'walk' ? 'walk' + (Math.floor(u.anim * 9) % 6) : u.pose;
-        var i = SPR.poses.indexOf(pose); if (i < 0) i = 0;
-        if (u.pinned && !u.fallback) blit(imgInf, i * s2, d * s2, s2, Math.round(s2 * 0.62), p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2 + s2 * 0.38, s2, Math.round(s2 * 0.62), gp[1], [214, 80, 60]);
-        else blit(imgInf, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2, gp[1], [214, 80, 60]);
-        if (u.at && u.pf) { ctx.fillStyle = '#E0604A'; ctx.fillRect(p[0] - view.x - 2, p[1] - view.y - s2 / 2 - 4, 4, 4); }
-        badge(u, p[0] - view.x, p[1] - view.y - s2 / 2 - 12);
-        ctx.globalAlpha = 1;
-      }
+    list.forEach(function (u) { if (isTank(u)) drawTank(u); else drawMan(u); });
+    drawHeard();
+    drawFx();
+    drawClouds();
+    if (TIME === 'mist') drawMist();
+    if (TIME === 'dusk') {
+      var vg = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.35, VW / 2, VH / 2, VW * 0.65);
+      vg.addColorStop(0, 'rgba(12,10,24,0)'); vg.addColorStop(1, 'rgba(12,10,24,.32)');
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH);
+    }
+    if (command === 'smoke' && hover) smokeCursor();
+    if ((command === 'area' || command === 'demo') && hover) { ctx.fillStyle = 'rgba(237,232,218,.95)'; ctx.font = '14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(command === 'area' ? 'Fire here' : 'Blow a gap here', hover[0], hover[1] - 16); }
+    selected.forEach(function (u) {
+      if (!alive(u) || !u.area) return;
+      var q = proj(u.area.x, u.area.y, 0), r = 6 / CAM.mPerPx; ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(226,178,90,.85)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(q[0] - view.x, q[1] - view.y, r, r * CAM.up[2], 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
     });
+    if (drag && drag.box) { ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
+    compassRose();
+    hud();
+  }
+
+  // Ground marks (craters, track marks, gaps blown in hedges) are permanent, so each is painted once onto a layer
+  // per background tile, and drawing a frame just lays those layers over the background.
+  var decals = {}, pendingMarks = {};
+  function tileDir() { return TIME === 'dusk' && TILES_DUSK ? 'tiles_dusk/' : 'tiles/'; }
+  function paintMark(m) {
+    var T = TILES.size, c = proj(m.kind === 'track' ? (m.ax + m.bx) / 2 : m.x, m.kind === 'track' ? (m.ay + m.by) / 2 : m.y, 0), pad = 140;
+    for (var r = Math.floor((c[1] - pad - 120) / T); r <= Math.floor((c[1] + pad) / T); r++)
+      for (var k = Math.floor((c[0] - pad) / T); k <= Math.floor((c[0] + pad) / T); k++) {
+        if (k < 0 || r < 0 || k >= TILES.cols || r >= TILES.rows) continue;
+        // the marks are painted straight into a copy of the background tile, so a frame still draws one image per tile
+        var key = k + '_' + r, src = tiles[tileDir() + key];
+        if (!decals[key]) {
+          if (!src || !src.complete) { (pendingMarks[key] = pendingMarks[key] || []).push(m); continue; }
+          decals[key] = document.createElement('canvas'); decals[key].width = src.width; decals[key].height = src.height;
+          decals[key].getContext('2d').drawImage(src, 0, 0);
+        }
+        markOn(decals[key].getContext('2d'), m, k * T, r * T);
+      }
+  }
+  function markOn(g2, m, ox, oy) {
+    if (m.kind === 'crater') {
+      var c = proj(m.x, m.y, 0), cx = c[0] - ox, cy = c[1] - oy, rx = m.r / CAM.mPerPx;
+      if (heightAt(Math.floor(c[0]), Math.floor(c[1])) > 0.4) return;
+      var gr = g2.createRadialGradient(cx, cy, 1, cx, cy, rx * 1.6);
+      gr.addColorStop(0, 'rgba(28,24,18,.75)'); gr.addColorStop(0.45, 'rgba(45,38,28,.5)'); gr.addColorStop(1, 'rgba(60,50,36,0)');
+      g2.fillStyle = gr; g2.beginPath(); g2.ellipse(cx, cy, rx * 1.6, rx * 1.6 * CAM.up[2], 0, 0, 6.3); g2.fill();
+    } else if (m.kind === 'breach') {
+      breachMark(g2, m, ox, oy);
+    } else {
+      var nx = -Math.sin(m.h) * 1.1, ny = Math.cos(m.h) * 1.1;
+      g2.strokeStyle = 'rgba(40,34,24,.22)'; g2.lineWidth = 4; g2.beginPath();
+      [-1, 1].forEach(function (sd) {
+        var a = proj(m.ax + nx * sd, m.ay + ny * sd, 0), b = proj(m.bx + nx * sd, m.by + ny * sd, 0);
+        g2.moveTo(a[0] - ox, a[1] - oy); g2.lineTo(b[0] - ox, b[1] - oy);
+      });
+      g2.stroke();
+    }
+  }
+
+  function breachMark(g2, m, ox, oy) {
+    // a gap torn through a hedge: a soft oval of churned earth over the ground and the bushes that stood there
+    var g = proj(m.x, m.y, 0), top = proj(m.x, m.y, 3.0), X = g[0] - ox, Y = g[1] - oy, T = top[1] - oy, rx = m.r / CAM.mPerPx, ry = rx * CAM.up[2];
+    var cy = (Y + ry + T) / 2, hy = (Y + ry - T) / 2 + ry * 0.4;
+    g2.save(); g2.translate(X, cy); g2.scale(1, hy / rx);
+    var gr = g2.createRadialGradient(0, 0, 0, 0, 0, rx);
+    var tone = TIME === 'dusk' ? '46,38,34' : '70,57,40';
+    gr.addColorStop(0, 'rgba(' + tone + ',.95)'); gr.addColorStop(0.62, 'rgba(' + tone + ',.88)'); gr.addColorStop(1, 'rgba(' + tone + ',0)');
+    g2.fillStyle = gr; g2.beginPath(); g2.arc(0, 0, rx, 0, 6.3); g2.fill(); g2.restore();
+    var sd = m.seed;
+    for (var i = 0; i < 26; i++) {                      // clods, stones and broken roots
+      sd = (sd * 9301 + 49297) % 233280; var a = sd / 233280; sd = (sd * 9301 + 49297) % 233280; var b = sd / 233280;
+      g2.fillStyle = i % 3 ? 'rgba(40,32,22,.85)' : 'rgba(64,74,42,.85)';
+      g2.fillRect(X + (a - .5) * rx * 1.4, cy + (b - .5) * hy * 1.4, 2 + (i % 3), 2);
+    }
+  }
+  function drawTank(u) {
+    var k = ((Math.round(u.h / (Math.PI / 8)) % 16) + 16) % 16, s = SPR.tank, p = proj(u.x, u.y, SPR.tankLookZ);
+    var f = [];
+    if (!alive(u)) f.push('brightness(0.35) saturate(0.3)');
+    if (TIME === 'dusk') f.push(DUSK);
+    unitFilter = f.length ? f.join(' ') : 'none';
+    blit(imgTank, k * s, 0, s, s, p[0] - view.x - s / 2, p[1] - view.y - s / 2, s, s, proj(u.x, u.y, 0)[1], [159, 194, 230]);
+    unitFilter = 'none';
+    if (alive(u)) bar(u, p, s);
+  }
+
+  function drawMan(u) {
+    var s2 = SPR.infantry, img = sheets[u.kit] || sheets.rifle, gp = proj(u.x, u.y, 0), p = proj(u.x, u.y, SPR.infantryLookZ);
+    var d = ((Math.round(u.h / (Math.PI / 4)) % 8) + 8) % 8, enemy = u.side === 'axis', prone = SPR.poses.indexOf('prone');
+    unitFilter = TIME === 'dusk' ? DUSK : 'none';
+    if (u.hp <= 0) {
+      // the fallen lie where they fell; Germans only once you've seen them
+      if (u.gone || (enemy && !u.bodySeen) || heightAt(Math.floor(gp[0]), Math.floor(gp[1])) > 0.4) { unitFilter = 'none'; return; }
+      ctx.globalAlpha = 0.6; ctx.filter = TIME === 'dusk' ? DUSK + ' brightness(0.7)' : 'brightness(0.7) saturate(0.6)';
+      ctx.drawImage(img, prone * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2);
+      ctx.filter = 'none'; ctx.globalAlpha = 1; unitFilter = 'none';
+      return;
+    }
+    if (u.gone) return;
+    var vis = enemy ? 1 - (clock - u.seenT) / 1.5 : 1;
+    if (vis <= 0) { lastSeen(u, s2, img); unitFilter = 'none'; return; }
+    ctx.globalAlpha = Math.min(1, vis);
+    if (heightAt(Math.floor(gp[0]), Math.floor(gp[1])) < 0.4) {
+      ctx.fillStyle = enemy ? 'rgba(214,80,60,.35)' : u.role === 'crew' ? 'rgba(200,220,240,.35)' : 'rgba(110,160,225,.4)';
+      ctx.beginPath(); ctx.ellipse(gp[0] - view.x, gp[1] - view.y, 9, 5, 0, 0, 6.3); ctx.fill();
+    }
+    var pose = u.pose === 'walk' ? 'walk' + (Math.floor(u.anim * 9) % 6) : u.pose;
+    var i = SPR.poses.indexOf(pose); if (i < 0) i = 0;
+    blit(img, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2, gp[1], enemy ? [214, 80, 60] : [159, 194, 230]);
+    unitFilter = 'none';
+    if (enemy && u.pf) { ctx.fillStyle = '#E0604A'; ctx.fillRect(p[0] - view.x - 2, p[1] - view.y - s2 / 2 - 4, 4, 4); }
+    badge(u, p[0] - view.x, p[1] - view.y - s2 / 2 - 12);
+    if (u.vet) stripes(p[0] - view.x + 9, p[1] - view.y - s2 / 2 - 8, u.vet);
+    ctx.globalAlpha = 1;
+  }
+  function stripes(x, y, n) {
+    // veterancy: one or two gold chevrons
+    ctx.strokeStyle = '#E2B25A'; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (var i = 0; i < n; i++) { ctx.moveTo(x - 3, y + i * 4); ctx.lineTo(x, y - 3 + i * 4); ctx.lineTo(x + 3, y + i * 4); }
+    ctx.stroke();
+  }
+  function crosshair(t) {
+    var q = proj(t.x, t.y, 0.9), x = q[0] - view.x, y = q[1] - view.y;
+    ctx.strokeStyle = 'rgba(240,110,80,.95)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, 6.3); ctx.moveTo(x - 16, y); ctx.lineTo(x - 6, y); ctx.moveTo(x + 6, y); ctx.lineTo(x + 16, y);
+    ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 6); ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 16); ctx.stroke();
+  }
+
+  function drawHeard() {
+    // gunfire you can hear but not see: rings pulsing out from roughly where it came from
+    heard.forEach(function (h) {
+      var age = (clock - h.t) / 4, q = proj(h.x, h.y, 0), x = q[0] - view.x, y = q[1] - view.y, col = h.kind === 'pf' ? '240,120,80' : '226,178,90';
+      ctx.lineWidth = 1.5;
+      for (var k = 0; k < 2; k++) {
+        var ph = (age * 3 + k * 0.5) % 1;
+        ctx.strokeStyle = 'rgba(' + col + ',' + (0.8 * (1 - age) * (1 - ph)).toFixed(3) + ')';
+        ctx.beginPath(); ctx.ellipse(x, y, 8 + ph * 34, (8 + ph * 34) * 0.6, 0, 0, 6.3); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(' + col + ',' + (0.9 * (1 - age)).toFixed(3) + ')'; ctx.font = '600 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', x, y + 4);
+    });
+  }
+
+  function drawFx() {
     fx.forEach(function (f) {
       var k = f.t / f.life;
       if (f.kind === 'line') {
         var a = proj(f.ax, f.ay, f.az), b = proj(f.bx, f.by, f.bz);
-        ctx.strokeStyle = f.col; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(a[0] - view.x, a[1] - view.y); ctx.lineTo(b[0] - view.x, b[1] - view.y); ctx.stroke();
+        if (TIME === 'dusk') { ctx.shadowColor = f.col; ctx.shadowBlur = 10; }
+        ctx.strokeStyle = f.col; ctx.lineWidth = TIME === 'dusk' ? 2.2 : 1.6; ctx.beginPath(); ctx.moveTo(a[0] - view.x, a[1] - view.y); ctx.lineTo(b[0] - view.x, b[1] - view.y); ctx.stroke();
+        ctx.shadowBlur = 0;
       } else if (f.kind === 'spark') {
         var q = proj(f.x, f.y, 1.5); ctx.fillStyle = 'rgba(255,230,160,' + (1 - k) + ')'; ctx.fillRect(q[0] - view.x - 2, q[1] - view.y - 2, 4, 4);
+      } else if (f.kind === 'flash') {
+        var qf = proj(f.x, f.y, f.z), rf = (f.size / CAM.mPerPx) * (TIME === 'dusk' ? 1.8 : 1) * (1 - k * 0.5);
+        drawPuff('flash', qf[0] - view.x, qf[1] - view.y, rf, 1 - k);
       } else {
-        var z = f.kind === 'smoke' ? 1 + k * 8 : f.kind === 'dust' ? 0.6 + k * 1.5 : 0.5, q2 = proj(f.x, f.y, z), rad = f.size * (f.kind === 'smoke' || f.kind === 'dust' ? (0.6 + k * 1.4) : (0.4 + k * 0.8)) / CAM.mPerPx;
-        var gr = ctx.createRadialGradient(q2[0] - view.x, q2[1] - view.y, 1, q2[0] - view.x, q2[1] - view.y, rad);
-        if (f.kind === 'smoke') { gr.addColorStop(0, 'rgba(70,68,62,' + 0.45 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(70,68,62,0)'); }
-        else if (f.kind === 'dust') { gr.addColorStop(0, 'rgba(150,132,104,' + 0.32 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(150,132,104,0)'); }
-        else { gr.addColorStop(0, 'rgba(255,230,170,' + (1 - k) + ')'); gr.addColorStop(0.4, 'rgba(240,140,50,' + 0.8 * (1 - k) + ')'); gr.addColorStop(1, 'rgba(80,60,40,0)'); }
-        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(q2[0] - view.x, q2[1] - view.y, rad, 0, 6.3); ctx.fill();
+        var drift = f.kind === 'black' || f.kind === 'smoke' ? f.t * 2.5 : 0;
+        var z = f.kind === 'smoke' ? 1 + k * 8 : f.kind === 'black' ? 2 + k * 16 : f.kind === 'dust' ? 0.6 + k * 1.5 : f.kind === 'fire' ? 0.8 + k * 2.2 : 0.5;
+        var q2 = proj(f.x + WIND[0] * drift, f.y + WIND[1] * drift, z);
+        var grow = f.kind === 'smoke' || f.kind === 'dust' ? (0.6 + k * 1.4) : f.kind === 'black' ? (0.7 + k * 2.4) : f.kind === 'fire' ? (1 - k * 0.6) : (0.4 + k * 0.8);
+        var peak = { smoke: 0.45, black: 0.5, dust: 0.32, fire: 0.9, boom: 1 }[f.kind] || 1;
+        drawPuff(f.kind, q2[0] - view.x, q2[1] - view.y, f.size * grow / CAM.mPerPx, peak * (1 - k));
       }
     });
-    if (drag && drag.box) { ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
-    hud();
+  }
+
+  function drawClouds() {
+    // smoke screens: a cluster of soft puffs, billowing out and thinning, drifting with the wind
+    clouds.forEach(function (cl) {
+      if (cl.kind !== 'smoke') return;
+      var r = cloudR(cl); if (r < 0.5) return;
+      cl.puffs.forEach(function (pf) {
+        var px = cl.x + Math.cos(pf.a) * pf.d * r * 0.7, py = cl.y + Math.sin(pf.a) * pf.d * r * 0.7, z = 1.5 + pf.s * 3 + (clock - cl.t0) * 0.03;
+        var q = proj(px, py, z);
+        drawPuff(TIME === 'dusk' ? 'dusksmoke' : 'white', q[0] - view.x, q[1] - view.y, r * (0.5 + pf.s * 0.35) / CAM.mPerPx, 0.5);
+      });
+    });
+  }
+
+  function drawMist() {
+    // ground mist: an overall veil plus slow-drifting banks, both thinning as the sun burns it off
+    var a = mistLeft(); if (a <= 0) return;
+    ctx.fillStyle = 'rgba(205,208,204,' + (0.08 + 0.34 * a).toFixed(3) + ')'; ctx.fillRect(0, 0, VW, VH);
+    mistPatches.forEach(function (m) {
+      var q = proj(m.x + WIND[0] * clock, m.y + WIND[1] * clock, 1.5);
+      drawPuff('mist', q[0] - view.x, q[1] - view.y, m.r / CAM.mPerPx, 0.38 * a, 0.55);
+    });
+  }
+
+  function smokeCursor() {
+    var g = unproj(hover[0] + view.x, hover[1] + view.y), q = proj(g[0], g[1], 0), x = q[0] - view.x, y = q[1] - view.y, r = 12 / CAM.mPerPx;
+    var ts = selected.filter(function (u) { return isTank(u) && alive(u) && u.smoke > 0; }), ok = ts.some(function (t) { return dist(t, { x: g[0], y: g[1] }) <= 140; });
+    ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.strokeStyle = ok ? 'rgba(235,235,225,.9)' : 'rgba(240,110,80,.9)';
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * CAM.up[2], 0, 0, 6.3); ctx.stroke();
+    ts.forEach(function (t) { var c = proj(t.x, t.y, 0), R = 140 / CAM.mPerPx; ctx.strokeStyle = 'rgba(235,235,225,.35)'; ctx.beginPath(); ctx.ellipse(c[0] - view.x, c[1] - view.y, R, R * CAM.up[2], 0, 0, 6.3); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(237,232,218,.95)'; ctx.font = '14px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(ok ? 'Smoke here' : 'Too far: 140 m at most', x, y - r * CAM.up[2] - 8);
+  }
+
+  function compassRose() {
+    // north is to the right on this map
+    var x = VW - 64, y = 64, n = proj(0, 1, 0), o = proj(0, 0, 0), dx = n[0] - o[0], dy = n[1] - o[1], l = Math.sqrt(dx * dx + dy * dy); dx /= l; dy /= l;
+    ctx.fillStyle = 'rgba(20,20,16,.6)'; ctx.beginPath(); ctx.arc(x, y, 30, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = 'rgba(237,232,218,.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - dx * 16, y - dy * 16); ctx.lineTo(x + dx * 16, y + dy * 16); ctx.stroke();
+    ctx.fillStyle = '#EDE8DA'; ctx.beginPath(); ctx.moveTo(x + dx * 20, y + dy * 20); ctx.lineTo(x + dx * 10 - dy * 6, y + dy * 10 + dx * 6); ctx.lineTo(x + dx * 10 + dy * 6, y + dy * 10 - dx * 6); ctx.fill();
+    ctx.font = '600 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('N', x + dx * 22 - dy * 12, y + dy * 22 + dx * 12 + 4);
+  }
+
+  function lastSeen(u, s2, img) {
+    // where you last saw him: a faded figure and a dashed ring, fading over 25 seconds. He may well have moved.
+    var age = clock - u.seenT; if (!u.last || age > 25) return;
+    var a = 1 - age / 25, g = proj(u.last.x, u.last.y, 0), p = proj(u.last.x, u.last.y, SPR.infantryLookZ);
+    var d = ((Math.round(u.last.h / (Math.PI / 4)) % 8) + 8) % 8, i = Math.max(0, SPR.poses.indexOf(u.last.pose === 'walk' ? 'idle' : u.last.pose));
+    ctx.globalAlpha = 0.28 * a;
+    ctx.drawImage(img, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2);
+    ctx.globalAlpha = 0.7 * a; ctx.strokeStyle = '#D6503C'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 12, 7, 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+  function badge(u, x, y) {
+    // cover: a green shield; pinned: amber chevrons; assault: red arrow; retreat: grey arrow; open ground: nothing
+    ctx.lineWidth = 2;
+    if (u.state === 'cover') { ctx.fillStyle = 'rgba(140,190,120,.95)'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill(); }
+    else if (u.state === 'pinned') { ctx.strokeStyle = '#E2B25A'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x, y - 1); ctx.lineTo(x + 5, y - 5); ctx.moveTo(x - 5, y); ctx.lineTo(x, y + 4); ctx.lineTo(x + 5, y); ctx.stroke(); }
+    else if (u.state === 'assault') { ctx.fillStyle = '#E0604A'; ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 5, y + 3); ctx.lineTo(x - 5, y + 3); ctx.closePath(); ctx.fill(); }
+    else if (u.state === 'crossing') { ctx.strokeStyle = '#E2B25A'; ctx.beginPath(); ctx.arc(x, y + 4, 6, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+    else if (u.state === 'retreat') { ctx.fillStyle = 'rgba(200,196,184,.9)'; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x + 5, y - 3); ctx.lineTo(x - 5, y - 3); ctx.closePath(); ctx.fill(); }
+  }
+  function bar(u, p, s) {
+    var w = 40, x = p[0] - view.x - w / 2, y = p[1] - view.y - s / 2 + 10;
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x, y, w, 5);
+    ctx.fillStyle = u.hp > 50 ? '#9FC2E6' : '#E0A84A'; ctx.fillRect(x, y, w * u.hp / 100, 5);
+    ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(237,232,218,.9)';
+    ctx.fillText(u.name + ' · ' + (u.climbing ? 'Crashing through' : u.wait > 0.5 ? 'Waiting' : u.state === 'move' ? 'Moving' : 'Halted'), x + w / 2, y - 4);
+    if (u.vet) stripes(x + w + 8, y + 1, u.vet);
+    var hurt = [];
+    if (u.dmg.track) hurt.push('Track broken, repairing ' + Math.round(u.repair * 100) + '%');
+    if (u.dmg.gun) hurt.push('Gun out');
+    if (u.dmg.gunner) hurt.push('Gunner hit');
+    if (u.dmg.engine) hurt.push('Engine damaged');
+    if (hurt.length) { ctx.fillStyle = '#E0A84A'; ctx.font = '11px system-ui, sans-serif'; ctx.fillText(hurt.join(' · '), x + w / 2, y + 17); }
   }
   // ------------------------------------------------------------------ hiding units behind buildings and trees
   // The background is one flat picture, so a unit behind a farmhouse would be painted over its roof. Blender
@@ -379,6 +1164,7 @@
       var c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
       var x = c.getContext('2d'); x.drawImage(im, 0, 0);
       heights[k] = { w: im.width, data: x.getImageData(0, 0, im.width, im.height).data };
+      flats.forEach(flatten);   // gaps blown before this tile loaded
     };
     im.src = 'tiles/h_' + k + '.png';
   }
@@ -405,74 +1191,144 @@
       }
     }
     if (hid) octx.putImageData(id, 0, 0);
+    if (unitFilter !== 'none') ctx.filter = unitFilter;   // a wreck's blackening, or the dusk grade
     ctx.drawImage(oc, dx, dy);
+    ctx.filter = 'none';
   }
 
-  function lastSeen(u, s2) {
-    // where you last saw him: a faded figure and a dashed ring, fading over 25 seconds. He may well have moved.
-    var age = clock - u.seenT; if (!u.last || age > 25) return;
-    var a = 1 - age / 25, g = proj(u.last.x, u.last.y, 0), p = proj(u.last.x, u.last.y, SPR.infantryLookZ);
-    var d = ((Math.round(u.last.h / (Math.PI / 4)) % 8) + 8) % 8, i = Math.max(0, SPR.poses.indexOf(u.last.pose === 'walk' ? 'idle' : u.last.pose));
-    ctx.globalAlpha = 0.28 * a;
-    ctx.drawImage(imgInf, i * s2, d * s2, s2, s2, p[0] - view.x - s2 / 2, p[1] - view.y - s2 / 2, s2, s2);
-    ctx.globalAlpha = 0.7 * a; ctx.strokeStyle = '#D6503C'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.ellipse(g[0] - view.x, g[1] - view.y, 12, 7, 0, 0, 6.3); ctx.stroke(); ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-  }
-  function badge(u, x, y) {
-    // cover: a green shield; pinned: amber chevrons; assault: red arrow; retreat: grey arrow; open ground: nothing
-    ctx.lineWidth = 2;
-    if (u.state === 'cover') { ctx.fillStyle = 'rgba(140,190,120,.95)'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill(); }
-    else if (u.state === 'pinned') { ctx.strokeStyle = '#E2B25A'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x, y - 1); ctx.lineTo(x + 5, y - 5); ctx.moveTo(x - 5, y); ctx.lineTo(x, y + 4); ctx.lineTo(x + 5, y); ctx.stroke(); }
-    else if (u.state === 'assault') { ctx.fillStyle = '#E0604A'; ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 5, y + 3); ctx.lineTo(x - 5, y + 3); ctx.closePath(); ctx.fill(); }
-    else if (u.state === 'retreat') { ctx.fillStyle = 'rgba(200,196,184,.9)'; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x + 5, y - 3); ctx.lineTo(x - 5, y - 3); ctx.closePath(); ctx.fill(); }
-  }
-  function bar(u, p, s) {
-    var w = 40, x = p[0] - view.x - w / 2, y = p[1] - view.y - s / 2 + 10;
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x, y, w, 5);
-    ctx.fillStyle = u.hp > 50 ? '#9FC2E6' : '#E0A84A'; ctx.fillRect(x, y, w * u.hp / 100, 5);
-    ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(237,232,218,.85)'; ctx.fillText(u.state === 'move' ? 'Moving' : 'Halted', x + w / 2, y - 4);
-  }
+  // ------------------------------------------------------------------ the panels
+  var hudEl = document.getElementById('hud'), panelEl = document.getElementById('panel');
+  function count(list, f) { return list.filter(f).length; }
   function hud() {
-    var axis = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5; }).length;
-    var tanks = units.filter(function (u) { return u.side === 'allies' && alive(u); }).length;
-    var pin = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5 && u.state === 'pinned'; }).length;
-    var cov = units.filter(function (u) { return u.side === 'axis' && alive(u) && clock - u.seenT < 1.5 && u.state === 'cover'; }).length;
-    document.getElementById('hud').innerHTML = '<b>Hedgerows near Carentan</b>Clear the Germans from the hamlet.<br>Shermans: ' + tanks + ' · Germans in sight: ' + axis + '<br><span style="color:#CFC9B8">In cover ' + cov + ' · Pinned ' + pin + '</span>'
-      + radio.filter(function (r) { return clock - r.t < 8; }).map(function (r) { return '<br><span style="color:#E2B25A">Radio:</span> ' + r.text; }).join('');
+    var mine = team('allies'), seen = team('axis').filter(function (u) { return clock - u.seenT < 1.5; });
+    var crews = count(mine, function (u) { return u.role === 'crew'; });
+    var html = '<b>Hedgerows near Carentan</b>Clear the Germans from the hamlet.'
+      + '<br><span class="dim">' + hourText() + ' · ' + weatherText() + '</span>'
+      + '<br>Shermans ' + count(mine, isTank) + ' · 1st Squad ' + count(mine, function (u) { return u.kit === 'us'; })
+      + (crews ? ' · Crew on foot ' + crews : '') + (tally.crewSaved ? ' · Crew saved ' + tally.crewSaved : '')
+      + '<br>Germans in sight ' + seen.length + ' · in cover ' + count(seen, function (u) { return u.state === 'cover'; })
+      + ' · pinned ' + count(seen, function (u) { return u.state === 'pinned'; }) + (tally.prisoners ? ' · prisoners ' + tally.prisoners : '')
+      + radio.filter(function (r) { return clock - r.t < 9; }).map(function (r) { return '<br><span class="radio">Radio:</span> ' + r.text; }).join('');
+    if (html !== hud.last) { hudEl.innerHTML = html; hud.last = html; }
+  }
+  function moraleWord(men) {
+    var m = 0; men.forEach(function (u) { m += u.morale / men.length; });
+    return men.some(function (u) { return u.broken; }) ? 'broken' : m > 60 ? 'steady' : m > 38 ? 'shaken' : 'close to breaking';
+  }
+  function panel() {
+    var sel = selected.filter(alive), ts = sel.filter(isTank), men = sel.filter(function (u) { return !isTank(u); }), html = '';
+    ts.forEach(function (t) {
+      var hurt = [];
+      if (t.dmg.track) hurt.push('track broken (' + Math.round(t.repair * 100) + '% repaired)');
+      if (t.dmg.gun) hurt.push('main gun out'); if (t.dmg.gunner) hurt.push('gunner wounded'); if (t.dmg.engine) hurt.push('engine damaged');
+      html += '<div class="row"><b>' + t.name + '</b>' + (t.vet ? ' <span class="vet">' + (t.vet === 2 ? 'veterans' : 'blooded') + '</span>' : '')
+        + ' · HE ' + t.he + ' of ' + HE_LOAD + ' · smoke ' + t.smoke + (t.heMode === 'hold' ? ' · holding HE' : '')
+        + (hurt.length ? '<br><span class="hurt">' + hurt.join(', ') + '</span>' : '') + '</div>';
+    });
+    if (ts.length) html += '<div class="btns"><button data-cmd="smoke"' + (command === 'smoke' ? ' class="on"' : '') + '>Smoke <kbd>F</kbd></button>'
+      + '<button data-cmd="he">HE: ' + (ts[0].heMode === 'auto' ? 'fire at will' : 'hold') + ' <kbd>H</kbd></button>'
+      + '<button data-cmd="area"' + (command === 'area' ? ' class="on"' : '') + '>Fire at position <kbd>T</kbd></button>'
+      + '<button data-cmd="crash"' + (ts[0].crash ? ' class="on"' : '') + '>Crash through hedges <kbd>C</kbd></button>'
+      + '<button data-cmd="halt">Halt <kbd>Space</kbd></button></div>';
+    if (men.length) {
+      html += '<div class="row"><b>' + squadName(men[0]) + '</b> · ' + men.length + (men.length === 1 ? ' man' : ' men') + ' · ' + moraleWord(men) + (men[0].assault ? ' · ready to assault' : '') + '</div>';
+      html += '<div class="btns">' + (men[0].role !== 'crew' ? '<button data-cmd="assault"' + (men[0].assault ? ' class="on"' : '') + '>Assault <kbd>G</kbd></button>'
+        + '<button data-cmd="area"' + (command === 'area' ? ' class="on"' : '') + '>Fire at position <kbd>T</kbd></button>'
+        + (charges[men[0].squad] !== undefined ? '<button data-cmd="demo"' + (command === 'demo' ? ' class="on"' : '') + '>Blow a gap (' + charges[men[0].squad] + ') <kbd>B</kbd></button>' : '') : '')
+        + '<button data-cmd="retreat">Back down the lane <kbd>R</kbd></button><button data-cmd="halt">Halt <kbd>Space</kbd></button></div>';
+    }
+    if (!html) html = '<div class="row dim">Click a Sherman or one of your riflemen to give orders.</div>';
+    html += '<div class="btns quiet"><button data-cmd="mute">Sound ' + (sound.on() ? 'on' : 'off') + ' <kbd>M</kbd></button></div>';
+    if (html !== panel.last) { panelEl.innerHTML = html; panel.last = html; }
+  }
+  panelEl.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('button'); if (b) doCommand(b.getAttribute('data-cmd')); });
+
+  function doCommand(c) {
+    var sel = selected.filter(alive), ts = sel.filter(isTank), men = sel.filter(function (u) { return !isTank(u); });
+    if (c === 'smoke') command = command === 'smoke' || !ts.length ? null : 'smoke';
+    else if (c === 'area') command = command === 'area' || !sel.length ? null : 'area';
+    else if (c === 'demo') command = command === 'demo' || !men.some(function (u) { return u.kit === 'us'; }) ? null : 'demo';
+    else if (c === 'crash' && ts.length) {
+      var cr = !ts[0].crash; ts.forEach(function (t) { t.crash = cr; });
+      say(cr ? ts.map(function (t) { return t.name; }).join(' and ') + ' will crash through hedges where it saves a long way round. Slow, no firing, and the belly is exposed.' : 'Keeping to the gaps.');
+    }
+    else if (c === 'he' && ts.length) {
+      var m = ts[0].heMode === 'auto' ? 'hold' : 'auto'; ts.forEach(function (t) { t.heMode = m; });
+      say(m === 'hold' ? 'Holding HE: machine guns only, unless you give them a target.' : 'HE: fire at will.');
+    } else if (c === 'halt') sel.forEach(function (u) { if (!u.broken) { u.path = null; u.assault = false; } });
+    else if (c === 'assault' && men.length && men[0].role !== 'crew') {
+      var on = !men[0].assault; men.forEach(function (u) { u.assault = on; });
+      say(squadName(men[0]) + (on ? ': assault. The next move goes in at the run, firing.' : ': steady advance.'));
+    } else if (c === 'retreat' && men.length) {
+      men.forEach(function (u) { u.retreating = true; u.assault = false; order(u, RALLY.x + (Math.random() - .5) * 10, RALLY.y + (Math.random() - .5) * 10); });
+    } else if (c === 'mute') sound.toggle();
   }
 
-  // ------------------------------------------------------------------ input: select, order, scroll
+  // ------------------------------------------------------------------ input: select, order, target, scroll
   var drag = null, keys = {};
   function toCanvas(e) { var b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * VW / b.width, (e.clientY - b.top) * VH / b.height]; }
   function unitAt(px, py) {
-    var best = null, bd = 40;
-    units.forEach(function (u) { if (u.side !== 'allies' || !alive(u)) return; var p = proj(u.x, u.y, 1); var d = Math.hypot(p[0] - view.x - px, p[1] - view.y - py); if (d < bd) { bd = d; best = u; } });
+    var best = null, bd = 1e9;
+    units.forEach(function (u) {
+      if (u.side !== 'allies' || !alive(u)) return;
+      var p = proj(u.x, u.y, isTank(u) ? 1 : 0.9), d = Math.sqrt((p[0] - view.x - px) * (p[0] - view.x - px) + (p[1] - view.y - py) * (p[1] - view.y - py));
+      if (d < (isTank(u) ? 40 : 18) && d < bd) { bd = d; best = u; }
+    });
+    return best;
+  }
+  function enemyAt(px, py) {
+    var best = null, bd = 20;
+    units.forEach(function (u) {
+      if (u.side !== 'axis' || !alive(u) || clock - u.seenT > 1.5) return;
+      var p = proj(u.x, u.y, 0.9), d = Math.sqrt((p[0] - view.x - px) * (p[0] - view.x - px) + (p[1] - view.y - py) * (p[1] - view.y - py));
+      if (d < bd) { bd = d; best = u; }
+    });
     return best;
   }
   cv.addEventListener('mousedown', function (e) { var p = toCanvas(e); drag = { x0: p[0], y0: p[1], x1: p[0], y1: p[1], vx: view.x, vy: view.y, moved: false, box: e.shiftKey }; });
   window.addEventListener('mousemove', function (e) {
-    if (!drag) return; var p = toCanvas(e); drag.x1 = p[0]; drag.y1 = p[1];
+    var p = toCanvas(e); hover = p;
+    if (!drag) return; drag.x1 = p[0]; drag.y1 = p[1];
     if (Math.abs(p[0] - drag.x0) + Math.abs(p[1] - drag.y0) > 8) drag.moved = true;
     if (drag.moved && !drag.box && !unitAt(drag.x0, drag.y0)) { view.x = drag.vx - (p[0] - drag.x0); view.y = drag.vy - (p[1] - drag.y0); clampView(); }
     else if (drag.moved && unitAt(drag.x0, drag.y0)) drag.box = true;
   });
-  window.addEventListener('mouseup', function (e) {
-    if (!drag) return; var d = drag; drag = null;
+  window.addEventListener('mouseup', function () {
+    if (!drag || !started) { drag = null; return; }
+    var d = drag; drag = null;
     if (d.box && d.moved) {
       var x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
-      selected = units.filter(function (u) { if (u.side !== 'allies' || !alive(u)) return false; var p = proj(u.x, u.y, 1); return p[0] - view.x > x0 && p[0] - view.x < x1 && p[1] - view.y > y0 && p[1] - view.y < y1; });
+      var inBox = units.filter(function (u) { if (u.side !== 'allies' || !alive(u)) return false; var p = proj(u.x, u.y, 1); return p[0] - view.x > x0 && p[0] - view.x < x1 && p[1] - view.y > y0 && p[1] - view.y < y1; });
+      if (inBox.length) { selected = inBox; command = null; }
       return;
     }
     if (d.moved) return;
-    var u = unitAt(d.x0, d.y0);
-    if (u) { selected = [u]; return; }
-    if (selected.length) {
-      var g = unproj(d.x0 + view.x, d.y0 + view.y);
-      selected.forEach(function (s, i) { if (alive(s)) order(s, g[0] + (i ? 7 : 0), g[1] + (i ? 7 : 0)); });
+    if (command) {
+      var gs = unproj(d.x0 + view.x, d.y0 + view.y), cmd = command; command = null;
+      if (cmd === 'smoke') fireSmoke(gs[0], gs[1]);
+      else if (cmd === 'demo') plantCharge(gs[0], gs[1]);
+      else if (cmd === 'area') { selected.filter(alive).forEach(function (u) { u.area = { x: gs[0], y: gs[1], until: clock + 20 }; u.target = null; }); say('Raking that position for 20 seconds.'); }
+      return;
     }
+    var u = unitAt(d.x0, d.y0);
+    if (u) { selected = isTank(u) ? [u] : squadOf(u); return; }
+    var foe = enemyAt(d.x0, d.y0);
+    if (foe && selected.length) {
+      selected.forEach(function (s) { if (alive(s)) s.target = foe; });
+      say('Target marked. ' + (selected.some(isTank) ? 'HE on him as soon as they can see him.' : 'Concentrating fire on him.'));
+      return;
+    }
+    if (selected.length) { var g = unproj(d.x0 + view.x, d.y0 + view.y); orderGroup(selected.filter(alive), g[0], g[1]); }
   });
-  window.addEventListener('keydown', function (e) { keys[e.key] = 1; }); window.addEventListener('keyup', function (e) { keys[e.key] = 0; });
+  window.addEventListener('keydown', function (e) {
+    var k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = 1;
+    if (!started) return;
+    if (k === 'f') doCommand('smoke'); else if (k === 'h') doCommand('he'); else if (k === ' ') { doCommand('halt'); e.preventDefault(); }
+    else if (k === 'g') doCommand('assault'); else if (k === 'r') doCommand('retreat'); else if (k === 'm') doCommand('mute');
+    else if (k === 't') doCommand('area'); else if (k === 'b') doCommand('demo'); else if (k === 'c') doCommand('crash');
+    else if (k === 'Escape') command = null;
+  });
+  window.addEventListener('keyup', function (e) { keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = 0; });
   function clampView() { view.x = Math.max(0, Math.min(CAM.W - VW, view.x)); view.y = Math.max(0, Math.min(CAM.H - VH, view.y)); }
 
   function frame(t) {
@@ -481,38 +1337,62 @@
     if (keys.ArrowLeft || keys.a) view.x -= sp; if (keys.ArrowRight || keys.d) view.x += sp;
     if (keys.ArrowUp || keys.w) view.y -= sp; if (keys.ArrowDown || keys.s) view.y += sp;
     clampView();
-    if (!over) update(dt);
-    draw();
+    if (started && !over) update(dt);
+    units.forEach(function (u) { if (isTank(u)) sound.engine(u); });
+    draw(); panel();
     requestAnimationFrame(frame);
   }
+  function end(t, s) { over = true; document.getElementById('endTitle').textContent = t; document.getElementById('endText').textContent = s; document.getElementById('end').style.display = 'flex'; }
 
   // ------------------------------------------------------------------ start
-  Promise.all([get('level.json'), get('camera.json'), get('sprites.json'), get('tiles/tiles.json'), image('sherman.png'), image('rifleman.png')]).then(function (r) {
-    LEVEL = r[0]; CAM = r[1]; SPR = r[2]; TILES = r[3]; imgTank = r[4]; imgInf = r[5];
+  function begin(t) {
+    TIME = t === 'mist' || t === 'dusk' ? t : 'day'; started = true;
+    document.getElementById('start').style.display = 'none';
+    sound.start();
+    say({ mist: 'Dawn. Mist lying on the fields, and you won’t see much past 50 m until it lifts. Germans reported around the farm.',
+          day: 'Two Shermans and 1st Squad at the lane. Germans reported around the farm.',
+          dusk: 'Last light. Germans reported around the farm. Watch for muzzle flashes in the hedges.' }[TIME]);
+  }
+  Promise.all([get('level.json'), get('camera.json'), get('sprites.json'), get('tiles/tiles.json'), maybe('tiles_dusk/tiles.json'), image('sherman.png')]).then(function (r) {
+    LEVEL = r[0]; CAM = r[1]; SPR = r[2]; TILES = r[3]; TILES_DUSK = r[4]; imgTank = r[5];
+    return Promise.all(Object.keys(SPR.kits).map(function (k) { return image(SPR.kits[k]).then(function (im) { sheets[k] = im; }); }));
+  }).then(function () {
     G = LEVEL.size; CELL = LEVEL.cell; HALF = LEVEL.world / 2;
-    block = new Uint8Array(G * G); for (var i = 0; i < G * G; i++) block[i] = LEVEL.grid.charCodeAt(i) === 49 ? 1 : 0;
-    // tanks are 3 m wide: they need a cell of clearance either side
-    tankBlock = new Uint8Array(G * G);
+    // the ground: 0 open, 1 hedgerow, 2 building (3 will be a wreck). tankgrid: where a 3 m-wide Sherman fits, measured at 1 m.
+    kindGrid = new Uint8Array(G * G); block = new Uint8Array(G * G); hedgeCell = new Uint8Array(G * G); tankBlock = new Uint8Array(G * G); tankSoft = new Uint8Array(G * G);
+    for (var i = 0; i < G * G; i++) { kindGrid[i] = LEVEL.grid.charCodeAt(i) - 48; block[i] = kindGrid[i] ? 1 : 0; hedgeCell[i] = kindGrid[i] === 1 ? 1 : 0; tankBlock[i] = LEVEL.tankgrid.charCodeAt(i) === 49 ? 1 : 0; }
+    // a tank can crash through what's only blocked by hedge: anywhere not within 4 m of a building
     for (var rr = 0; rr < G; rr++) for (var cc = 0; cc < G; cc++) {
-      var b = 0; for (var dr = -1; dr <= 1 && !b; dr++) for (var dc = -1; dc <= 1 && !b; dc++) if (blocked(block, cc + dc, rr + dr)) b = 1;
-      tankBlock[rr * G + cc] = b;
+      if (!tankBlock[rr * G + cc]) continue;
+      var bld = 0; for (var dr = -2; dr <= 2 && !bld; dr++) for (var dc = -2; dc <= 2 && !bld; dc++) { var r2 = rr + dr, c2 = cc + dc; if (r2 >= 0 && c2 >= 0 && r2 < G && c2 < G && kindGrid[r2 * G + c2] === 2) bld = 1; }
+      tankSoft[rr * G + cc] = bld ? 0 : 1;
     }
-    LEVEL.shermans.forEach(function (p) { var c = nearestOpen(tankBlock, cellOf(p[0], p[1])), w = centre(c[0], c[1]); units.push(tank(w[0], w[1])); });
-    // point the Shermans towards the hamlet
-    units.forEach(function (u) { u.h = Math.atan2(LEVEL.objective[1] - u.y, LEVEL.objective[0] - u.x); });
+    OBJ = { x: LEVEL.objective[0], y: LEVEL.objective[1] };
+    LEVEL.shermans.forEach(function (p, i) { var c = nearestOpen(tankBlock, cellOf(p[0], p[1])), w = centre(c[0], c[1]); var t = tank(w[0], w[1], i); t.h = Math.atan2(OBJ.y - t.y, OBJ.x - t.x); units.push(t); });
+    // 1st Squad waits behind the rear tank; the rally point, where crews are safe, is further back down the lane
+    var back = units[1], bx = back.x - OBJ.x, by = back.y - OBJ.y, bl = Math.sqrt(bx * bx + by * by); bx /= bl; by /= bl;
+    var rc = nearestOpen(block, cellOf(back.x + bx * 28, back.y + by * 28)), rw = centre(rc[0], rc[1]); RALLY = { x: rw[0], y: rw[1] };
+    for (var k = 0; k < 6; k++) {
+      var sc = nearestOpen(block, cellOf(back.x + bx * (10 + (k % 2) * 3) - by * (k - 2.5) * 1.6, back.y + by * (10 + (k % 2) * 3) + bx * (k - 2.5) * 1.6)), sw = centre(sc[0], sc[1]);
+      var m = soldier(sw[0], sw[1], 'allies', 'us', '1st Squad', k === 0 ? 'nco' : 'rifle'); m.h = Math.atan2(-by, -bx); units.push(m);
+    }
     LEVEL.squads.forEach(function (p, si) {
       for (var k = 0; k < 5; k++) {
         var a = k * 1.26, x = p[0] + Math.cos(a) * 4, y = p[1] + Math.sin(a) * 4, c = cellOf(x, y);
         if (blocked(block, c[0], c[1])) { x = p[0]; y = p[1]; }
-        units.push(soldier(x, y, si, k < 2));
+        units.push(soldier(x, y, 'axis', 'rifle', 'Gruppe ' + (si + 1), k < 2 ? 'pf' : k === 4 ? 'nco' : 'rifle'));
       }
     });
-    selected = units.filter(function (u) { return u.side === 'allies'; });
-    var c0 = proj(LEVEL.shermans[0][0], LEVEL.shermans[0][1], 0), c1 = proj(LEVEL.objective[0], LEVEL.objective[1], 0);
+    for (var q = 0; q < 80; q++) mistPatches.push({ x: (Math.random() - .5) * 760, y: (Math.random() - .5) * 760, r: 18 + Math.random() * 30 });
+    selected = units.filter(isTank);
+    var c0 = proj(LEVEL.shermans[0][0], LEVEL.shermans[0][1], 0), c1 = proj(OBJ.x, OBJ.y, 0);
     view.x = (c0[0] + c1[0]) / 2 - VW / 2; view.y = (c0[1] + c1[1]) / 2 - VH / 2; clampView();
     document.getElementById('loading').style.display = 'none';
-    say('Two Shermans in the lane. Germans reported around the farm.');
-    window.__game = { clock: function () { return clock; }, units: units, update: update, draw: function () { draw(); }, order: order, proj: proj, view: view, selected: function () { return selected; } };
+    window.__game = { clock: function () { return clock; }, units: units, update: update, draw: function () { draw(); }, order: order, orderGroup: orderGroup,
+      proj: proj, view: view, selected: function () { return selected; }, select: function (l) { selected = l; }, fireSmoke: fireSmoke, doCommand: doCommand,
+      begin: begin, tally: tally, see: seeLine, hitTank: hitTank, knockOut: knockOut, breach: breach, plantCharge: plantCharge, grid: function () { return { block: block, tank: tankBlock, kind: kindGrid }; }, hear: hear, sight: sightRange, rally: function () { return RALLY; }, clouds: function () { return clouds; }, heard: function () { return heard; } };
+    if (params.time) begin(params.time); else document.getElementById('start').style.display = 'flex';
     requestAnimationFrame(frame);
   });
+  [].forEach.call(document.querySelectorAll('#start button'), function (b) { b.addEventListener('click', function () { begin(b.getAttribute('data-time')); }); });
 })();
