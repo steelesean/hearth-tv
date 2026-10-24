@@ -1,0 +1,20 @@
+const { chromium } = require('playwright'); const http = require('http'); const fs = require('fs'); const path = require('path');
+const root = path.join(__dirname, 'game');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const srv = http.createServer((q, r) => { const u = decodeURIComponent(q.url.split('?')[0]).replace(/^\/game/, ''); const f = path.join(root, u === '/' ? 'index.html' : u); fs.readFile(f, (e, b) => { if (e) { r.statusCode = 404; return r.end(); } r.setHeader('content-type', types[path.extname(f)] || 'application/octet-stream'); r.end(b); }); }).listen(0);
+(async () => {
+  const b = await chromium.launch(), p = await b.newPage({ viewport: { width: 1600, height: 900 } }), errs = [];
+  p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(`http://localhost:${srv.address().port}/game/?time=day&quiet=1&mode=battle`); await p.waitForFunction(() => window.__game, null, { timeout: 30000 }); await p.waitForTimeout(1000);
+  await p.click('#cards [data-card="1st Squad"]'); await p.waitForTimeout(300);
+  await p.screenshot({ path: path.join(__dirname, 'ui4-squad.png') });
+  await p.click('#cards button[data-cmd="hold"]'); await p.waitForTimeout(200);
+  const held = await p.evaluate(() => window.__game.units.filter((u) => u.squad === '1st Squad').every((u) => u.hold));
+  await p.click('#cards [data-card="Able"]'); await p.waitForTimeout(200);
+  await p.click('#cards button[data-cmd="smoke"]'); await p.waitForTimeout(200);
+  const box = await p.evaluate(() => { const g = window.__game, a = g.units[0], q = g.proj(a.x + Math.cos(a.h) * 60, a.y + Math.sin(a.h) * 60, 0), r = document.getElementById('c').getBoundingClientRect(); return [r.left + (q[0] - g.view.x) * r.width / 1920, r.top + (q[1] - g.view.y) * r.height / 1080]; });
+  await p.mouse.click(box[0], box[1]); await p.waitForTimeout(200);
+  const smoke = await p.evaluate(() => ({ clouds: window.__game.clouds().length, left: window.__game.units[0].smoke }));
+  await p.screenshot({ path: path.join(__dirname, 'ui4-tank.png') });
+  console.log(JSON.stringify({ ambushFromCard: held, smokeFromCard: smoke }), 'errors:', errs.join(' | ') || 'none'); await b.close(); srv.close();
+})();
