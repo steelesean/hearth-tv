@@ -4,57 +4,87 @@
 <meta charset="utf-8">
 <base href="/game/">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hedgerows near Carentan</title>
+<title>Hedgerows</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #EDE8DA; }
-  canvas { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-  .box { position: absolute; background: rgba(20,20,16,.78); border: 1px solid rgba(237,232,218,.2); border-radius: 12px; }
-  .hud { left: 20px; top: 16px; padding: 10px 16px; font-size: 15px; line-height: 1.45; pointer-events: none; max-width: 560px; }
-  .hud b { font: 500 20px Georgia, serif; display: block; }
+  canvas#c { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  #ui { position: absolute; pointer-events: none; }
+  #ui > * { position: absolute; pointer-events: auto; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(20,20,16,.78); border: 1px solid rgba(237,232,218,.18); border-radius: 999px; padding: 5px 12px; font-size: 14px; color: #EDE8DA; white-space: nowrap; }
+  .chip.hot { border-color: #E2B25A; box-shadow: 0 0 0 2px rgba(226,178,90,.35); }
+  .chip .bar { display: inline-block; width: 46px; height: 5px; background: rgba(0,0,0,.5); border-radius: 3px; overflow: hidden; }
+  .chip .bar i { display: block; height: 100%; }
+  .chip .sep { width: 1px; height: 14px; background: rgba(237,232,218,.25); }
+  .chip.btn { cursor: pointer; font: inherit; font-size: 13px; padding: 5px 11px; }
+  .chip.btn:hover { background: rgba(237,232,218,.18); }
   .dim { color: #CFC9B8; }
-  .radio { color: #E2B25A; }
-  .panel { right: 20px; bottom: 16px; padding: 10px 14px; font-size: 14px; line-height: 1.45; max-width: 460px; }
-  .panel .row { margin: 2px 0 6px; }
-  .panel .vet { color: #E2B25A; }
-  .panel .hurt { color: #E0A84A; }
-  .panel .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .panel .btns.quiet { margin: 4px 0 0; }
-  .panel button { font: inherit; font-size: 13px; color: #EDE8DA; background: rgba(237,232,218,.1); border: 1px solid rgba(237,232,218,.25); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
-  .panel button:hover { background: rgba(237,232,218,.2); }
-  .panel button.on { background: #EDE8DA; color: #1b1b16; }
-  kbd { font: 11px system-ui, sans-serif; opacity: .65; margin-left: 4px; }
-  .help { left: 20px; bottom: 16px; padding: 8px 40px 8px 14px; font-size: 13px; color: #CFC9B8; max-width: 760px; line-height: 1.45; }
-  .help .x { position: absolute; right: 8px; top: 6px; width: 24px; height: 24px; border: 0; border-radius: 999px; background: rgba(237,232,218,.12); color: #EDE8DA; font: 16px/24px system-ui, sans-serif; cursor: pointer; padding: 0; }
-  .help .x:hover { background: rgba(237,232,218,.25); }
+  #objs { left: 14px; top: 12px; display: flex; gap: 8px; pointer-events: none; }
+  #clock { left: 50%; top: 12px; transform: translateX(-50%); pointer-events: none; }
+  #ticker { left: 50%; top: 50px; transform: translateX(-50%); pointer-events: none; max-width: 70%; }
+  #ticker .chip { white-space: normal; border-radius: 12px; }
+  #ticker b { color: #E2B25A; font-weight: 600; margin-right: 4px; }
+  #res { right: 104px; top: 12px; display: flex; gap: 6px; }
+  #cards { left: 14px; bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; max-width: 80%; }
+  .card { display: flex; align-items: center; gap: 8px; background: rgba(20,20,16,.8); border: 1px solid rgba(237,232,218,.18); border-radius: 12px; padding: 6px 12px 6px 9px; color: #EDE8DA; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+  .card:hover { background: rgba(40,40,32,.9); }
+  .card.sel { border-color: #9FC2E6; box-shadow: 0 0 0 2px rgba(159,194,230,.35); }
+  .card.warn .fl { color: #E0A84A; }
+  .card .ic { color: #9FC2E6; display: inline-flex; }
+  .card .tx { display: flex; flex-direction: column; gap: 2px; }
+  .card .ln { display: flex; align-items: center; gap: 3px; color: #CFC9B8; font-size: 12px; }
+  .card .fl { font-size: 11px; color: #CFC9B8; }
+  .card .hp { display: inline-block; width: 40px; height: 5px; background: rgba(0,0,0,.5); border-radius: 3px; overflow: hidden; margin-right: 6px; }
+  .card .hp i { display: block; height: 100%; }
+  .card .dot { width: 6px; height: 6px; border-radius: 3px; display: inline-block; }
+  #log { right: 14px; top: 56px; display: none; width: 380px; max-height: 50%; overflow: auto; background: rgba(20,20,16,.9); border: 1px solid rgba(237,232,218,.2); border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.5; }
+  #log b { font: 500 16px Georgia, serif; display: block; margin-bottom: 4px; }
+  #helpov { left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; width: 640px; background: rgba(24,24,19,.96); border: 1px solid rgba(237,232,218,.25); border-radius: 16px; padding: 18px 24px; font-size: 14px; line-height: 1.6; cursor: pointer; }
+  #helpov b { font: 400 24px Georgia, serif; display: block; margin-bottom: 6px; }
+  #helpov td { padding: 1px 14px 1px 0; vertical-align: top; } #helpov td:first-child { color: #E2B25A; white-space: nowrap; }
   .over { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,10,8,.55); }
-  .over > div { background: rgba(28,28,22,.95); border: 1px solid rgba(237,232,218,.25); border-radius: 18px; padding: 28px 40px; text-align: center; max-width: 640px; line-height: 1.5; }
-  .over b { font: 400 38px Georgia, serif; display: block; margin-bottom: 8px; }
-  .over button { margin: 18px 6px 0; font: inherit; padding: 10px 22px; border-radius: 999px; border: 0; background: #EDE8DA; color: #1b1b16; cursor: pointer; }
-  .over button small { display: block; font-size: 12px; opacity: .7; }
-  .over .diff { margin-top: 14px; font-size: 14px; color: #CFC9B8; }
-  .over .diff button { margin: 0 4px; padding: 5px 14px; font-size: 13px; background: rgba(237,232,218,.12); color: #EDE8DA; }
-  .over .diff button.pick { background: #E2B25A; color: #1b1b16; }
-  body.tv .help, body.tv .panel { display: none; }   /* on the TV: no mouse, so no buttons; the remote's menu does it all */
-  body.tv .hud { font-size: 17px; max-width: 760px; }
+  .over > div { background: rgba(28,28,22,.95); border: 1px solid rgba(237,232,218,.25); border-radius: 18px; padding: 26px 36px; text-align: center; max-width: 760px; line-height: 1.5; max-height: 92vh; overflow: auto; }
+  .over b { font: 400 38px Georgia, serif; display: block; margin-bottom: 4px; }
+  .over b.small { font: 600 13px system-ui, sans-serif; display: inline; margin-right: 8px; color: #E2B25A; }
+  .over p { margin: 8px 0; }
+  .over .row { margin: 10px 0; font-size: 14px; color: #CFC9B8; }
+  .over .row button, #endButtons button { margin: 3px 4px; font: inherit; font-size: 14px; padding: 7px 16px; border-radius: 999px; border: 0; background: rgba(237,232,218,.12); color: #EDE8DA; cursor: pointer; }
+  .over .row button.pick { background: #E2B25A; color: #1b1b16; }
+  .over button.go { background: #EDE8DA; color: #1b1b16; font-size: 17px; padding: 10px 34px; }
+  #endButtons button { background: #EDE8DA; color: #1b1b16; }
+  #aar { display: block; width: 100%; max-width: 720px; margin: 14px auto 6px; border-radius: 8px; }
+  #debrief { text-align: left; font-size: 14px; color: #CFC9B8; }
+  body.tv #res .btn { display: none; }   /* on the TV the remote's Back button pauses, and the pause menu has the rest */
+  body.tv .chip, body.tv .card { font-size: 16px; }
   .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #CFC9B8; }
 </style>
 </head>
 <body>
 <canvas id="c" width="1920" height="1080"></canvas>
-<div class="box hud" id="hud"></div>
-<div class="box help" id="help"><button class="x" id="helpClose" aria-label="Hide help" title="Hide help">×</button>Click a Sherman, or one of your riflemen to take the whole squad; shift-drag to box several. Click the ground to move, a German to target him. Drag the map or use the arrow keys. Riflemen take a point by standing on it. Hedgerows block sight; tanks need a gap (or can crash through, slowly), and infantry can climb the banks. With the TV remote: arrows move the cursor, OK gives orders, Back pauses.</div>
-<div class="box panel" id="panel"></div>
+<div id="ui">
+  <div id="objs"></div><div id="clock"></div><div id="ticker"></div><div id="res"></div><div id="cards"></div><div id="log"></div>
+  <div id="helpov"><b>How to play</b><table>
+    <tr><td>Select</td><td>Click a Sherman or a rifleman (the whole squad), or a card at the bottom; shift-drag a box round several</td></tr>
+    <tr><td>Move</td><td>Click the ground. Click a German to make him the target</td></tr>
+    <tr><td>Orders</td><td>Right-click: the command wheel for the selected units, at that spot</td></tr>
+    <tr><td>Keys</td><td>F smoke · T fire at a spot · H hold HE · C crash through hedges · G assault · X ambush · U ride a tank · B blow a gap · R back down the lane · Space halt · V artillery · N smoke shells</td></tr>
+    <tr><td>Game</td><td>P pause · + double speed · M sound · L radio log · ? this help · arrows scroll</td></tr>
+    <tr><td>TV remote</td><td>Arrows move the cursor, OK selects or opens the wheel, Back clears or pauses</td></tr>
+    <tr><td>Points</td><td>Your riflemen take a point by standing on it with no Germans close</td></tr>
+  </table><span class="dim">Click anywhere on this box to close it.</span></div>
+</div>
 <div class="over" id="start"><div>
-  <b>Hedgerows near Carentan</b>
-  Normandy, June 1944. Two Shermans and 1st Squad have to take a farm and a crossroads in the bocage, then hold both when the Germans counter-attack. The Germans have Panzerfausts and an MG42, and the hedges are thick.
-  <br><span class="dim">Sound on is best. On the TV: up and down for difficulty, left and right for the hour, then OK.</span><br>
-  <div class="diff">Difficulty: <button data-diff="easy">Easy</button><button data-diff="normal">Normal</button><button data-diff="hard">Hard</button></div>
-  <button data-time="mist">Morning mist<small>06:10, sight 55 m and lifting</small></button>
-  <button data-time="day">Afternoon<small>13:05, clear</small></button>
-  <button data-time="dusk">Dusk<small>21:15, light fading</small></button>
+  <b>Hedgerows</b>
+  <div class="dim" id="missionTitle"></div>
+  <p id="brief"></p>
+  <div class="row">Play: <button data-mode="campaign">Campaign</button><button data-mode="battle">Single battle</button></div>
+  <div class="row" id="missionRow"></div>
+  <div class="row">Difficulty: <button data-diff="easy">Easy</button><button data-diff="normal">Normal</button><button data-diff="hard">Hard</button></div>
+  <div class="row">Hour: <button data-time="mist">Morning mist</button><button data-time="day">Afternoon</button><button data-time="dusk">Dusk</button></div>
+  <div class="row"><button id="go" class="go">Start</button></div>
+  <span class="dim">Sound on is best. On the TV, use the arrows and OK.</span>
 </div></div>
-<div class="over" id="end"><div><b id="endTitle"></b><span id="endText"></span><br><button onclick="location.reload()">Play again</button></div></div>
+<div class="over" id="end"><div><b id="endTitle"></b><span id="endText"></span><canvas id="aar" width="720" height="440"></canvas><div id="debrief"></div><div id="endButtons"></div></div></div>
 <div class="loading" id="loading">Loading the battlefield…</div>
 <script src="game.js"></script>
 </body>
