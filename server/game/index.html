@@ -27,15 +27,17 @@
   #ticker .chip { white-space: normal; border-radius: 12px; }
   #ticker b { color: #E2B25A; font-weight: 600; margin-right: 4px; }
   #res { right: 104px; top: 12px; display: flex; gap: 6px; }
-  #cards { left: 14px; bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; max-width: 64%; }
+  #cards { left: 14px; bottom: 12px; display: flex; gap: 6px; flex-wrap: wrap-reverse; align-items: flex-end; max-width: 66%; }
   .card .head { display: flex; align-items: center; gap: 8px; }
-  .card .orders { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid rgba(237,232,218,.15); }
+  /* a selected card's orders float above it, so opening them never moves the other cards */
+  .card { position: relative; }
+  .card .orders { position: absolute; left: -1px; bottom: calc(100% + 8px); width: 230px; display: flex; flex-direction: column; gap: 4px; padding: 10px; background: rgba(20,20,16,.94); border: 1px solid rgba(159,194,230,.55); border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.45); cursor: default; }
   .card .orders button { font: inherit; font-size: 13px; text-align: left; color: #EDE8DA; background: rgba(237,232,218,.08); border: 1px solid rgba(237,232,218,.2); border-radius: 8px; padding: 5px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 14px; }
   .card .orders button:hover { background: rgba(237,232,218,.2); }
   .card .orders button.on { background: #EDE8DA; color: #1b1b16; }
   .card .orders kbd { opacity: .55; }
   .card .orders .hint { font-size: 11px; color: #CFC9B8; max-width: 200px; }
-  .card { display: flex; flex-direction: column; align-items: stretch; gap: 0; background: rgba(20,20,16,.8); border: 1px solid rgba(237,232,218,.18); border-radius: 12px; padding: 6px 12px 6px 9px; color: #EDE8DA; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+  .card { display: flex; flex-direction: column; align-items: stretch; gap: 0; background: rgba(20,20,16,.8); border: 1px solid rgba(237,232,218,.18); border-radius: 12px; padding: 5px 10px 5px 8px; color: #EDE8DA; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
   .card:hover { background: rgba(40,40,32,.9); }
   .card.sel { border-color: #9FC2E6; box-shadow: 0 0 0 2px rgba(159,194,230,.35); }
   .card.warn .fl { color: #E0A84A; }
@@ -63,7 +65,7 @@
   #endButtons button { background: #EDE8DA; color: #1b1b16; }
   #aar { display: block; width: 100%; max-width: 720px; margin: 14px auto 6px; border-radius: 8px; }
   #debrief { text-align: left; font-size: 14px; color: #CFC9B8; }
-  body.tv #res .btn { display: none; }   /* on the TV the remote's Back button pauses, and the pause menu has the rest */
+  body.tv #res .btn:not([data-cmd=arty]):not([data-cmd=artysmoke]):not([data-cmd=findfoe]) { display: none; }   /* on the TV the remote's Back button pauses, and the pause menu has the rest */
   body.tv .chip, body.tv .card { font-size: 16px; }
   .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #CFC9B8; }
 </style>

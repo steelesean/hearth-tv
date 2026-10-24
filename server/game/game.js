@@ -1836,8 +1836,10 @@
     var r = radio[0];
     setHTML('ticker', r && clock - r.t < 8 ? '<div class="chip line"><b>Radio</b> ' + r.text + '</div>' : '');
     var seen = team('axis').filter(function (u) { return clock - u.seenT < 1.5; }).length;
-    setHTML('res', '<div class="chip" title="Artillery fire missions (V)">' + ICON.shell + arty.he + '</div><div class="chip" title="Smoke-shell missions (N)">' + ICON.cloud + arty.smoke + '</div>'
-      + '<div class="chip" title="Germans in sight">' + ICON.eye + seen + '</div>'
+    // the counters are buttons too: artillery and smoke start a fire mission (then click the map), the eye finds a German
+    setHTML('res', '<button class="chip btn' + (command === 'arty' ? ' hot' : '') + '" data-cmd="arty" title="Artillery: click, then click the map (V)">' + ICON.shell + arty.he + '</button>'
+      + '<button class="chip btn' + (command === 'artysmoke' ? ' hot' : '') + '" data-cmd="artysmoke" title="Smoke shells: click, then click the map (N)">' + ICON.cloud + arty.smoke + '</button>'
+      + '<button class="chip btn" data-cmd="findfoe" title="Germans in sight: click to look at the next one">' + ICON.eye + seen + '</button>'
       + '<button class="chip btn" data-cmd="pause" title="Pause (P)">' + (paused ? '▶' : '❚❚') + '</button>'
       + '<button class="chip btn" data-cmd="speed" title="Speed (+)">' + gameSpeed + '×</button>'
       + '<button class="chip btn" data-cmd="mute" title="Sound (M)">' + (sound.on() ? 'Sound' : 'Muted') + '</button>'
@@ -1915,13 +1917,32 @@
     var already = g.units.every(function (u) { return selected.indexOf(u) >= 0; });
     selected = g.units; if (already) centreOn(g.units);   // a second click finds them
   });
+  // right-click (two-finger tap or Control-click on a Mac) on the interface: no browser menu. On a card it selects
+  // that unit and opens its orders; on an order or a marker it does what a click does.
+  document.getElementById('ui').addEventListener('contextmenu', function (e) {
+    e.preventDefault(); if (!started || over) return;
+    if (remote.menu) remote.menu = null;
+    var b = e.target.closest && e.target.closest('[data-card]'), c = e.target.closest && e.target.closest('button[data-cmd]');
+    if (b && !c) { var g = groupsOfMine().filter(function (x) { return x.key === b.getAttribute('data-card'); })[0]; if (g) selected = g.units; return; }
+    if (e.target.click) e.target.click();
+  });
   // every marker catches its own clicks, so none of them reaches the map as a move order
   ui.objs.addEventListener('click', function (e) {
     var c = e.target.closest && e.target.closest('[data-obj]'); if (!c) return;
     var o = OBJS.filter(function (x) { return x.name === c.getAttribute('data-obj'); })[0]; if (o) centreOn([o]);
   });
   ui.ticker.addEventListener('click', function () { doCommand('log'); });
-  ui.res.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('button[data-cmd]'); if (b) doCommand(b.getAttribute('data-cmd')); });
+  ui.res.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('button[data-cmd]'); if (!b) return;
+    var c = b.getAttribute('data-cmd');
+    if (c === 'findfoe') {
+      var foes = team('axis').filter(function (s) { return clock - s.seenT < 1.5; }); if (!foes.length) { say('No Germans in sight just now.'); return; }
+      findfoe.i = ((findfoe.i || 0) + 1) % foes.length; centreOn([foes[findfoe.i]]); return;
+    }
+    doCommand(c);
+    if (command === c) say(c === 'arty' ? 'Artillery: click on the map where you want the shells. Esc to cancel.' : 'Smoke shells: click on the map where you want the smoke. Esc to cancel.');
+  });
+  function findfoe() {}
   function toggleBox(k) { ui[k].style.display = ui[k].style.display === 'block' ? 'none' : 'block'; uiLast[k] = null; }
   ui.helpov.addEventListener('click', function () { toggleBox('helpov'); });
 
@@ -2711,7 +2732,7 @@
     var p = toCanvas(e); remote.x = p[0]; remote.y = p[1]; remoteOk();
   });
   cv.addEventListener('mousedown', function (e) {
-    if (e.button === 2) return;
+    if (e.button === 2 || e.ctrlKey) return;   // Control-click on a Mac is a right-click: the wheel, not a move order
     if (remote.menu && !remote.menu.pause) {
       var m = remote.menu, i = wheelPick(m, toCanvas(e)[0], toCanvas(e)[1]); remote.menu = null;
       if (i >= 0) m.items[i].run();
