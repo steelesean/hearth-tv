@@ -1567,7 +1567,8 @@
   }
   function panel() {
     // one card per tank or squad: what it is, how it's doing, and whether it's in trouble
-    var html = groupsOfMine().map(function (g) {
+    var groups = groupsOfMine(), first = groups.filter(function (g) { return g.units.every(function (u) { return selected.indexOf(u) >= 0; }); })[0];
+    var html = groups.map(function (g) {
       var sel = g.units.every(function (u) { return selected.indexOf(u) >= 0; }), u0 = g.units[0], line = '', flags = [];
       if (g.kind === 'tank') {
         line = '<i class="hp"><i style="width:' + Math.max(0, u0.hp) + '%;background:' + (u0.hp > 50 ? '#9FC2E6' : '#E0A84A') + '"></i></i>HE ' + u0.he + ' · smoke ' + u0.smoke;
@@ -1584,14 +1585,40 @@
       }
       var ic = g.kind === 'tank' ? ICON.tank : g.kind === 'scout' ? ICON.scout : g.kind === 'crew' ? ICON.crew : ICON.helmet;
       var sgt = g.units.filter(function (v) { return v.role === 'nco' && v.man; })[0];
-      return '<button class="card' + (sel ? ' sel' : '') + (flags.some(function (f) { return /pinned|broken|track|gun|engine/.test(f); }) ? ' warn' : '') + '" data-card="' + g.key + '">'
-        + '<span class="ic">' + ic + '</span><span class="tx"><b>' + (g.kind === 'crew' ? g.key + '’s crew' : g.key) + '</b>' + (sel && sgt ? ' <span class="dim">' + manLabel(sgt.man) + '</span>' : '')
-        + '<span class="ln">' + line + '</span>' + (flags.length ? '<span class="fl">' + flags.join(' · ') + '</span>' : '') + '</span></button>';
+      return '<div class="card' + (sel ? ' sel' : '') + (flags.some(function (f) { return /pinned|broken|track|gun|engine/.test(f); }) ? ' warn' : '') + '" data-card="' + g.key + '">'
+        + (g === first ? cardOrders(g) : '')   // only the first selected card opens up
+        + '<div class="head"><span class="ic">' + ic + '</span><span class="tx"><b>' + (g.kind === 'crew' ? g.key + '’s crew' : g.key) + '</b>' + (sel && sgt ? ' <span class="dim">' + manLabel(sgt.man) + '</span>' : '')
+        + '<span class="ln">' + line + '</span>' + (flags.length ? '<span class="fl">' + flags.join(' · ') + '</span>' : '') + '</span></div></div>';
     }).join('');
     setHTML('cards', html);
   }
+  function cardOrders(g) {
+    // the selected card opens upwards into that unit's orders: instant ones act at once, the ones that need a place
+    // light up and wait for a click on the map
+    var u = g.units[0], O = [];
+    var add = function (cmd, label, key, on) { O.push('<button data-cmd="' + cmd + '"' + (on ? ' class="on"' : '') + '>' + label + (key ? ' <kbd>' + key + '</kbd>' : '') + '</button>'); };
+    if (g.kind === 'tank') {
+      add('area', 'Fire at a spot', 'T', command === 'area');
+      if (u.smoke > 0) add('smoke', 'Smoke (' + u.smoke + ')', 'F', command === 'smoke');
+      add('he', u.heMode === 'auto' ? 'Hold HE' : 'HE at will', 'H', u.heMode === 'hold');
+      add('crash', 'Crash through hedges', 'C', u.crash);
+      if (riders(u).length) add('ride', 'Riders off', 'U');
+    } else if (g.kind !== 'crew') {
+      add('assault', 'Assault', 'G', u.assault);
+      add('hold', 'Ambush', 'X', u.hold);
+      add('area', 'Fire at a spot', 'T', command === 'area');
+      if (charges[u.squad]) add('demo', 'Blow a gap (' + charges[u.squad] + ')', 'B', command === 'demo');
+      add('ride', u.riding ? 'Get off the tank' : 'Ride a Sherman', 'U');
+    }
+    add('arty', 'Artillery (' + arty.he + ')', 'V', command === 'arty');
+    add('artysmoke', 'Smoke shells (' + arty.smoke + ')', 'N', command === 'artysmoke');
+    if (g.kind !== 'tank') add('retreat', 'Back down the lane', 'R');
+    add('halt', 'Halt', 'Space');
+    return '<div class="orders">' + O.join('') + (command ? '<span class="hint">Now click on the map. Esc to cancel</span>' : '<span class="hint">Click the ground to move · right-click for the wheel</span>') + '</div>';
+  }
   ui.cards.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('button[data-card]'); if (!b) return;
+    var c = e.target.closest && e.target.closest('button[data-cmd]'); if (c) { doCommand(c.getAttribute('data-cmd')); return; }
+    var b = e.target.closest && e.target.closest('[data-card]'); if (!b) return;
     var g = groupsOfMine().filter(function (x) { return x.key === b.getAttribute('data-card'); })[0]; if (!g) return;
     var already = g.units.every(function (u) { return selected.indexOf(u) >= 0; });
     selected = g.units; if (already) centreOn(g.units);   // a second click finds them
