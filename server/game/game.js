@@ -166,7 +166,7 @@
   }
   // kit: 'rifle' (German), 'us' (American rifleman) or 'tanker' (a Sherman's crew). role: 'rifle', 'pf', 'nco' or 'crew'.
   function soldier(x, y, side, kit, squad, role) {
-    var heart = { nco: 88, pf: 74, rifle: 68, crew: 42, mg: 80, loader: 70 }[role] + Math.random() * 14;
+    var heart = { nco: 88, pf: 74, rifle: 68, crew: 42, mg: 80, loader: 70, scout: 72 }[role] + Math.random() * 14 + (side === 'axis' && started ? DIFF.heart : 0);   // reinforcements arriving mid-game get the difficulty too
     return { kind: 'inf', side: side, kit: kit, role: role, squad: squad, x: x, y: y, h: Math.random() * 6.28, hp: 100, path: null,
       shot: 1 + Math.random() * 3, anim: Math.random(), pose: 'idle', fired: 0, pf: role === 'pf' ? 1 : 0, state: 'exposed',
       seenT: -99, supp: 0, suppT: -9, pinned: false, sought: -99, morale: heart, heart: heart, kills: 0, vet: role === 'nco' ? 1 : 0,
@@ -195,20 +195,24 @@
     var tanks = list.filter(isTank), men = list.filter(function (u) { return !isTank(u); });
     tanks.forEach(function (t, i) {
       if (t.dmg.track) { say(t.name + ' can’t move: the track is broken.'); return; }
-      if (!i) { order(t, x, y); return; }
+      if (!i) { if (!order(t, x, y)) toast('No way through for ' + t.name, x, y); return; }
       // the second tank pulls up beside the first if there's room, otherwise behind it
       var a = Math.atan2(y - tanks[0].y, x - tanks[0].x), s = Math.sin(a), c = Math.cos(a);
       var spots = [[x - s * 8, y + c * 8], [x + s * 8, y - c * 8], [x - c * 12, y - s * 12], [x - c * 20, y - s * 20]];
       for (var k = 0; k < spots.length; k++) { var q = cellOf(spots[k][0], spots[k][1]); if (!blocked(tankBlock, q[0], q[1])) { order(t, spots[k][0], spots[k][1]); return; } }
-      order(t, x - c * 12, y - s * 12);
+      if (!order(t, x - c * 12, y - s * 12)) toast('No way through for ' + t.name, x, y);
     });
     if (!men.length) return;
     men.forEach(function (m) { if (m.riding) dismount(m, true); m.boardTo = null; });   // a move order gets them off the tank first
-    if (men.some(function (m) { return m.broken; })) { say(squadName(men[0]) + ' won’t go. They’re shaken and pulling back.'); men = men.filter(function (m) { return !m.broken; }); }
+    if (men.some(function (m) { return m.broken; })) { say(squadName(men[0]) + ' won’t go. They’re shaken and pulling back.'); toast('Shaken: won’t move', x, y); men = men.filter(function (m) { return !m.broken; }); }
+    if (men.length) delayOrder(men, x, y);
+  }
+  function moveMen(men, x, y) {
     // the squad spreads out in a line across the direction of travel, 3 m apart, and takes cover when it gets there
-    var cx = 0, cy = 0; men.forEach(function (m) { cx += m.x / men.length; cy += m.y / men.length; });
+    var cx = 0, cy = 0, ok = 0; men.forEach(function (m) { cx += m.x / men.length; cy += m.y / men.length; });
     var a = Math.atan2(y - cy, x - cx), nx = -Math.sin(a), ny = Math.cos(a);
-    men.forEach(function (m, i) { var o = (i - (men.length - 1) / 2) * 3; order(m, x + nx * o, y + ny * o); m.arrive = true; m.retreating = false; });
+    men.forEach(function (m, i) { var o = (i - (men.length - 1) / 2) * 3; if (order(m, x + nx * o, y + ny * o)) ok++; m.arrive = true; m.retreating = false; });
+    if (!ok) toast('No way through there', x, y);
   }
 
   function turnTo(u, ang, rate, dt) {
@@ -328,7 +332,11 @@
     if (coverAgainst(t, from)) m *= weapon === 'bullet' ? 0.35 : 0.6; // bocage banks stop bullets better than blast
     return m;
   }
-  function suppress(t, amt) { t.supp = Math.min(100, t.supp + amt * (t.state === 'assault' ? 0.5 : 1)); t.suppT = clock; }
+  function suppress(t, amt, from) {
+    t.supp = Math.min(100, t.supp + amt * (t.state === 'assault' ? 0.5 : 1)); t.suppT = clock; t.engaged = true;
+    if (from) t.suppFrom = { x: from.x, y: from.y, t: clock };
+    if (t.hold) springAmbush(t);   // shot at: the ambush is blown
+  }
   function findCover(u, threat, reach) {
     // nearest open cell within reach that puts a hedge between this soldier and the threat
     var c0 = cellOf(u.x, u.y), best = null, bd = 1e9, R = Math.round((reach || 14) / CELL);
@@ -369,13 +377,13 @@
   function rifleShot(s, t) {
     // a rifle or SMG shot at whoever he can see; at a tank it just sparks off the armour
     var w = WEAPON[s.kit], d = dist(s, t);
-    s.fired = 0.2; s.shot = w.every[0] + Math.random() * (w.every[1] - w.every[0]);
+    s.fired = 0.2; s.shot = w.every[0] + Math.random() * (w.every[1] - w.every[0]); s.lastFired = clock; s.engaged = true;
     tracer(s, t, s.side === 'axis' ? 'rgba(255,220,150,.55)' : 'rgba(215,232,255,.55)'); muzzle(s); sound.rifle(s);
     if (s.side === 'axis' && clock - s.seenT > 1.5) hear(s, 'rifle');
     if (t.kind === 'tank') { fx.push({ t: 0, life: .15, x: t.x, y: t.y, kind: 'spark' }); return; }
-    suppress(t, 7);
+    suppress(t, 7, s);
     units.forEach(function (o) { if (o !== t && o.kind === 'inf' && o.side === t.side && alive(o) && dist(o, t) < 4) suppress(o, 3); });
-    var p = w.acc * Math.max(0.15, 1 - d / w.range) * vetAcc(s) * (s.assault && s.path ? 0.5 : 1) * (s.riding ? 0.5 : 1) * exposure(t, s, 'bullet');
+    var p = w.acc * Math.max(0.15, 1 - d / w.range) * vetAcc(s) * germanAcc(s) * (s.assault && s.path ? 0.5 : 1) * (s.riding ? 0.5 : 1) * (clock < (s.volley || 0) ? 1.6 : 1) * exposure(t, s, 'bullet');
     if (Math.random() < p) killed(t, s);
   }
   function blast(x, y, by, power) {
@@ -384,7 +392,7 @@
     units.forEach(function (s) {
       if (s.kind !== 'inf' || !alive(s)) return;
       var d = Math.sqrt((s.x - x) * (s.x - x) + (s.y - y) * (s.y - y));
-      if (d < 14 * power) { suppress(s, 70 - d * 3 / power); s.morale -= 8; }
+      if (d < 14 * power) { suppress(s, 70 - d * 3 / power); s.morale -= 8; if (s.role === 'mg') s.relocate = true; }
       if (d < 7 * power && Math.random() < (0.6 - d / (12 * power)) * exposure(s, by || { x: x + 1, y: y }, 'blast')) killed(s, by);
     });
   }
@@ -415,13 +423,143 @@
     selected = selected.filter(alive);
   }
 
+  // ------------------------------------------------------------------ difficulty
+  // Easy, Normal or Hard, chosen on the start screen: how well the Germans shoot, how long they hold on, how many
+  // come in the counter-attack, and how much artillery you get.
+  var DIFFS = {
+    easy:   { label: 'Easy',   acc: 0.75, heart: -12, waves: 1, arty: [4, 3], counter: 0 },
+    normal: { label: 'Normal', acc: 1.0,  heart: 0,   waves: 2, arty: [3, 2], counter: 1 },
+    hard:   { label: 'Hard',   acc: 1.2,  heart: 8,   waves: 3, arty: [2, 1], counter: 2 } };
+  var DIFF = DIFFS[prefs.difficulty] || DIFFS.normal;
+  function germanAcc(s) { return s.side === 'axis' ? DIFF.acc : 1; }
+
+  // ------------------------------------------------------------------ seeing and being seen
+  // Both sides spot by the same rules. You're easiest to see moving or firing; still and in cover you're hard to pick
+  // out; still, in cover and holding your fire (an ambush), you're very hard to see until they're close. Tanks are big.
+  // Scouts with binoculars see further. Within 25 m you see anything with a clear line.
+  function spotRange(o, t) {
+    var R = sightRange() * (o.role === 'scout' ? 1.35 : isTank(o) ? 1.1 : 1);
+    var k = 1, still = !t.path && !t.riding, firing = clock - (t.lastFired || -99) < 3;
+    if (isTank(t)) k = 1.3;
+    else if (firing) k = 1.2;
+    else if (still) {
+      var cover = coverAgainst(t, o);
+      k = t.hold || (t.side === 'axis' && !t.engaged && !t.goal) ? (cover ? 0.35 : 0.6) : cover ? 0.6 : t.pinned ? 0.75 : 0.9;
+      if (t.role === 'scout') k = Math.min(k, 0.5);
+    }
+    return Math.max(25, R * k);
+  }
+  function canSee(o, t) { return dist(o, t) < spotRange(o, t) && seeLine(o.x, o.y, t.x, t.y); }
+  function holdRange(u) {
+    // when a man is allowed to open fire: an ambush waits until they're within 40 m; German defenders who haven't been
+    // spotted wait until you're within 90 m (the MG42 opens up at whatever it can see); scouts only shoot back
+    if (u.hold) return 40;
+    if (u.role === 'scout') return u.engaged ? 999 : 0;
+    if (u.side === 'axis' && !u.engaged && !u.goal && u.role !== 'mg') return 90;
+    return 999;
+  }
+  function springAmbush(u) {
+    // the first shot from an ambush: the whole squad opens up together, and the first volley is deadly
+    squadOf(u).forEach(function (m) { if (m.hold) { m.hold = false; m.volley = clock + 3; m.shot = Math.min(m.shot, Math.random() * 0.4); } });
+    if (u.side === 'allies') say(squadName(u) + ': ambush! Open fire!');
+  }
+
+  // ------------------------------------------------------------------ German tactics
+  // Counter-attack at once: lose a point and the nearest German squad not already fighting comes straight back for it,
+  // one squad going round the flank. MG42 teams fire a few bursts and move before your HE finds them. Squads falling
+  // back or crossing open ground under fire lay smoke.
+  function gegenstoss(o) {
+    var squads = {};
+    team('axis').forEach(function (s) { if (s.kind === 'inf' && !s.broken && !s.retreating && s.role !== 'mg' && s.role !== 'loader') (squads[s.squad] = squads[s.squad] || []).push(s); });
+    var free = Object.keys(squads).map(function (k) { return squads[k]; }).filter(function (sq) {
+      return !sq.some(function (s) { return clock - (s.contact || -99) < 15; }) && dist(sq[0], o) < 260;
+    }).sort(function (a, b) { return dist(a[0], o) - dist(b[0], o); }).slice(0, 1 + DIFF.counter);
+    free.forEach(function (sq, i) {
+      var via = i % 2 ? flankPoint(sq[0], o) : null;
+      sq.forEach(function (s) { s.goal = { x: o.x + (Math.random() - .5) * 14, y: o.y + (Math.random() - .5) * 14 }; s.via = via; s.fallback = false; order(s, (via || s.goal).x, (via || s.goal).y); });
+    });
+    if (free.length) say('Germans are forming up to counter-attack the ' + o.name + '. Get ready.');
+  }
+  function flankPoint(from, o) {
+    // a point 50 m off to one side of the straight line in, so the attack comes from an unexpected direction
+    var dx = o.x - from.x, dy = o.y - from.y, l = Math.sqrt(dx * dx + dy * dy) || 1, s = Math.random() < 0.5 ? 1 : -1;
+    var c = nearestOpen(block, cellOf(o.x - dx / l * 40 - dy / l * 50 * s, o.y - dy / l * 40 + dx / l * 50 * s));
+    if (!c) return null; var w = centre(c[0], c[1]); return { x: w[0], y: w[1] };
+  }
+  function mgMove(u, why) {
+    // shoot and scoot: a new spot 12 to 35 m away with a view towards the enemy, and the loader follows
+    var foe = team('allies').filter(function (a) { return clock - (a.seenByAxis || -99) < 20; }).sort(function (a, b) { return dist(a, u) - dist(b, u); })[0] || { x: u.x + Math.cos(u.h) * 50, y: u.y + Math.sin(u.h) * 50 };
+    var site = siteGun(u, foe, 35);
+    if (dist(site, u) < 12) { var a = Math.random() * 6.28, c = nearestOpen(block, cellOf(u.x + Math.cos(a) * 20, u.y + Math.sin(a) * 20)); if (c) { var w = centre(c[0], c[1]); site = { x: w[0], y: w[1], h: site.h }; } }
+    u.bursts = 0; u.setup = 0; u.relocate = false; u.goal = { x: site.x, y: site.y }; order(u, site.x, site.y);
+    units.forEach(function (v) { if (v.role === 'loader' && v.squad === u.squad && alive(v)) { v.goal = { x: site.x - 1.5, y: site.y + 1 }; order(v, v.goal.x, v.goal.y); } });
+    if (clock - u.seenT < 3) say('The MG42 is moving' + (why ? ' (' + why + ')' : '') + '.');
+  }
+  function germanSmoke(sq, towards) {
+    // smoke candles: once per squad, between them and you
+    if (sq[0].smoked || !towards) return;
+    sq.forEach(function (s) { s.smoked = true; });
+    var cx = 0, cy = 0; sq.forEach(function (s) { cx += s.x / sq.length; cy += s.y / sq.length; });
+    var dx = towards.x - cx, dy = towards.y - cy, l = Math.sqrt(dx * dx + dy * dy) || 1, puffs = [];
+    for (var i = 0; i < 8; i++) puffs.push({ a: Math.random() * 6.28, d: Math.sqrt(Math.random()), s: Math.random() });
+    clouds.push({ x: cx + dx / l * 10, y: cy + dy / l * 10, r: 9, t0: clock + 1, life: 35, kind: 'smoke', puffs: puffs });
+    if (sq.some(function (s) { return clock - s.seenT < 3; })) say('The Germans are laying smoke.');
+  }
+
+  // ------------------------------------------------------------------ command friction and resupply
+  // Orders to a squad go through its sergeant. With him alive they're under way in half a second; without him the men
+  // take two to four seconds to sort themselves out. Tanks on the radio are immediate.
+  var pendingOrders = [];
+  function delayOrder(men, x, y) {
+    var nco = men.some(function (m) { return m.role === 'nco' && alive(m); }) || men[0].role === 'scout' || men[0].role === 'crew';
+    var wait = nco ? 0.5 : 2 + Math.random() * 2;
+    men.forEach(function (m) { m.orderWait = clock + wait; });
+    pendingOrders.push({ men: men, x: x, y: y, t: clock + wait });
+    if (!nco) say(squadName(men[0]) + ' has lost its sergeant: slow to get going.');
+  }
+  function runOrders() {
+    pendingOrders = pendingOrders.filter(function (p) {
+      if (clock < p.t) return true;
+      var men = p.men.filter(alive); if (men.length) moveMen(men, p.x, p.y);
+      return false;
+    });
+  }
+  function resupply(t, dt) {
+    // a Sherman halted at the rally point takes on HE and smoke bombs from the supply truck
+    if (t.path || dist(t, RALLY) > 28) { t.supplying = false; return; }
+    if (t.he >= HE_LOAD && t.smoke >= SMOKE_LOAD) return;
+    if (!t.supplying) { t.supplying = true; t.supplyT = clock; say(t.name + ' re-arming at the rally point.'); }
+    if (clock - t.supplyT > 5) { t.supplyT = clock; if (t.he < HE_LOAD) t.he++; else t.smoke++; }
+  }
+
+  // ------------------------------------------------------------------ feedback
+  var toasts = [];
+  function toast(text, x, y) { toasts.push({ text: text, x: x, y: y, t: clock, real: Date.now() }); }
+  function drawToasts() {
+    toasts = toasts.filter(function (o) { return Date.now() - o.real < 2600; });
+    toasts.forEach(function (o) {
+      var q = proj(o.x, o.y, 1), a = 1 - (Date.now() - o.real) / 2600, X = q[0] - view.x, Y = q[1] - view.y - 20 - (1 - a) * 16;
+      ctx.globalAlpha = Math.min(1, a * 2); ctx.font = '600 14px system-ui, sans-serif'; ctx.textAlign = 'center';
+      var w = ctx.measureText(o.text).width + 16; ctx.fillStyle = 'rgba(60,20,16,.85)'; ctx.fillRect(X - w / 2, Y - 16, w, 22);
+      ctx.fillStyle = '#F2D6CF'; ctx.fillText(o.text, X, Y); ctx.globalAlpha = 1;
+    });
+  }
+  function pinMark(u, x, y) {
+    // a pinned man shows where the fire is coming from: a short red tick pointing towards it
+    var f = u.suppFrom; if (!f || clock - f.t > 6) return;
+    var a = Math.atan2(proj(f.x, f.y, 0)[1] - proj(u.x, u.y, 0)[1], proj(f.x, f.y, 0)[0] - proj(u.x, u.y, 0)[0]);
+    ctx.strokeStyle = 'rgba(230,90,70,.9)'; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * 12, y + Math.sin(a) * 12); ctx.lineTo(x + Math.cos(a) * 24, y + Math.sin(a) * 24); ctx.stroke();
+  }
+  var gameSpeed = 1;
+
   // ------------------------------------------------------------------ the simulation
   var OBJ, RALLY;   // the farm the Germans hold, and the spot back down the lane where your crews are safe
   function update(dt) {
     clock += dt;
     var allies = team('allies'), axis = team('axis'), R = sightRange();
     // spotting: a German is on your screen only while one of your men or tanks can see him
-    var sees = function (s) { return allies.some(function (a) { return dist(a, s) < R && seeLine(a.x, a.y, s.x, s.y); }); };
+    var sees = function (s) { return allies.some(function (a) { return canSee(a, s); }); };
     axis.forEach(function (s) { if (sees(s)) { s.seenT = clock; s.last = { x: s.x, y: s.y, h: s.h, pose: s.pose }; } });
     units.forEach(function (s) { if (s.side === 'axis' && s.hp <= 0 && !s.bodySeen && (clock - s.seenT < 0.5 || sees(s))) s.bodySeen = true; });
     // crews climbing out of knocked-out tanks
@@ -439,6 +577,7 @@
     });
     squadOrders(allies);
     burnFuses();
+    runOrders();
     objectivesUpdate(dt);
     artyUpdate();
     clouds.forEach(function (cl) { if (cl.kind === 'smoke') { cl.x += WIND[0] * dt; cl.y += WIND[1] * dt; } });
@@ -481,6 +620,7 @@
       }
       if (Math.random() < dt * 6) fx.push({ t: 0, life: 2.6, x: u.x - Math.cos(u.h) * 3.5 + Math.random() - .5, y: u.y - Math.sin(u.h) * 3.5 + Math.random() - .5, size: 2.5, kind: 'dust' });
     } else u.lastMark = null;
+    resupply(u, dt);
     if (u.dmg.engine && Math.random() < dt * 2) boom(u.x - Math.cos(u.h) * 3, u.y - Math.sin(u.h) * 3, 1.2, true);
     if (u.hp < 50 && Math.random() < dt * 1.5) boom(u.x, u.y, 1.5, true);
     // a broken track: the crew climb out and fix it, as long as nothing hostile is in sight within 60 m
@@ -494,12 +634,13 @@
     if (u.area && clock > u.area.until) u.area = null;
     if (u.area && seeLine(u.x, u.y, u.area.x, u.area.y)) { areaFire(u, axis); return; }
     if (u.target && (!alive(u.target) || clock - u.target.seenT > 5)) u.target = null;
-    var seen = axis.filter(function (s) { return dist(u, s) < R && seeLine(u.x, u.y, s.x, s.y); });
+    var seen = axis.filter(function (s) { return canSee(u, s); });
     seen.sort(function (a, b) { return dist(u, a) - dist(u, b); });
     var onTarget = u.target && seen.indexOf(u.target) >= 0;
     if (seen.length && u.mg <= 0) {                 // bow and coax MGs: bursts at the target or the nearest, pinning those around it
       var t = onTarget ? u.target : seen[0]; u.mg = 0.9; tracer(u, t, 'rgba(255,215,120,.9)'); sound.mg(u);
-      axis.forEach(function (s) { var d = dist(s, t); if (d < 5) suppress(s, d < 1 ? 22 : 8); });
+      axis.forEach(function (s) { var d = dist(s, t); if (d < 5) suppress(s, d < 1 ? 22 : 8, u); });
+      if (t.role === 'mg' && dist(u, t) < 150) t.relocate = t.relocate || Math.random() < 0.25;   // a Sherman's MG on it: time to move
       if (Math.random() < Math.max(0.08, 0.4 - dist(u, t) / 400) * aim * exposure(t, u, 'bullet')) killed(t, u);
     }
     // 76 mm high explosive: on its own at whatever it sees, unless you've told it to hold; always at a target you've given it
@@ -538,11 +679,13 @@
     var sgt = u.role !== 'nco' && units.some(function (v) { return v.role === 'nco' && alive(v) && v.squad === u.squad && dist(v, u) < 30; });
     if (u.pinned) u.morale -= 3 * dt; else if (u.supp < 10) u.morale += (1.5 + (sgt ? 1.5 : 0)) * dt;
     u.morale = Math.max(0, Math.min(u.heart, u.morale));
-    var vis = foes.filter(function (a) { return dist(u, a) < R && seeLine(u.x, u.y, a.x, a.y); });
+    var vis = foes.filter(function (a) { return canSee(u, a); });
+    if (u.side === 'axis') vis.forEach(function (a) { a.seenByAxis = clock; });
     vis.sort(function (a, b) { return dist(u, a) - dist(u, b); });
     var men = vis.filter(function (a) { return a.kind === 'inf'; });
     var tgt = u.target && vis.indexOf(u.target) >= 0 ? u.target : men[0] || vis[0];
-    var w = WEAPON[u.kit], inRange = tgt && dist(u, tgt) < w.range, st = null;
+    var w = WEAPON[u.kit], inRange = tgt && dist(u, tgt) < Math.min(w.range, holdRange(u)), st = null;
+    if (u.hold && tgt && dist(u, tgt) < 40) springAmbush(u);
     if (u.area && clock > u.area.until) u.area = null;
     if (u.riding) { rideUpdate(u, dt, tgt, inRange); return; }
     if (u.boardTo && !u.pinned) {
@@ -551,8 +694,11 @@
     }
     // Germans with somewhere to be (the counter-attack) push on, but stop and fight when they meet you
     if (u.side === 'axis' && u.goal && !u.retreating && !u.task) {
-      if (tgt) { u.contact = clock; if (u.path && !u.pf && u.role !== 'mg' && u.role !== 'loader') u.path = null; }
-      else if (!u.path && clock - (u.contact || -99) > 10 && dist(u, u.goal) > 10) order(u, u.goal.x, u.goal.y);
+      if (u.via && dist(u, u.via) < 12) u.via = null;   // round the flank: now head in
+      if (tgt) {
+        u.contact = clock; if (u.path && !u.pf && u.role !== 'mg' && u.role !== 'loader') u.path = null;
+        if (!coverAgainst(u, tgt) && dist(u, tgt) < 120) germanSmoke(squadOf(u), tgt);   // caught in the open: smoke
+      } else if (!u.path && clock - (u.contact || -99) > 10 && dist(u, u.via || u.goal) > 10) order(u, (u.via || u.goal).x, (u.via || u.goal).y);
     }
     if (u.task && !u.pinned) {
       sapper(u, dt);
@@ -567,7 +713,7 @@
     } else if (u.side === 'axis' && u.pf && (st = stalk(u, dt, foes))) {
       // the Panzerfaust man is hunting
     } else if (u.path) {
-      u.pose = 'walk'; u.aiming = false; move(u, u.assault ? 3.4 : u.role === 'crew' ? 3.0 : 2.2, 6, dt);
+      u.pose = 'walk'; u.aiming = false; move(u, u.assault ? 3.4 : u.role === 'crew' ? 3.0 : u.role === 'scout' ? 2.8 : 2.2, 6, dt);
       if (u.assault && tgt && inRange && u.shot <= 0) rifleShot(u, tgt);   // an assault fires from the hip on the run
       if (!u.path) arrived(u);
     } else if (u.area && !tgt && seeLine(u.x, u.y, u.area.x, u.area.y)) {
@@ -575,7 +721,7 @@
       if (u.shot <= 0) areaFire(u, foes);
     } else if (tgt) {
       // under threat: get a hedge between you and them first, then return fire
-      if (!coverAgainst(u, tgt) && clock - u.sought > 12 && u.role !== 'crew') {
+      if (!coverAgainst(u, tgt) && clock - u.sought > 12 && u.role !== 'crew' && !u.hold) {
         u.sought = clock; var cw = findCover(u, tgt, 14);
         if (cw) { u.path = path(block, [u.x, u.y], cw); if (u.path) u.path = u.path.slice(1); }
       }
@@ -586,7 +732,7 @@
     if (!u.path) u.climbing = false;
     separate(u);
     var threat = tgt || foes[0];
-    u.state = u.climbing ? 'crossing' : u.retreating && u.path ? 'retreat' : u.pinned ? 'pinned' : st === 'assault' || (u.assault && u.path) ? 'assault' : u.path ? 'move'
+    u.state = u.hold && !u.path ? 'ambush' : u.climbing ? 'crossing' : u.retreating && u.path ? 'retreat' : u.pinned ? 'pinned' : st === 'assault' || (u.assault && u.path) ? 'assault' : u.path ? 'move'
       : threat && coverAgainst(u, threat) ? 'cover' : 'exposed';
   }
   function arrived(u) {
@@ -606,17 +752,26 @@
   }
   function stalk(u, dt, foes) {
     // the Panzerfaust man goes after a tank he can see, or one he can hear: a moving Sherman is loud within 120 m
-    var R = sightRange();
-    var known = foes.filter(function (a) { return a.kind === 'tank' && ((dist(u, a) < R && seeLine(u.x, u.y, a.x, a.y)) || (a.state === 'move' && dist(u, a) < 120)); });
-    if (!known.length) return null;
+    var known = foes.filter(function (a) { return a.kind === 'tank' && (canSee(u, a) || (a.state === 'move' && dist(u, a) < 120)); });
+    if (!known.length) { u.hold = false; return null; }
     known.sort(function (a, b) { return dist(u, a) - dist(u, b); });
-    var tk = known[0], d = dist(u, tk), see = d < R && seeLine(u.x, u.y, tk.x, tk.y);
+    var tk = known[0], d = dist(u, tk), see = canSee(u, tk) || (d < 40 && seeLine(u.x, u.y, tk.x, tk.y));
+    var closing = tk.state === 'move' && d < (u.lastTkD || 1e9) - 0.02; u.lastTkD = d;
     if (d > 38 || !see) {
+      // a tank coming this way: lie still in the hedge and let it come. Otherwise go round to its side or rear.
+      if (closing && d < 110 && clock - u.seenT > 2 && coverAgainst(u, tk)) { u.path = null; u.hold = true; u.pose = 'prone'; return 'ambush'; }
+      u.hold = false;
       var sprint = see && d < 80;
-      if (!u.path || u.repath <= 0) { order(u, tk.x, tk.y); u.repath = 3; }
+      if (!u.path || u.repath <= 0) {
+        var back = tk.h + Math.PI, side = Math.sin(Math.atan2(u.y - tk.y, u.x - tk.x) - tk.h) > 0 ? 1 : -1, a = back - side * 0.9;
+        var fx = tk.x + Math.cos(a) * 30, fy = tk.y + Math.sin(a) * 30, fc = cellOf(fx, fy);
+        if (blocked(block, fc[0], fc[1]) || tk.state === 'move') { fx = tk.x; fy = tk.y; }
+        order(u, fx, fy); u.repath = 3;
+      }
       u.repath -= dt; u.pose = 'walk'; u.aiming = false; move(u, sprint ? 3.4 : 2.6, 6, dt);
       return sprint ? 'assault' : 'stalk';
     }
+    u.hold = false;
     u.path = null; u.pose = 'aim'; turnTo(u, Math.atan2(tk.y - u.y, tk.x - u.x), 4, dt);
     if (!u.aiming) { u.aiming = true; u.shot = 1.2 + Math.random(); }   // a moment to aim
     if (u.shot <= 0) {
@@ -624,7 +779,8 @@
       tracer(u, tk, 'rgba(255,160,80,1)'); boom(tk.x, tk.y, 3, false); muzzle(u, true); sound.pf(u, tk);
       fx.push({ t: 0, life: 2.2, x: u.x - Math.cos(u.h) * 2, y: u.y - Math.sin(u.h) * 2, size: 2, kind: 'dust' });   // the back-blast kicks up dirt
       if (clock - u.seenT > 1.5) hear(u, 'pf');
-      if (Math.random() < 0.85 * (tk.state === 'move' ? 0.8 : 1) * (1 - u.supp / 300)) hitTank(tk, u); else say('Panzerfaust missed ' + tk.name + '!');
+      u.lastFired = clock; u.engaged = true;
+      if (Math.random() < 0.85 * (tk.state === 'move' ? 0.8 : 1) * (1 - u.supp / 300) * Math.min(1.1, germanAcc(u))) hitTank(tk, u); else say('Panzerfaust missed ' + tk.name + '!');
     }
     return 'aim';
   }
@@ -661,11 +817,13 @@
             var foe = allies.slice().sort(function (a, b) { return dist(a, { x: cx, y: cy }) - dist(b, { x: cx, y: cy }); })[0];
             var ax = foe ? cx - foe.x : cx - RALLY.x, ay = foe ? cy - foe.y : cy - RALLY.y, al = Math.sqrt(ax * ax + ay * ay) || 1;
             var fc = nearestOpen(block, cellOf(cx + ax / al * 60, cy + ay / al * 60)) || cellOf(cx, cy), fw = centre(fc[0], fc[1]);
-            sq.forEach(function (s) { s.broken = s.brokeOnce = s.fallback = s.retreating = true; order(s, fw[0] + (Math.random() - .5) * 14, fw[1] + (Math.random() - .5) * 14); });
+            sq.forEach(function (s) { s.broken = s.brokeOnce = s.fallback = s.retreating = true; s.goal = s.via = null; order(s, fw[0] + (Math.random() - .5) * 14, fw[1] + (Math.random() - .5) * 14); });
+            germanSmoke(sq, foe);
             if (seen) say('A German squad is breaking and falling back!');
           }
         } else if (threatened && !sq.some(function (s) { return s.pf; }) && !sq[0].fallback) {
           var fb = fallbackPoint(sq[0]);
+          germanSmoke(sq, allies.slice().sort(function (a, b) { return dist(a, sq[0]) - dist(b, sq[0]); })[0]);
           sq.forEach(function (s) { s.fallback = s.retreating = true; s.goal = null; order(s, fb.x + (Math.random() - .5) * 20, fb.y + (Math.random() - .5) * 20); });
           if (seen) say('German squad falling back to the farm.');
         }
@@ -782,7 +940,7 @@
       else if (theirs && !mine) o.prog = Math.max(-1, o.prog - dt / 12);
       o.contested = !!(mine && theirs);
       if (o.prog >= 1) o.owner = 'allies'; else if (o.prog <= -1) o.owner = 'axis'; else if (Math.abs(o.prog) < 0.02) o.owner = null;
-      if (o.owner !== was && o.owner) say(o.owner === 'allies' ? 'The ' + o.name + ' is ours.' : 'The Germans have taken back the ' + o.name + '!');
+      if (o.owner !== was && o.owner) { say(o.owner === 'allies' ? 'The ' + o.name + ' is ours.' : 'The Germans have taken back the ' + o.name + '!'); if (o.owner === 'allies') gegenstoss(o); }
     });
     var held = OBJS.every(function (o) { return o.owner === 'allies'; });
     if (!reinforced && (OBJS[0].owner === 'allies' || clock > 300)) bringUpSecond();
@@ -801,12 +959,12 @@
   function counterAttack() {
     // two rifle squads and an MG42 team come in along the lane from the east; 2nd Squad comes up the lane behind you
     var target = function (i) { var a = OBJS.filter(function (o) { return o.owner === 'allies'; }); return (a.length ? a : OBJS)[i % (a.length || OBJS.length)]; };
-    ['Gruppe 5', 'Gruppe 6'].forEach(function (name, si) {
-      var goal = target(si);
+    ['Gruppe 5', 'Gruppe 6', 'Gruppe 7'].slice(0, DIFF.waves).forEach(function (name, si) {
+      var goal = target(si), via = si % 2 ? flankPoint(ENTRY, goal) : null;   // every other squad comes round the flank
       for (var k = 0; k < 5; k++) {
         var c = nearestOpen(block, cellOf(ENTRY.x - si * 14 - k * 2.5, ENTRY.y + (k % 2) * 3)), w = centre(c[0], c[1]);
         var s = soldier(w[0], w[1], 'axis', 'rifle', name, k === 0 ? 'pf' : k === 4 ? 'nco' : 'rifle');
-        s.goal = { x: goal.x + (Math.random() - .5) * 16, y: goal.y + (Math.random() - .5) * 16 }; units.push(s); order(s, s.goal.x, s.goal.y);
+        s.goal = { x: goal.x + (Math.random() - .5) * 16, y: goal.y + (Math.random() - .5) * 16 }; s.via = via; units.push(s); order(s, (via || s.goal).x, (via || s.goal).y);
       }
     });
     var cr = OBJS[1], spot = mgSpot(cr, ENTRY);
@@ -884,11 +1042,14 @@
     u.setup = (u.setup || 0) + dt;
     if (u.setup < 3) { u.pose = 'prone'; if (tgt) turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 2, dt); return true; }
     u.pose = 'aim';
+    if (u.relocate) { mgMove(u, 'under fire'); return true; }   // shells or a tank's MG close: get out before the next one
     if (!tgt) return true;
     turnTo(u, Math.atan2(tgt.y - u.y, tgt.x - u.x), 1.5, dt);
     if (u.shot > 0) return true;
     var loader = units.some(function (v) { return v.role === 'loader' && v.squad === u.squad && alive(v) && dist(v, u) < 8; });
-    u.shot = (1.2 + Math.random() * 0.8) * (loader ? 1 : 1.8); u.fired = 0.35;
+    u.shot = (1.2 + Math.random() * 0.8) * (loader ? 1 : 1.8); u.fired = 0.35; u.lastFired = clock; u.engaged = true;
+    u.bursts = (u.bursts || 0) + 1;
+    if (u.relocate || u.bursts > 7 + Math.random() * 5) { mgMove(u, u.relocate ? 'under fire' : ''); return true; }
     tracer(u, tgt, 'rgba(255,200,120,.85)'); muzzle(u); sound.mg42(u);
     if (clock - u.seenT > 1.5) hear(u, 'mg');
     if (tgt.kind === 'tank') { fx.push({ t: 0, life: .2, x: tgt.x, y: tgt.y, kind: 'spark' }); return true; }
@@ -896,7 +1057,7 @@
     units.forEach(function (o) {
       if (o.kind !== 'inf' || o.side === u.side || !alive(o)) return;
       var e = dist(o, tgt);
-      if (e < 7) { suppress(o, e < 1 ? 38 : 20); if (Math.random() < 0.16 * Math.max(0.25, 1 - d / 300) * (e < 1 ? 1 : 0.35) * exposure(o, u, 'bullet')) killed(o, u); }
+      if (e < 7) { suppress(o, e < 1 ? 38 : 20, u); if (Math.random() < 0.16 * DIFF.acc * Math.max(0.25, 1 - d / 300) * (e < 1 ? 1 : 0.35) * exposure(o, u, 'bullet')) killed(o, u); }
     });
     return true;
   }
@@ -1203,6 +1364,7 @@
     });
     if (drag && drag.box) { ctx.strokeStyle = 'rgba(159,194,230,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
     compassRose();
+    drawToasts();
     drawRemote();
     if (paused && !remote.menu) { ctx.fillStyle = 'rgba(10,10,8,.45)'; ctx.fillRect(0, 0, VW, VH); ctx.fillStyle = '#EDE8DA'; ctx.font = '400 40px Georgia, serif'; ctx.textAlign = 'center'; ctx.fillText('Paused', VW / 2, VH / 2); ctx.font = '15px system-ui, sans-serif'; ctx.fillText('Press P to carry on', VW / 2, VH / 2 + 30); }
     hud();
@@ -1301,6 +1463,8 @@
     unitFilter = 'none';
     if (enemy && u.pf) { ctx.fillStyle = '#E0604A'; ctx.fillRect(p[0] - view.x - 2, p[1] - view.y - s2 / 2 - 4, 4, 4); }
     badge(u, p[0] - view.x, p[1] - view.y - s2 / 2 - 12);
+    if (u.pinned) pinMark(u, p[0] - view.x, p[1] - view.y);
+    if (u.orderWait > clock) { ctx.fillStyle = 'rgba(237,232,218,.9)'; ctx.font = '600 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('…', p[0] - view.x, p[1] - view.y - s2 / 2 - 20); }
     if (u.vet) stripes(p[0] - view.x + 9, p[1] - view.y - s2 / 2 - 8, u.vet);
     ctx.globalAlpha = 1;
   }
@@ -1415,6 +1579,7 @@
     if (u.state === 'cover') { ctx.fillStyle = 'rgba(140,190,120,.95)'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill(); }
     else if (u.state === 'pinned') { ctx.strokeStyle = '#E2B25A'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x, y - 1); ctx.lineTo(x + 5, y - 5); ctx.moveTo(x - 5, y); ctx.lineTo(x, y + 4); ctx.lineTo(x + 5, y); ctx.stroke(); }
     else if (u.state === 'assault') { ctx.fillStyle = '#E0604A'; ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 5, y + 3); ctx.lineTo(x - 5, y + 3); ctx.closePath(); ctx.fill(); }
+    else if (u.state === 'ambush') { ctx.strokeStyle = 'rgba(140,190,120,.95)'; ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.stroke(); }
     else if (u.state === 'crossing') { ctx.strokeStyle = '#E2B25A'; ctx.beginPath(); ctx.arc(x, y + 4, 6, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
     else if (u.state === 'retreat') { ctx.fillStyle = 'rgba(200,196,184,.9)'; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x + 5, y - 3); ctx.lineTo(x - 5, y - 3); ctx.closePath(); ctx.fill(); }
   }
@@ -1496,7 +1661,11 @@
   if (remote.on) tvMode();
   window.hearthKey = function (k) {
     remote.on = true; tvMode(); hover = [remote.x, remote.y];
-    if (!started) { if (k === 'ok') begin(['mist', 'day', 'dusk'][remote.startPick || 1]); else if (k === 'left' || k === 'right') { remote.startPick = Math.max(0, Math.min(2, (remote.startPick === undefined ? 1 : remote.startPick) + (k === 'left' ? -1 : 1))); startHighlight(); } return; }
+    if (!started && (k === 'up' || k === 'down')) {
+      var ds = ['easy', 'normal', 'hard'], di = ds.indexOf(prefs.difficulty || 'normal');
+      prefs.difficulty = ds[Math.max(0, Math.min(2, di + (k === 'up' ? -1 : 1)))]; savePrefs(); DIFF = DIFFS[prefs.difficulty]; showDiff(); return;
+    }
+    if (!started) { if (k === 'ok') begin(['mist', 'day', 'dusk'][remote.startPick === undefined ? 1 : remote.startPick]); else if (k === 'left' || k === 'right') { remote.startPick = Math.max(0, Math.min(2, (remote.startPick === undefined ? 1 : remote.startPick) + (k === 'left' ? -1 : 1))); startHighlight(); } return; }
     if (over) { if (k === 'ok') location.reload(); else if (k === 'back') leave(); return; }
     var m = remote.menu;
     if (m) {
@@ -1525,7 +1694,7 @@
   };
   function leave() { if (history.length > 1) history.back(); else location.href = '/'; }
   function startHighlight() {
-    [].forEach.call(document.querySelectorAll('#start button'), function (b, i) { b.style.outline = i === remote.startPick ? '3px solid #E2B25A' : 'none'; });
+    [].forEach.call(document.querySelectorAll('#start button[data-time]'), function (b, i) { b.style.outline = i === remote.startPick ? '3px solid #E2B25A' : 'none'; });
   }
   function centreOn(list) {
     if (!list.length) return;
@@ -1539,6 +1708,7 @@
       { label: 'Carry on', run: function () {} },
       { label: 'Start again', run: function () { location.reload(); } },
       { label: 'Sound ' + (sound.on() ? 'off' : 'on'), run: function () { sound.toggle(); } },
+      { label: gameSpeed === 1 ? 'Double speed' : 'Normal speed', run: function () { doCommand('speed'); } },
       { label: prefs.hints ? 'Hide button hints' : 'Show button hints', run: function () { prefs.hints = !prefs.hints; savePrefs(); } },
       { label: 'Back to Hearth', run: leave }], true);
   }
@@ -1557,7 +1727,7 @@
       // nothing selected: a menu for finding your units
       var mine = team('allies');
       [['Shermans', mine.filter(isTank)], ['1st Squad', mine.filter(function (v) { return v.squad === '1st Squad'; })], ['2nd Squad', mine.filter(function (v) { return v.squad === '2nd Squad'; })],
-       ['Crews on foot', mine.filter(function (v) { return v.role === 'crew'; })]].forEach(function (p) {
+       ['Scouts', mine.filter(function (v) { return v.squad === 'Scouts'; })], ['Crews on foot', mine.filter(function (v) { return v.role === 'crew'; })]].forEach(function (p) {
         if (p[1].length) items.push({ label: 'Select ' + p[0], run: function () { selected = p[1]; centreOn(p[1]); } });
       });
       items.push({ label: 'Artillery here (' + arty.he + ')', run: function () { callArty(g[0], g[1], 'he'); } });
@@ -1571,6 +1741,7 @@
     items.push({ label: 'Fire at this spot', run: function () { areaAt(g[0], g[1]); } });
     if (ts.some(function (t) { return t.smoke > 0; })) items.push({ label: 'Smoke here (mortar, ' + ts[0].smoke + ')', run: function () { fireSmoke(g[0], g[1]); } });
     if (men.some(function (m) { return m.kit === 'us'; }) && charges[men[0].squad]) items.push({ label: 'Blow a gap in this hedge (' + charges[men[0].squad] + ')', run: function () { plantCharge(g[0], g[1]); } });
+    if (men.length && men[0].role !== 'crew') items.push({ label: men[0].hold ? 'Fire at will' : 'Ambush: hold fire', run: function () { doCommand('hold'); } });
     if (men.length && men[0].role !== 'crew') items.push(men[0].riding ? { label: 'Get off the tank', run: function () { doCommand('ride'); } } : { label: 'Climb on a Sherman', run: function () { doCommand('ride'); } });
     if (ts.length && ts.some(function (t) { return riders(t).length; })) items.push({ label: 'Riders off', run: function () { doCommand('ride'); } });
     if (ts.length) {
@@ -1668,6 +1839,7 @@
       html += '<div class="row"><b>' + squadName(men[0]) + '</b> · ' + men.length + (men.length === 1 ? ' man' : ' men') + ' · ' + moraleWord(men) + (men[0].assault ? ' · ready to assault' : '') + (men[0].riding ? ' · riding on ' + men[0].riding.name : '') + '</div>';
       html += '<div class="btns">' + (men[0].role !== 'crew' ? '<button data-cmd="assault"' + (men[0].assault ? ' class="on"' : '') + '>Assault <kbd>G</kbd></button>'
         + '<button data-cmd="area"' + (command === 'area' ? ' class="on"' : '') + '>Fire at position <kbd>T</kbd></button>'
+        + '<button data-cmd="hold"' + (men[0].hold ? ' class="on"' : '') + '>Ambush <kbd>X</kbd></button>'
         + (charges[men[0].squad] !== undefined ? '<button data-cmd="demo"' + (command === 'demo' ? ' class="on"' : '') + '>Blow a gap (' + charges[men[0].squad] + ') <kbd>B</kbd></button>' : '')
         + '<button data-cmd="ride">' + (men[0].riding ? 'Get off the tank' : 'Climb on a Sherman') + ' <kbd>U</kbd></button>' : '')
         + '<button data-cmd="retreat">Back down the lane <kbd>R</kbd></button><button data-cmd="halt">Halt <kbd>Space</kbd></button></div>';
@@ -1683,6 +1855,7 @@
     html += '<div class="btns quiet"><button data-cmd="arty"' + (command === 'arty' ? ' class="on"' : '') + '>Artillery (' + arty.he + ') <kbd>V</kbd></button>'
       + '<button data-cmd="artysmoke"' + (command === 'artysmoke' ? ' class="on"' : '') + '>Smoke shells (' + arty.smoke + ') <kbd>N</kbd></button>'
       + '<button data-cmd="pause">' + (paused ? 'Carry on' : 'Pause') + ' <kbd>P</kbd></button>'
+      + '<button data-cmd="speed">Speed ' + gameSpeed + '× <kbd>+</kbd></button>'
       + '<button data-cmd="mute">Sound ' + (sound.on() ? 'on' : 'off') + ' <kbd>M</kbd></button>'
       + (prefs.help ? '' : '<button data-cmd="help">Help</button>') + '<button data-cmd="orders">Hide buttons</button></div>';
     if (html !== panel.last) { panelEl.innerHTML = html; panel.last = html; }
@@ -1696,6 +1869,11 @@
     else if (c === 'arty') command = command === 'arty' ? null : 'arty';
     else if (c === 'artysmoke') command = command === 'artysmoke' ? null : 'artysmoke';
     else if (c === 'pause') paused = !paused;
+    else if (c === 'speed') { gameSpeed = gameSpeed === 1 ? 2 : 1; say(gameSpeed === 2 ? 'Double speed.' : 'Normal speed.'); }
+    else if (c === 'hold' && men.length) {
+      var hv = !men[0].hold; men.forEach(function (m) { m.hold = hv; if (hv) m.path = null; });
+      say(squadName(men[0]) + (hv ? ': ambush. Holding fire until they’re within 40 m.' : ': fire at will.'));
+    }
     else if (c === 'orders') { prefs.orders = !prefs.orders; savePrefs(); }
     else if (c === 'help') { prefs.help = !prefs.help; savePrefs(); showHelp(); }
     else if (c === 'ride') {
@@ -1785,6 +1963,7 @@
     if (k === 'f') doCommand('smoke'); else if (k === 'h') doCommand('he'); else if (k === ' ') { doCommand('halt'); e.preventDefault(); }
     else if (k === 'g') doCommand('assault'); else if (k === 'r') doCommand('retreat'); else if (k === 'm') doCommand('mute');
     else if (k === 't') doCommand('area'); else if (k === 'b') doCommand('demo'); else if (k === 'c') doCommand('crash');
+    else if (k === 'x') doCommand('hold'); else if (k === '=' || k === '+') doCommand('speed');
     else if (k === 'v') doCommand('arty'); else if (k === 'n') doCommand('artysmoke'); else if (k === 'u') doCommand('ride'); else if (k === 'p') doCommand('pause');
     else if (k === 'Escape') command = null;
   });
@@ -1797,7 +1976,7 @@
     if (keys.ArrowLeft || keys.a) view.x -= sp; if (keys.ArrowRight || keys.d) view.x += sp;
     if (keys.ArrowUp || keys.w) view.y -= sp; if (keys.ArrowDown || keys.s) view.y += sp;
     clampView();
-    if (started && !over && !paused) update(dt);
+    if (started && !over && !paused) for (var sp2 = 0; sp2 < gameSpeed; sp2++) update(dt);   // double speed: two steps a frame
     units.forEach(function (u) { if (isTank(u)) sound.engine(u); });
     draw(); panel();
     requestAnimationFrame(frame);
@@ -1807,6 +1986,8 @@
   // ------------------------------------------------------------------ start
   function begin(t) {
     TIME = t === 'mist' || t === 'dusk' ? t : 'day'; started = true;
+    DIFF = DIFFS[params.diff || prefs.difficulty] || DIFFS.normal; arty = { he: DIFF.arty[0], smoke: DIFF.arty[1] };
+    units.forEach(function (u) { if (u.side === 'axis') { u.heart = Math.max(30, u.heart + DIFF.heart); u.morale = u.heart; } });
     document.getElementById('start').style.display = 'none';
     sound.start();
     say({ mist: 'Dawn. Mist lying on the fields, and you won’t see much past 50 m until it lifts. Germans reported around the farm.',
@@ -1837,6 +2018,12 @@
       var m = soldier(sw[0], sw[1], 'allies', 'us', '1st Squad', k === 0 ? 'nco' : 'rifle'); m.h = Math.atan2(-by, -bx); units.push(m);
     }
     // two German squads hold the farm
+    // two scouts with binoculars, out on the flank of 1st Squad: they see further and are hard to spot, but avoid a fight
+    for (var sk = 0; sk < 2; sk++) {
+      var scc = nearestOpen(block, cellOf(back.x + bx * 6 + by * (12 + sk * 2), back.y + by * 6 - bx * (12 + sk * 2))), scw = centre(scc[0], scc[1]);
+      var sc0 = soldier(scw[0], scw[1], 'allies', 'us', 'Scouts', 'scout'); sc0.h = Math.atan2(-by, -bx); units.push(sc0);
+    }
+    arty = { he: DIFF.arty[0], smoke: DIFF.arty[1] };
     LEVEL.squads.slice(0, 2).forEach(function (p, si) {
       for (var k = 0; k < 5; k++) {
         var a = k * 1.26, x = p[0] + Math.cos(a) * 4, y = p[1] + Math.sin(a) * 4, c = cellOf(x, y);
@@ -1866,9 +2053,14 @@
     document.getElementById('loading').style.display = 'none';
     window.__game = { clock: function () { return clock; }, units: units, update: update, draw: function () { draw(); }, order: order, orderGroup: orderGroup,
       proj: proj, view: view, selected: function () { return selected; }, select: function (l) { selected = l; }, fireSmoke: fireSmoke, doCommand: doCommand,
-      begin: begin, tally: tally, see: seeLine, hitTank: hitTank, knockOut: knockOut, objs: function () { return OBJS; }, phase: function () { return phase; }, callArty: callArty, mount: mount, riders: riders, remoteKey: function (k) { window.hearthKey(k); }, remote: remote, paused: function () { return paused; }, breach: breach, plantCharge: plantCharge, grid: function () { return { block: block, tank: tankBlock, kind: kindGrid }; }, hear: hear, sight: sightRange, rally: function () { return RALLY; }, clouds: function () { return clouds; }, heard: function () { return heard; } };
+      begin: begin, tally: tally, see: seeLine, spot: spotRange, hitTank: hitTank, knockOut: knockOut, objs: function () { return OBJS; }, phase: function () { return phase; }, callArty: callArty, mount: mount, riders: riders, remoteKey: function (k) { window.hearthKey(k); }, remote: remote, paused: function () { return paused; }, breach: breach, plantCharge: plantCharge, grid: function () { return { block: block, tank: tankBlock, kind: kindGrid }; }, hear: hear, sight: sightRange, rally: function () { return RALLY; }, clouds: function () { return clouds; }, heard: function () { return heard; } };
     if (params.time) begin(params.time); else document.getElementById('start').style.display = 'flex';
     requestAnimationFrame(frame);
   });
-  [].forEach.call(document.querySelectorAll('#start button'), function (b) { b.addEventListener('click', function () { begin(b.getAttribute('data-time')); }); });
+  [].forEach.call(document.querySelectorAll('#start button[data-time]'), function (b) { b.addEventListener('click', function () { begin(b.getAttribute('data-time')); }); });
+  function showDiff() { [].forEach.call(document.querySelectorAll('#start button[data-diff]'), function (b) { b.className = b.getAttribute('data-diff') === (prefs.difficulty || 'normal') ? 'pick' : ''; }); }
+  [].forEach.call(document.querySelectorAll('#start button[data-diff]'), function (b) {
+    b.addEventListener('click', function () { prefs.difficulty = b.getAttribute('data-diff'); savePrefs(); DIFF = DIFFS[prefs.difficulty]; showDiff(); });
+  });
+  showDiff();
 })();

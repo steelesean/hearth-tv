@@ -32,6 +32,9 @@
   .over b { font: 400 38px Georgia, serif; display: block; margin-bottom: 8px; }
   .over button { margin: 18px 6px 0; font: inherit; padding: 10px 22px; border-radius: 999px; border: 0; background: #EDE8DA; color: #1b1b16; cursor: pointer; }
   .over button small { display: block; font-size: 12px; opacity: .7; }
+  .over .diff { margin-top: 14px; font-size: 14px; color: #CFC9B8; }
+  .over .diff button { margin: 0 4px; padding: 5px 14px; font-size: 13px; background: rgba(237,232,218,.12); color: #EDE8DA; }
+  .over .diff button.pick { background: #E2B25A; color: #1b1b16; }
   body.tv .help, body.tv .panel { display: none; }   /* on the TV: no mouse, so no buttons; the remote's menu does it all */
   body.tv .hud { font-size: 17px; max-width: 760px; }
   .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #CFC9B8; }
@@ -45,7 +48,8 @@
 <div class="over" id="start"><div>
   <b>Hedgerows near Carentan</b>
   Normandy, June 1944. Two Shermans and 1st Squad have to take a farm and a crossroads in the bocage, then hold both when the Germans counter-attack. The Germans have Panzerfausts and an MG42, and the hedges are thick.
-  <br><span class="dim">Sound on is best. On the TV, use left and right, then OK.</span><br>
+  <br><span class="dim">Sound on is best. On the TV: up and down for difficulty, left and right for the hour, then OK.</span><br>
+  <div class="diff">Difficulty: <button data-diff="easy">Easy</button><button data-diff="normal">Normal</button><button data-diff="hard">Hard</button></div>
   <button data-time="mist">Morning mist<small>06:10, sight 55 m and lifting</small></button>
   <button data-time="day">Afternoon<small>13:05, clear</small></button>
   <button data-time="dusk">Dusk<small>21:15, light fading</small></button>
