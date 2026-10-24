@@ -19,9 +19,11 @@
   .chip.btn { cursor: pointer; font: inherit; font-size: 13px; padding: 5px 11px; }
   .chip.btn:hover { background: rgba(237,232,218,.18); }
   .dim { color: #CFC9B8; }
-  #objs { left: 14px; top: 12px; display: flex; gap: 8px; pointer-events: none; }
-  #clock { left: 50%; top: 12px; transform: translateX(-50%); pointer-events: none; }
-  #ticker { left: 50%; top: 50px; transform: translateX(-50%); pointer-events: none; max-width: 70%; }
+  #objs { left: 14px; top: 12px; display: flex; gap: 8px; }
+  #objs .chip { cursor: pointer; }
+  #clock { left: 14px; top: 52px; max-width: 40%; }
+  #clock .chip { white-space: normal; border-radius: 12px; }
+  #ticker { left: 50%; bottom: 78px; transform: translateX(-50%); max-width: 56%; cursor: pointer; }
   #ticker .chip { white-space: normal; border-radius: 12px; }
   #ticker b { color: #E2B25A; font-weight: 600; margin-right: 4px; }
   #res { right: 104px; top: 12px; display: flex; gap: 6px; }

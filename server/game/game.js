@@ -1531,14 +1531,14 @@
     eye: '<svg viewBox="0 0 24 14" width="22" height="13"><path d="M1 7q11-12 22 0q-11 12-22 0z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="7" r="3" fill="currentColor"/></svg>' };
   function statusText() {
     if (MISSION.id === 'gulch') return 'Hold until relieved: ' + mmss(RELIEF - clock);
-    if (phase === 'attack') return 'Take the farm and the crossroads · counter-attack expected in ' + mmss(480 - clock);
+    if (phase === 'attack') return 'Take both points · counter-attack in ' + mmss(480 - clock);
     if (phase === 'warning') return 'Counter-attack in ' + mmss(phaseT - clock);
     return (OBJS.every(function (o) { return o.owner === 'allies'; }) ? 'Hold both until relieved: ' : 'Take and hold both until relieved: ') + mmss(holdUntil - clock);
   }
   function hud() {
     setHTML('objs', OBJS.map(function (o) {
       var col = o.owner === 'allies' ? '#7FA9DC' : o.owner === 'axis' ? '#D6503C' : '#CFC9B8', w = Math.abs(o.prog) * 50;
-      return '<div class="chip' + (o.contested ? ' hot' : '') + '">' + ICON.flag(col) + '<span>' + o.label + '</span>'
+      return '<div class="chip' + (o.contested ? ' hot' : '') + '" data-obj="' + o.name + '" title="Show the ' + o.name + '">' + ICON.flag(col) + '<span>' + o.label + '</span>'
         + '<i class="bar"><i style="width:' + w + '%;margin-left:' + (o.prog >= 0 ? 50 : 50 - w) + '%;background:' + (o.prog >= 0 ? '#7FA9DC' : '#D6503C') + '"></i></i></div>';
     }).join(''));
     var wx = TIME === 'mist' ? (mistLeft() > 0.05 ? 'mist, ' + Math.round(sightRange()) + ' m' : 'clearing') : TIME === 'dusk' ? 'dusk' : 'clear';
@@ -1596,6 +1596,12 @@
     var already = g.units.every(function (u) { return selected.indexOf(u) >= 0; });
     selected = g.units; if (already) centreOn(g.units);   // a second click finds them
   });
+  // every marker catches its own clicks, so none of them reaches the map as a move order
+  ui.objs.addEventListener('click', function (e) {
+    var c = e.target.closest && e.target.closest('[data-obj]'); if (!c) return;
+    var o = OBJS.filter(function (x) { return x.name === c.getAttribute('data-obj'); })[0]; if (o) centreOn([o]);
+  });
+  ui.ticker.addEventListener('click', function () { doCommand('log'); });
   ui.res.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('button[data-cmd]'); if (b) doCommand(b.getAttribute('data-cmd')); });
   function toggleBox(k) { ui[k].style.display = ui[k].style.display === 'block' ? 'none' : 'block'; uiLast[k] = null; }
   ui.helpov.addEventListener('click', function () { toggleBox('helpov'); });
