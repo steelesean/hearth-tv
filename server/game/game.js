@@ -8,7 +8,7 @@
   var cv = document.getElementById('c'), ctx = cv.getContext('2d');
   var VW = 1920, VH = 1080;
   var LEVEL, CAM, SPR, TILES, TILES_DUSK, imgTank, imgStug, sheets = {}, tiles = {}, heights = {};
-  var oc = document.createElement('canvas'), octx = oc.getContext('2d');   // scratch canvas for hiding parts of units
+  var oc = document.createElement('canvas'), octx = oc.getContext('2d');   // read back often: kept in memory, not on the graphics chip, which a TV stick can't read quickly   // scratch canvas for hiding parts of units
   var units = [], fx = [], marks = [], clouds = [], heard = [], pendingCrew = [], selected = [];
   var over = false, started = false, lastT = 0, clock = 0;
   var view = { x: 0, y: 0 };                         // top-left of the screen, in background pixels
@@ -3004,46 +3004,72 @@
   }
 
   // ------------------------------------------------------------------ playing with the Fire TV remote
-  // The Hearth app hands the page six buttons: the four arrows, OK and Back (window.hearthKey). The arrows move a
-  // cursor, faster the longer you hold them, and the view scrolls when it reaches the edge. OK on one of your units
-  // selects it; OK anywhere else opens a menu of orders for that spot. Back clears the selection, or pauses.
-  var remote = { on: !!params.remote, x: VW / 2, y: VH / 2, menu: null, last: 0, lastKey: '', speed: 1 };
-  var paused = false;
+  // The Hearth app hands the page the remote's buttons (window.hearthKey), and tells it when an arrow is let go
+  // (window.hearthKeyUp). Rewind and fast-forward step through your units, and the view jumps to each. The arrows
+  // glide a cursor while they're held, faster the longer, and the view scrolls at the edge. OK on one of your units
+  // selects it; OK anywhere else opens the orders for that spot. Back clears the selection, or pauses; so does Play.
+  var remote = { on: !!params.remote, x: VW / 2, y: VH / 2, menu: null, hold: null, keyUps: false };
+  var paused = false, ARROW = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
   function tvMode() { if (!document.body.classList.contains('tv')) document.body.classList.add('tv'); }
   if (remote.on) tvMode();
-  window.hearthKey = function (k) {
+  window.hearthKey = function (k, sendsUp) {
+    if (sendsUp) remote.keyUps = true;   // the app will say when the button is let go
     remote.on = true; tvMode(); hover = [remote.x, remote.y];
     var ov = ['start', 'end'].filter(function (id) { return document.getElementById(id).style.display === 'flex'; })[0];
-    if (ov) { if (k === 'back') return leave(); return navOverlay(ov, k); }   // Back on the start or end screen: back to Hearth
+    if (ov) { if (k === 'back') return leave(); return navOverlay(ov, k === 'play' ? 'ok' : k); }   // Back on the start or end screen: back to Hearth
     // an open help box, intelligence file or radio log: OK or Back closes it
     var box = ['helpov', 'intel', 'log'].filter(function (id) { return ui[id] && ui[id].style.display === 'block'; })[0];
-    if (box && (k === 'ok' || k === 'back')) { toggleBox(box); return; }
+    if (box && (k === 'ok' || k === 'back' || k === 'play')) { toggleBox(box); return; }
     var m = remote.menu;
     if (m) {
       if (k === 'up' || k === 'left') m.i = (m.i + m.items.length - 1) % m.items.length;
       else if (k === 'down' || k === 'right') m.i = (m.i + 1) % m.items.length;
-      else if (k === 'back') { remote.menu = null; if (m.pause) paused = false; }
+      else if (k === 'back' || (k === 'play' && m.pause)) { remote.menu = null; if (m.pause) paused = false; }
       else if (k === 'ok') { var it = m.items[m.i]; remote.menu = null; if (m.pause) paused = false; it.run(); }
       return;
     }
     if (k === 'ok') return remoteOk();
+    if (k === 'menu') return remoteOk(true);   // the orders at the cursor, even over one of your own units
+    if (k === 'next' || k === 'prev') return cycleUnit(k === 'next' ? 1 : -1);
+    if (k === 'play') return planning ? planMenu() : pauseMenu();
     if (k === 'back') {
       if (command) { command = null; return; }
       if (selected.length) { selected = []; return; }
       if (planning) return planMenu();
       return pauseMenu();
     }
-    // arrows: a held button repeats about twenty times a second; the cursor speeds up while it's held
+    var d = ARROW[k]; if (!d) return;
+    // an arrow: a nudge now, then the cursor glides for as long as it's held (remoteTick). The app says when it's let
+    // go; an older app doesn't, so a held button's repeats keep it alive instead.
     var now = Date.now();
-    remote.speed = k === remote.lastKey && now - remote.last < 180 ? Math.min(5, remote.speed + 0.25) : 1;
-    remote.last = now; remote.lastKey = k;
-    var step = 22 * remote.speed, dx = k === 'left' ? -step : k === 'right' ? step : 0, dy = k === 'up' ? -step : k === 'down' ? step : 0;
+    if (!remote.hold || remote.hold.k !== k) { remote.hold = { k: k, t0: now }; moveCursor(d[0] * 28, d[1] * 28); }
+    remote.hold.until = now + (remote.keyUps ? 4000 : 180);
+  };
+  window.hearthKeyUp = function (k) { remote.keyUps = true; if (remote.hold && remote.hold.k === k) remote.hold = null; };
+  function moveCursor(dx, dy) {
     remote.x += dx; remote.y += dy;
     var M = 140;   // within 140 px of the edge, the map scrolls instead
     if (remote.x < M) { view.x -= M - remote.x; remote.x = M; } if (remote.x > VW - M) { view.x += remote.x - (VW - M); remote.x = VW - M; }
     if (remote.y < M) { view.y -= M - remote.y; remote.y = M; } if (remote.y > VH - M) { view.y += remote.y - (VH - M); remote.y = VH - M; }
     clampView(); hover = [remote.x, remote.y];
-  };
+  }
+  function remoteTick(dt) {
+    var pn = performance.now(); if (remote.lastT) remote.fps = (remote.fps || 30) * 0.92 + 0.08 * 1000 / Math.max(1, pn - remote.lastT); remote.lastT = pn;
+    // the glide: in pixels a second, so a slow frame never makes a slow cursor
+    var h = remote.hold; if (!h) return;
+    var now = Date.now(), held = (now - h.t0) / 1000, d = ARROW[h.k];
+    if (now > h.until || remote.menu) { remote.hold = null; return; }
+    if (held < 0.15) return;   // a tap is just the nudge
+    var v = Math.min(1600, 550 + 1100 * (held - 0.15));
+    moveCursor(d[0] * v * dt, d[1] * v * dt);
+  }
+  function cycleUnit(step) {
+    // fast-forward and rewind: the next or previous of your tanks and squads, selected, with the view on it
+    var gs = groupsOfMine().filter(function (g) { return g.units.some(alive); }); if (!gs.length) return;
+    var i = -1; gs.forEach(function (g, j) { if (selected.length && g.units.indexOf(selected[0]) >= 0) i = j; });
+    var g = gs[(i + step + gs.length) % gs.length];
+    selected = g.units.filter(alive); centreOn(selected); command = null;
+  }
   function leave() { if (history.length > 1) history.back(); else location.href = '/'; }
   function navOverlay(id, k) {
     // the start and end screens: arrows move between the buttons, OK presses the one that's lit
@@ -3088,19 +3114,20 @@
       { label: prefs.autopause === false ? 'Pause on alerts' : 'Don’t pause on alerts', run: function () { prefs.autopause = prefs.autopause === false; savePrefs(); } },
       { label: gameSpeed === 1 ? 'Double speed' : 'Normal speed', run: function () { doCommand('speed'); } },
       { label: prefs.hints ? 'Hide button hints' : 'Show button hints', run: function () { prefs.hints = !prefs.hints; savePrefs(); } },
+      { label: prefs.fps ? 'Hide frame rate' : 'Show frame rate', run: function () { prefs.fps = !prefs.fps; savePrefs(); } },
       { label: 'Back to Hearth', run: leave }], true);
   }
-  function remoteOk() {
+  function remoteOk(ordersOnly) {
     var sx = remote.x, sy = remote.y, g = unproj(sx + view.x, sy + view.y);
-    if (planning) { var pu = unitAt(sx, sy); if (pu) selected = isTank(pu) ? [pu] : squadOf(pu); else if (selected.length) deployTo(selected.filter(alive), g[0], g[1]); return; }
+    if (planning) { var pu = !ordersOnly && unitAt(sx, sy); if (pu) selected = isTank(pu) ? [pu] : squadOf(pu); else if (selected.length) deployTo(selected.filter(alive), g[0], g[1]); return; }
     if (command) {
       var cmd = command; command = null;
       if (cmd === 'smoke') fireSmoke(g[0], g[1]); else if (cmd === 'demo') plantCharge(g[0], g[1]);
       else if (cmd === 'area') areaAt(g[0], g[1]); else if (cmd === 'arty') callArty(g[0], g[1], 'he'); else if (cmd === 'artysmoke') callArty(g[0], g[1], 'smoke'); else if (cmd === 'queue') queueMove(selected, g[0], g[1]);
       return;
     }
-    var u = unitAt(sx, sy);
-    if (u) { selected = isTank(u) ? [u] : squadOf(u); return; }
+    var u = !ordersOnly && unitAt(sx, sy);
+    if (u && selected.indexOf(u) < 0) { selected = isTank(u) ? [u] : squadOf(u); return; }   // OK again on them: their orders
     var sel = selected.filter(alive), ts = sel.filter(isTank), men = sel.filter(function (v) { return !isTank(v); }), foe = enemyAt(sx, sy), items = [];
     if (!sel.length) {
       // nothing selected: a menu for finding your units
@@ -3142,6 +3169,7 @@
     if (remote.on && started && !remote.menu) {
       // the cursor: big enough to find from the sofa, a light ring on a dark one so it shows on any ground
       var x = remote.x, y = remote.y, u = unitAt(x, y), R = 30;
+      if (u) { var up = proj(u.x, u.y, 0); ctx.strokeStyle = '#E2B25A'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(up[0] - view.x, up[1] - view.y, isTank(u) ? 34 : 18, isTank(u) ? 22 : 11, 0, 0, 6.3); ctx.stroke(); }   // the unit OK will pick
       ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(10,10,8,.75)'; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.3); ctx.stroke();
       ctx.lineWidth = 3.5; ctx.strokeStyle = u ? '#E2B25A' : '#F4F0E4'; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.3); ctx.stroke();
       ctx.beginPath(); [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d) { ctx.moveTo(x + d[0] * (R - 9), y + d[1] * (R - 9)); ctx.lineTo(x + d[0] * (R + 11), y + d[1] * (R + 11)); }); ctx.stroke();
@@ -3152,6 +3180,13 @@
         var w = ctx.measureText(hint).width + 28, hx = Math.min(x + R + 18, VW - w - 10);
         ctx.fillStyle = 'rgba(14,14,10,.85)'; ctx.fillRect(hx, y + 14, w, 40); ctx.fillStyle = '#F4F0E4'; ctx.fillText(hint, hx + 14, y + 42);
       }
+    }
+    if (remote.on && started && !over && document.body.classList.contains('tv')) {
+      // the buttons, once, along the top
+      ctx.textAlign = 'center'; ctx.font = '600 20px system-ui, sans-serif';
+      if (prefs.hints) { var lg = (planning ? 'Rewind / Fast-forward: choose a unit \u00b7 OK: place it \u00b7 Play: plan menu' : 'Rewind / Fast-forward: choose a unit \u00b7 OK: orders \u00b7 Play: pause'), lw = ctx.measureText(lg).width + 32;
+        ctx.fillStyle = 'rgba(14,14,10,.78)'; ctx.fillRect(VW / 2 - lw / 2, 108, lw, 36); ctx.fillStyle = '#F4F0E4'; ctx.fillText(lg, VW / 2, 133); }
+      if (prefs.fps) { ctx.fillStyle = 'rgba(14,14,10,.78)'; ctx.fillRect(VW / 2 - 70, 150, 140, 32); ctx.fillStyle = '#E2B25A'; ctx.fillText(Math.round(remote.fps || 0) + ' frames/s', VW / 2, 173); }
     }
     var m = remote.menu; if (!m) return;
     if (!m.pause && !document.body.classList.contains('tv')) return drawWheel(m);
@@ -3227,12 +3262,12 @@
     units.forEach(function (u) {
       if (u.side !== 'allies' || !alive(u) || u.riding || u.stray) return;
       var p = proj(u.x, u.y, isTank(u) ? 1 : 0.9), d = Math.sqrt((p[0] - view.x - px) * (p[0] - view.x - px) + (p[1] - view.y - py) * (p[1] - view.y - py));
-      if (d < (isTank(u) ? 40 : 18) && d < bd) { bd = d; best = u; }
+      if (d < (isTank(u) ? 40 : 18) * (remote.on ? 1.8 : 1) && d < bd) { bd = d; best = u; }
     });
     return best;
   }
   function enemyAt(px, py) {
-    var best = null, bd = 20;
+    var best = null, bd = remote.on ? 36 : 20;
     units.forEach(function (u) {
       if (u.side !== 'axis' || !alive(u) || clock - u.seenT > 1.5) return;
       var p = proj(u.x, u.y, 0.9), d = Math.sqrt((p[0] - view.x - px) * (p[0] - view.x - px) + (p[1] - view.y - py) * (p[1] - view.y - py));
@@ -3329,6 +3364,7 @@
     if (keys.ArrowLeft || keys.a) view.x -= sp; if (keys.ArrowRight || keys.d) view.x += sp;
     if (keys.ArrowUp || keys.w) view.y -= sp; if (keys.ArrowDown || keys.s) view.y += sp;
     clampView();
+    remoteTick(dt);
     if (started && !over && !paused && !planning) for (var sp2 = 0; sp2 < gameSpeed; sp2++) update(dt);   // double speed: two steps a frame
     units.forEach(function (u) { if (isTank(u)) sound.engine(u); });
     draw(); panel();

@@ -1175,6 +1175,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
     if (k === 'back') return back();
     if (k === 'ok') return select();
     if (k === 'home') { closeOverlays(); if (kidsMode) setMode(false); return; }
+    if (['up', 'down', 'left', 'right'].indexOf(k) < 0) return;   // the media buttons are for the game
     move(k);
   };
   function back() {

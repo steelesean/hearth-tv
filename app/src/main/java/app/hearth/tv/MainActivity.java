@@ -124,8 +124,11 @@ public class MainActivity extends Activity {
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         String key = keyName(event.getKeyCode());
         if (key == null) return super.dispatchKeyEvent(event);
+        // true: this app also says when a button is let go, so a page can glide while it's held
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            web.evaluateJavascript("window.hearthKey && hearthKey('" + key + "')", null);
+            web.evaluateJavascript("window.hearthKey && hearthKey('" + key + "', true)", null);
+        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+            web.evaluateJavascript("window.hearthKeyUp && hearthKeyUp('" + key + "')", null);
         }
         return true;
     }
@@ -139,6 +142,13 @@ public class MainActivity extends Activity {
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER: return "ok";
             case KeyEvent.KEYCODE_BACK: return "back";   // this is home, so Back never leaves the app
+            // the media buttons, for the game: units, pause and orders. The home screen ignores them.
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD: return "next";
+            case KeyEvent.KEYCODE_MEDIA_REWIND: return "prev";
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PAUSE: return "play";
+            case KeyEvent.KEYCODE_MENU: return "menu";
             default: return null;
         }
     }
