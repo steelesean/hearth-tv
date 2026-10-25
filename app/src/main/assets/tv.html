@@ -500,6 +500,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
     b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
     $('apps').appendChild(b);
   });
+  // Hedgerows, the war game: the TV's own copy, played with this remote. It sits at the end of the row, and the
+  // Energy tile (which arrives later, with its data) goes just before it.
+  var GAME_URL = 'https://hearth-tv-server.vercel.app/game/?remote=1';
+  var gameTile = el('button', 'app focusable', '<span class="swatch" style="background:#6B6440"></span><span class="name">Hedgerows</span>');
+  gameTile.type = 'button';
+  gameTile.addEventListener('click', function () {
+    if (navigator.onLine === false) { say('Hedgerows needs the internet', 'Check the Wi-Fi and try again.', true); return; }
+    location.href = GAME_URL;
+  });
+  $('apps').appendChild(gameTile);
   $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
 
   var kidButtons = [];
@@ -1225,7 +1235,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       energyTile = el('button', 'app focusable', '<span class="swatch" style="background:#2F4A3F"></span><span class="name">Energy</span>');
       energyTile.type = 'button';
       energyTile.addEventListener('click', openEnergy);
-      $('apps').appendChild(energyTile);
+      $('apps').insertBefore(energyTile, gameTile);   // Energy, then Hedgerows, at the end of the row
       $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
     }
     if (!$('energyPanel').hidden) renderEnergy();

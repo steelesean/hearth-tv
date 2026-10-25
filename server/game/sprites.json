@@ -1,0 +1,1 @@
+{"tank": 110, "infantry": 37, "poses": ["idle", "walk0", "walk1", "walk2", "walk3", "walk4", "walk5", "aim", "fire", "prone"], "kits": {"rifle": "rifleman.png", "us": "us.png", "tanker": "tanker.png", "mg42": "mg42.png", "para": "para.png", "bazooka": "bazooka.png"}, "tankLookZ": 0.9, "infantryLookZ": 0.75, "spritePx": 0.078}
