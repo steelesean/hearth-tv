@@ -140,18 +140,21 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .live-card .lede { font-size: 28px; color: var(--ink-soft); margin: 0; }
 .channel { height: 140px; border-radius: 26px; border: 2px solid var(--line); background: var(--card); font: 600 32px var(--font-ui); color: var(--ink); text-align: left; padding: 0 30px; }
 
-/* Screensaver: big quiet time and weather, drifting slowly so nothing burns in */
-.saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--ground); }
-/* At night the screensaver goes darker still, so it barely lights the room */
-.stage.evening .saver { background: #161715; }
-.stage.evening .saver-time { color: #8E918A; }
-.stage.evening .saver-date { color: #5F625C; }
-.stage.evening .saver-weather { color: #7E8179; }
-.saver-weather b { color: var(--focus); font-weight: 600; }
+/* Screensaver: quiet grey time and weather on a very dark blue, close to the living-room wall, drifting slowly so
+   nothing burns in. The time is sized to the width of the lines under it (paintSaver), so the three share both edges. */
+.saver { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: #0B111C; }
 .saver-inner { position: absolute; left: 200px; top: 220px; transition: left 3s ease, top 3s ease; }
-.saver-time { font: 400 280px/1 var(--font-display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
-.saver-date { font-size: 40px; color: var(--ink-soft); margin-top: 24px; }
-.saver-weather { font-size: 40px; color: var(--ink); margin-top: 14px; }
+.saver-time, .saver-date, .saver-weather { width: fit-content; }
+.saver-time { font: 400 160px/1 var(--font-display); letter-spacing: -0.03em; color: #8B919B; font-variant-numeric: tabular-nums; }
+.saver-date { font-size: 40px; color: #5E6571; margin-top: 22px; }
+.saver-weather { font-size: 40px; color: #737A86; margin-top: 12px; }
+.saver-weather b { color: #8B919B; font-weight: 600; }
+/* At night darker still, so it barely lights the room */
+.stage.evening .saver { background: #070B13; }
+.stage.evening .saver-time { color: #646A74; }
+.stage.evening .saver-date { color: #434955; }
+.stage.evening .saver-weather { color: #545B66; }
+.stage.evening .saver-weather b { color: #646A74; }
 .kid .gone { position: absolute; left: 24px; top: 22px; font-size: 18px; font-weight: 600; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; }
 .picks-note { font-size: 20px; color: var(--ink-soft); margin: 26px 0 0; }
 
@@ -562,8 +565,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
     $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
     $('saverWeather').innerHTML = nowSegments(w, true).map(function (x) { return x.html; }).join(' · ');
-    $('saverInner').style.left = (120 + Math.round(Math.random() * 700)) + 'px';
-    $('saverInner').style.top = (100 + Math.round(Math.random() * 380)) + 'px';
+    // the time's inked digits exactly as wide as the date under them, sharing its left and right edges (measured on
+    // the ink, not the box, as a serif 1 sits in from its edge). The line after it can run longer, when it has news.
+    var t = $('saverTime'), wide = $('saverDate').offsetWidth, c = document.createElement('canvas').getContext('2d');
+    c.font = '400 100px ' + getComputedStyle(t).fontFamily; if ('letterSpacing' in c) c.letterSpacing = '-3px';
+    var m = c.measureText(t.textContent), ink = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+    if (wide && ink > 0) { var k = wide / ink; t.style.fontSize = (100 * k).toFixed(1) + 'px'; t.style.marginLeft = (m.actualBoundingBoxLeft * k).toFixed(1) + 'px'; }
+    // drift somewhere new, always wholly on screen with a margin, however long the lines are
+    var box = $('saverInner'), room = Math.max(0, 1920 - 240 - box.offsetWidth), tall = Math.max(0, 1080 - 200 - box.offsetHeight);
+    box.style.left = (120 + Math.round(Math.random() * room)) + 'px';
+    box.style.top = (100 + Math.round(Math.random() * tall)) + 'px';
   }
   function wake() { lastActive = Date.now(); if (!$('saver').hidden) { $('saver').hidden = true; return true; } return false; }
   setInterval(function () {
