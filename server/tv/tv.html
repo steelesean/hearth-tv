@@ -66,12 +66,12 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .ep.carry { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 .ep.carry .m { color: var(--carry-soft); }
 .ep.carry .d { color: var(--carry-accent); }
-.apps { display: grid; grid-template-columns: repeat(8, 1fr); grid-gap: 18px; }
+.apps { display: flex; gap: 14px; }   /* each tile as wide as its name, sharing the spare room, so ten fit on one row */
 .app {
   height: 84px; border-radius: 20px; border: 2px solid var(--line); background: var(--surface);
-  display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
+  flex: 1 1 auto; display: flex; align-items: center; padding: 0 16px; box-sizing: border-box; text-align: left; font-family: var(--font-ui); color: var(--ink);
 }
-.app .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; margin-right: 14px; }
+.app .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; margin-right: 12px; }
 .app .name { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
 .app.live { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .app.live .swatch { border-radius: 50%; animation: blink 2s ease-in-out infinite; }
@@ -2868,7 +2868,16 @@ var qrcode = function() {
     b.addEventListener('click', function () { a.live ? openLive() : openApp(a.key); });
     $('apps').appendChild(b);
   });
-  $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
+  // Hedgerows, the war game: the TV's own copy, played with this remote. It sits at the end of the row, and the
+  // Energy tile (which arrives later, with its data) goes just before it.
+  var GAME_URL = 'https://hearth-tv-server.vercel.app/game/?remote=1';
+  var gameTile = el('button', 'app focusable', '<span class="swatch" style="background:#6B6440"></span><span class="name">Hedgerows</span>');
+  gameTile.type = 'button';
+  gameTile.addEventListener('click', function () {
+    if (navigator.onLine === false) { say('Hedgerows needs the internet', 'Check the Wi-Fi and try again.', true); return; }
+    location.href = GAME_URL;
+  });
+  $('apps').appendChild(gameTile);
 
   var kidButtons = [];
   C.kids.forEach(function (k) {
@@ -3593,8 +3602,7 @@ var qrcode = function() {
       energyTile = el('button', 'app focusable', '<span class="swatch" style="background:#2F4A3F"></span><span class="name">Energy</span>');
       energyTile.type = 'button';
       energyTile.addEventListener('click', openEnergy);
-      $('apps').appendChild(energyTile);
-      $('apps').style.gridTemplateColumns = 'repeat(' + $('apps').children.length + ', 1fr)';
+      $('apps').insertBefore(energyTile, gameTile);   // Energy, then Hedgerows, at the end of the row
     }
     if (!$('energyPanel').hidden) renderEnergy();
   }
