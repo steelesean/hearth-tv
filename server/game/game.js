@@ -17,6 +17,10 @@
   var flats = [];                     // breaches in hedges: where the height map has to be flattened
   var tally = { crewOut: 0, crewSaved: 0, prisoners: 0, withdrew: 0, savedBy: {} };
   var params = {}; location.search.replace(/[?&](\w+)=?([^&]*)/g, function (_, k, v) { params[k] = v || '1'; });
+  // the TV draws the battlefield at 1280 x 720 and lets the screen scale it up: under half the pixels a frame for a
+  // stick's small graphics chip, and from the sofa it looks the same. Everything still works in 1920 x 1080 terms.
+  var TV = !!window.HearthNative || params.remote === '1', RS = TV ? 2 / 3 : 1;
+  cv.width = VW * RS; cv.height = VH * RS;
   var TIME = 'day';            // 'mist', 'day' or 'dusk': chosen on the start screen
   var command = null;          // 'smoke', 'demo' or 'area' while waiting for the player to click where
   var WIND = [0.35, 0.12];     // metres a second; smoke and mist drift with it
@@ -31,7 +35,7 @@
     // On a small screen (a phone) the interface shrinks with the picture, down to 70%, so the cards and buttons
     // don't swamp the battlefield; on a computer or the TV it stays full size.
     var k = Math.min(window.innerWidth / VW, window.innerHeight / VH), u = document.getElementById('ui'), w = VW * k, h = VH * k;
-    var tv = !!window.HearthNative || params.remote === '1', s = w < 1000 && !tv ? Math.max(0.7, w / 1400) : 1;   // the TV is never a phone
+    var tv = TV, s = w < 1000 && !tv ? Math.max(0.7, w / 1400) : 1;   // the TV is never a phone
     cv.style.width = w + 'px'; cv.style.height = h + 'px';
     document.body.classList.toggle('small', w < 1000 && !tv);
     var wrap = document.getElementById('uiwrap');
@@ -2650,7 +2654,9 @@
     ctx.globalAlpha = Math.min(1, alpha); ctx.drawImage(puff(kind), X - rad, Y - rad * (squash || 1), rad * 2, rad * 2 * (squash || 1)); ctx.globalAlpha = 1;
   }
   var DUSK = 'brightness(0.95) saturate(0.85) sepia(0.12)';
+  var vignette = null;
   function draw() {
+    ctx.setTransform(RS, 0, 0, RS, 0, 0);
     ctx.fillStyle = '#1b1c16'; ctx.fillRect(0, 0, VW, VH);
     var T = TILES.size, dir = tileDir();
     for (var r = Math.floor(view.y / T); r <= Math.floor((view.y + VH) / T); r++)
@@ -2690,8 +2696,8 @@
     drawMissions();
     if (TIME === 'mist') drawMist();
     if (TIME === 'dusk') {
-      var vg = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.35, VW / 2, VH / 2, VW * 0.65);
-      vg.addColorStop(0, 'rgba(12,10,24,0)'); vg.addColorStop(1, 'rgba(12,10,24,.24)');
+      if (!vignette) { vignette = ctx.createRadialGradient(VW / 2, VH / 2, VH * 0.35, VW / 2, VH / 2, VW * 0.65); vignette.addColorStop(0, 'rgba(12,10,24,0)'); vignette.addColorStop(1, 'rgba(12,10,24,.24)'); }   // made once
+      var vg = vignette;
       ctx.fillStyle = vg; ctx.fillRect(0, 0, VW, VH);
     }
     if (command === 'smoke' && hover) smokeCursor();
@@ -2778,7 +2784,7 @@
     var k = ((Math.round(u.h / (Math.PI / 8)) % 16) + 16) % 16, s = SPR.tank, p = proj(u.x, u.y, SPR.tankLookZ);
     var f = [];
     if (!alive(u)) f.push('brightness(0.35) saturate(0.3)');
-    if (TIME === 'dusk') f.push(DUSK);
+    if (TIME === 'dusk' && !TV) f.push(DUSK);   // the TV skips the dusk tint on units: a filter on every sprite is too slow for a stick
     unitFilter = f.length ? f.join(' ') : 'none';
     if (enemy && alive(u)) { var gq = proj(u.x, u.y, 0); ctx.fillStyle = 'rgba(214,80,60,.3)'; ctx.beginPath(); ctx.ellipse(gq[0] - view.x, gq[1] - view.y, 30, 17, 0, 0, 6.3); ctx.fill(); }
     blit(img, k * s, 0, s, s, p[0] - view.x - s / 2, p[1] - view.y - s / 2, s, s, proj(u.x, u.y, 0)[1], enemy ? [214, 80, 60] : [159, 194, 230]);
@@ -2790,7 +2796,7 @@
     var deck = u.riding ? 1.9 : 0;   // men riding a Sherman stand on its engine deck
     var s2 = SPR.infantry, img = sheets[u.kit] || sheets.rifle, gp = proj(u.x, u.y, deck), p = proj(u.x, u.y, SPR.infantryLookZ + deck);
     var d = ((Math.round(u.h / (Math.PI / 4)) % 8) + 8) % 8, enemy = u.side === 'axis', prone = SPR.poses.indexOf('prone');
-    unitFilter = TIME === 'dusk' ? DUSK : 'none';
+    unitFilter = TIME === 'dusk' && !TV ? DUSK : 'none';
     if (u.hp <= 0) {
       // the fallen lie where they fell; Germans only once you've seen them
       if (u.gone || (enemy && !u.bodySeen) || heightAt(Math.floor(gp[0]), Math.floor(gp[1])) > 0.4) { unitFilter = 'none'; return; }
@@ -2888,9 +2894,10 @@
     // ground mist: an overall veil plus slow-drifting banks, both thinning as the sun burns it off
     var a = mistLeft(); if (a <= 0) return;
     ctx.fillStyle = 'rgba(205,208,204,' + (0.08 + 0.34 * a).toFixed(3) + ')'; ctx.fillRect(0, 0, VW, VH);
-    mistPatches.forEach(function (m) {
+    mistPatches.forEach(function (m, i) {
+      if (TV && i % 2) return;   // the TV: half the banks, a little thicker, for half the painting
       var q = proj(m.x + WIND[0] * clock, m.y + WIND[1] * clock, 1.5);
-      drawPuff('mist', q[0] - view.x, q[1] - view.y, m.r / CAM.mPerPx, 0.38 * a, 0.55);
+      drawPuff('mist', q[0] - view.x, q[1] - view.y, m.r / CAM.mPerPx, 0.38 * a * (TV ? 1.5 : 1), 0.55);
     });
   }
 
@@ -3368,6 +3375,7 @@
   window.addEventListener('keyup', function (e) { keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = 0; });
   function clampView() { view.x = Math.max(0, Math.min(CAM.W - VW, view.x)); view.y = Math.max(0, Math.min(CAM.H - VH, view.y)); }
 
+  var lastPanel = 0;
   function frame(t) {
     var dt = Math.min(0.05, (t - lastT) / 1000 || 0); lastT = t;
     var sp = 900 * dt;
@@ -3377,7 +3385,8 @@
     remoteTick(dt);
     if (started && !over && !paused && !planning) for (var sp2 = 0; sp2 < gameSpeed; sp2++) update(dt);   // double speed: two steps a frame
     units.forEach(function (u) { if (isTank(u)) sound.engine(u); });
-    draw(); panel();
+    draw();
+    if (!TV || t - lastPanel > 200) { panel(); lastPanel = t; }   // the TV: the cards five times a second, not every frame
     requestAnimationFrame(frame);
   }
   function end(t, s, won) { over = true; document.getElementById('endTitle').textContent = t; document.getElementById('endText').innerHTML = '<span class="result">' + s + '</span><span class="stats">' + statsHTML() + '</span>'; document.getElementById('end').style.display = 'flex'; debrief(!!won); }
