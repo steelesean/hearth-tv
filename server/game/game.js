@@ -2205,6 +2205,16 @@
     if (!planning) return '';
     var lim = supportLimit(), n = Object.keys(supportPicked).length, phone = document.body.classList.contains('small'), tv = document.body.classList.contains('tv');
     var how = tv ? 'OK on a unit, then OK inside the dashed line, to place it. Back for this menu.' : phone ? 'Tap a unit, then tap inside the dashed line to place it.' : 'Click a unit, then click inside the dashed line to place it.';
+    if (tv) {
+      // the TV: the remote can't reach buttons here, so this is only a summary; support and Begin are in the Back menu,
+      // and the panel steps aside while that menu is open, so the choices never show twice
+      if (remote.menu) return '';
+      var picked = SUPPORTS.filter(function (s) { return supportPicked[s.id]; }).map(function (s) { return s.label; });
+      return '<b>Plan the attack</b><span class="dim">' + how + '</span>'
+        + '<span class="lbl">Support: choose ' + words(lim).toLowerCase() + ' <span class="dim">(' + n + ' chosen)</span></span>'
+        + '<span>' + (picked.length ? picked.join('<br>') : 'None yet') + '</span>'
+        + '<span class="dim">Back, then Begin the attack, when you\u2019re ready.</span>';
+    }
     return '<b>Plan the attack</b><span class="dim">' + how + '</span>'
       + '<span class="lbl">Support: choose ' + words(lim).toLowerCase() + ' <span class="dim">(' + n + ' chosen)</span></span>'
       + SUPPORTS.map(function (s) { return '<button data-sup="' + s.id + '"' + (supportPicked[s.id] ? ' class="on"' : '') + ' title="' + s.help + '">' + s.label + '<small>' + s.help + '</small></button>'; }).join('')
