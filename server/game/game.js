@@ -3070,7 +3070,11 @@
     var g = gs[(i + step + gs.length) % gs.length];
     selected = g.units.filter(alive); centreOn(selected); command = null;
   }
-  function leave() { if (history.length > 1) history.back(); else location.href = '/'; }
+  function leave() {
+    // back to Hearth: the TV app takes it there itself; history is only for an older app, or a browser
+    if (window.HearthNative && window.HearthNative.home) { window.HearthNative.home(); return; }
+    if (history.length > 1) history.back(); else location.href = '/';
+  }
   function navOverlay(id, k) {
     // the start and end screens: arrows move between the buttons, OK presses the one that's lit
     var bs = [].slice.call(document.querySelectorAll('#' + id + ' button')).filter(function (b) { return b.offsetParent !== null; });
@@ -3203,11 +3207,17 @@
     });
     ctx.fillStyle = 'rgba(237,232,218,.65)'; ctx.font = '19px system-ui, sans-serif'; ctx.fillText('OK to choose \u00b7 Back to close', mx + 26, my + H - 18);
   }
-  // On a desktop, ?remote=1 turns the arrow keys, Enter and Escape into the remote, for testing
+  // On a desktop, ?remote=1 turns the keyboard into the remote, for testing: arrows, Enter (OK), Escape (Back),
+  // [ and ] (rewind and fast-forward), Space (play) and M (menu)
   window.addEventListener('keydown', function (e) {
     if (window.HearthNative || !remote.on) return;
-    var k = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'ok', Escape: 'back' }[e.key];
-    if (k) { e.preventDefault(); e.stopImmediatePropagation(); window.hearthKey(k); }
+    var k = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'ok', Escape: 'back', '[': 'prev', ']': 'next', ' ': 'play', m: 'menu' }[e.key];
+    if (k) { e.preventDefault(); e.stopImmediatePropagation(); window.hearthKey(k, true); }
+  }, true);
+  window.addEventListener('keyup', function (e) {
+    if (window.HearthNative || !remote.on) return;
+    var k = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
+    if (k) window.hearthKeyUp(k);
   }, true);
 
   // ------------------------------------------------------------------ the panels

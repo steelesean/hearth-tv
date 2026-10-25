@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -54,14 +55,34 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(), "HearthNative");
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
+                if (url != null && url.startsWith(HOME_PAGE)) view.clearHistory();   // nothing to go back to from home
                 ready = true;
                 Remote.flush();
             }
         });
         setContentView(web);
-        web.loadUrl("file:///android_asset/tv.html");
+        web.loadUrl(HOME_PAGE);
         Remote.attach(this);
         hideSystemBars();
+    }
+
+    private static final String HOME_PAGE = "file:///android_asset/tv.html";
+
+    /** Home on the remote brings Hearth back (HomeGuard): always to its own screen, never left on a game. */
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        showHome();
+    }
+
+    /** Back to Hearth's own screen, from a page such as the game. Leaves it alone if it's already showing. */
+    void showHome() {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                String url = web.getUrl();
+                if (url == null || !url.startsWith(HOME_PAGE)) web.loadUrl(HOME_PAGE);
+            }
+        });
     }
 
     @Override protected void onResume() {
@@ -171,6 +192,11 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "{}";
             }
+        }
+
+        /** A page such as the game asks to go back to Hearth. */
+        @JavascriptInterface public void home() {
+            showHome();
         }
 
         @JavascriptInterface public String openApp(String key) {
