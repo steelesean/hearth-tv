@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <base href="/game/">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<script>
+  // On the TV (the Hearth app, or ?remote=1) lay the page out at 1920 wide, as the Hearth home screen does. The stick
+  // reports 960 by itself, which would put the game in phone mode.
+  if (window.HearthNative || /[?&]remote=1/.test(location.search)) document.querySelector('meta[name=viewport]').setAttribute('content', 'width=1920');
+</script>
 <title>Hedgerows</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
@@ -94,6 +99,7 @@
   #debrief { text-align: left; font-size: 14px; color: #CFC9B8; }
   body.tv #res .btn:not([data-cmd=arty]):not([data-cmd=artysmoke]):not([data-cmd=findfoe]) { display: none; }   /* on the TV the remote's Back button pauses, and the pause menu has the rest */
   body.tv .chip, body.tv .card { font-size: 16px; }
+  body.tv .card .orders { display: none; }   /* the remote gives orders from its own list; the mouse panel's letters mean nothing on a TV */
   /* a phone: the radio line gives way to the cards (the Radio button still opens the log), and the start and end
      screens tighten up */
   body.small #ticker { display: none; }

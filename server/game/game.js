@@ -31,9 +31,9 @@
     // On a small screen (a phone) the interface shrinks with the picture, down to 70%, so the cards and buttons
     // don't swamp the battlefield; on a computer or the TV it stays full size.
     var k = Math.min(window.innerWidth / VW, window.innerHeight / VH), u = document.getElementById('ui'), w = VW * k, h = VH * k;
-    var s = w < 1000 ? Math.max(0.7, w / 1400) : 1;
+    var tv = !!window.HearthNative || params.remote === '1', s = w < 1000 && !tv ? Math.max(0.7, w / 1400) : 1;   // the TV is never a phone
     cv.style.width = w + 'px'; cv.style.height = h + 'px';
-    document.body.classList.toggle('small', w < 1000);
+    document.body.classList.toggle('small', w < 1000 && !tv);
     var wrap = document.getElementById('uiwrap');
     if (wrap) { wrap.style.width = w + 'px'; wrap.style.height = h + 'px'; wrap.style.left = (window.innerWidth - w) / 2 + 'px'; wrap.style.top = (window.innerHeight - h) / 2 + 'px'; }
     if (u) { u.style.width = (w / s) + 'px'; u.style.height = (h / s) + 'px'; u.style.transform = s < 1 ? 'scale(' + s + ')' : ''; u.style.transformOrigin = '0 0'; u.style.setProperty('--s', s); }
@@ -3041,7 +3041,7 @@
     if (!bs.length) return;
     var cur = bs.indexOf(remote.focus) >= 0 ? remote.focus : document.getElementById('go') && id === 'start' ? document.getElementById('go') : bs[bs.length - 1];
     if (k === 'ok') { cur.click(); return; }
-    if (k !== 'ok' && k !== 'back') {
+    if (k !== 'ok' && k !== 'back' && k !== 'show') {
       var r0 = cur.getBoundingClientRect(), best = null, bd = 1e9;
       bs.forEach(function (b) {
         if (b === cur) return;
@@ -3053,7 +3053,7 @@
       if (best) cur = best;
     }
     remote.focus = cur;
-    bs.forEach(function (b) { b.style.outline = b === cur ? '3px solid #E2B25A' : 'none'; b.style.outlineOffset = '2px'; });
+    bs.forEach(function (b) { var on = b === cur; b.style.outline = on ? '5px solid #E2B25A' : 'none'; b.style.outlineOffset = '4px'; b.style.boxShadow = on ? '0 0 0 12px rgba(226,178,90,.25)' : ''; b.style.transform = on ? 'scale(1.06)' : ''; });
   }
   function centreOn(list) {
     if (!list.length) return;
@@ -3126,29 +3126,37 @@
   }
   function areaAt(x, y) { selected.filter(alive).forEach(function (u) { u.area = { x: x, y: y, until: clock + 20 }; u.target = null; }); say('Raking that position for 20 seconds.'); }
   function drawRemote() {
+    // the start or end screen: light the button OK will press as soon as it opens, before any arrow is pressed
+    var ov = remote.on && ['start', 'end'].filter(function (id) { return document.getElementById(id).style.display === 'flex'; })[0];
+    if (ov && !(remote.focus && remote.focus.offsetParent && document.getElementById(ov).contains(remote.focus))) navOverlay(ov, 'show');
     if (remote.on && started && !remote.menu) {
-      // the cursor: a ring with a dot, and what OK will do here
-      var x = remote.x, y = remote.y, u = unitAt(x, y);
-      ctx.strokeStyle = 'rgba(237,232,218,.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 14, 0, 6.3); ctx.stroke();
-      ctx.fillStyle = '#EDE8DA'; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, 6.3); ctx.fill();
-      var hint = command ? { smoke: 'OK: smoke here', demo: 'OK: blow a gap here', area: 'OK: fire here', arty: 'OK: shells here', artysmoke: 'OK: smoke shells here' }[command]
-        : u ? 'OK: select ' + (isTank(u) ? u.name : squadName(u)) : selected.length ? 'OK: orders' : 'OK: menu';
-      ctx.font = '14px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(20,20,16,.7)';
-      if (prefs.hints || command) { var w = ctx.measureText(hint).width + 14; ctx.fillRect(x + 20, y + 10, w, 22); ctx.fillStyle = '#EDE8DA'; ctx.fillText(hint, x + 27, y + 26); }
+      // the cursor: big enough to find from the sofa, a light ring on a dark one so it shows on any ground
+      var x = remote.x, y = remote.y, u = unitAt(x, y), R = 30;
+      ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(10,10,8,.75)'; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.3); ctx.stroke();
+      ctx.lineWidth = 3.5; ctx.strokeStyle = u ? '#E2B25A' : '#F4F0E4'; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.3); ctx.stroke();
+      ctx.beginPath(); [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d) { ctx.moveTo(x + d[0] * (R - 9), y + d[1] * (R - 9)); ctx.lineTo(x + d[0] * (R + 11), y + d[1] * (R + 11)); }); ctx.stroke();
+      var hint = command ? { smoke: 'OK: smoke here', demo: 'OK: blow a gap here', area: 'OK: fire here', arty: 'OK: shells here', artysmoke: 'OK: smoke shells here', queue: 'OK: then move here' }[command]
+        : u ? 'OK: select ' + (isTank(u) ? u.name : squadName(u)) : planning ? (selected.length ? 'OK: place them here' : 'Back: plan menu') : selected.length ? 'OK: orders' : 'OK: menu';
+      if (prefs.hints || command) {
+        ctx.font = '600 24px system-ui, sans-serif'; ctx.textAlign = 'left';
+        var w = ctx.measureText(hint).width + 28, hx = Math.min(x + R + 18, VW - w - 10);
+        ctx.fillStyle = 'rgba(14,14,10,.85)'; ctx.fillRect(hx, y + 14, w, 40); ctx.fillStyle = '#F4F0E4'; ctx.fillText(hint, hx + 14, y + 42);
+      }
     }
     var m = remote.menu; if (!m) return;
-    if (!m.pause) return drawWheel(m);
-    // the pause menu: a column of choices in the middle
-    var W = 330, H = 40 + m.items.length * 34, mx = m.pause ? VW / 2 - W / 2 : Math.min(VW - W - 20, m.x + 24), my = m.pause ? VH / 2 - H / 2 : Math.max(20, Math.min(VH - H - 20, m.y - 40));
-    if (m.pause) { ctx.fillStyle = 'rgba(10,10,8,.5)'; ctx.fillRect(0, 0, VW, VH); }
-    ctx.fillStyle = 'rgba(24,24,19,.94)'; ctx.strokeStyle = 'rgba(237,232,218,.25)'; ctx.lineWidth = 1;
+    if (!m.pause && !document.body.classList.contains('tv')) return drawWheel(m);
+    // on the TV every menu is a list of words: the lit row is what OK will do
+    var W = 520, RH = 54, H = 76 + m.items.length * RH + 44, mx = m.pause ? VW / 2 - W / 2 : Math.max(20, Math.min(VW - W - 20, m.x + 50)), my = m.pause ? VH / 2 - H / 2 : Math.max(20, Math.min(VH - H - 20, m.y - 60));
+    ctx.fillStyle = 'rgba(10,10,8,' + (m.pause ? .55 : .3) + ')'; ctx.fillRect(0, 0, VW, VH);
+    ctx.fillStyle = 'rgba(24,24,19,.97)'; ctx.strokeStyle = 'rgba(237,232,218,.3)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.rect(mx, my, W, H); ctx.fill(); ctx.stroke();
-    ctx.textAlign = 'left'; ctx.font = '500 17px Georgia, serif'; ctx.fillStyle = '#EDE8DA'; ctx.fillText(m.title, mx + 18, my + 27);
+    ctx.textAlign = 'left'; ctx.font = '500 30px Georgia, serif'; ctx.fillStyle = '#EDE8DA'; ctx.fillText(m.title, mx + 26, my + 48);
     m.items.forEach(function (it, i) {
-      var y = my + 40 + i * 34;
-      if (i === m.i) { ctx.fillStyle = '#EDE8DA'; ctx.fillRect(mx + 8, y, W - 16, 30); }
-      ctx.fillStyle = i === m.i ? '#1b1b16' : '#EDE8DA'; ctx.font = '15px system-ui, sans-serif'; ctx.fillText(it.label, mx + 18, y + 20);
+      var y = my + 70 + i * RH, on = i === m.i;
+      if (on) { ctx.fillStyle = '#E2B25A'; ctx.fillRect(mx + 12, y, W - 24, RH - 6); }
+      ctx.fillStyle = on ? '#1b1b16' : '#EDE8DA'; ctx.font = (on ? '600 ' : '') + '24px system-ui, sans-serif'; ctx.fillText(it.label, mx + 30, y + 33);
     });
+    ctx.fillStyle = 'rgba(237,232,218,.65)'; ctx.font = '19px system-ui, sans-serif'; ctx.fillText('OK to choose \u00b7 Back to close', mx + 26, my + H - 18);
   }
   // On a desktop, ?remote=1 turns the arrow keys, Enter and Escape into the remote, for testing
   window.addEventListener('keydown', function (e) {
