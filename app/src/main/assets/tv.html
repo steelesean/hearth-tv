@@ -147,7 +147,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
 .saver-time, .saver-date, .saver-weather { width: fit-content; }
 .saver-time { font: 400 160px/1 var(--font-display); letter-spacing: -0.03em; color: #8B919B; font-variant-numeric: tabular-nums; }
 .saver-date { font-size: 40px; color: #5E6571; margin-top: 22px; }
-.saver-weather { font-size: 40px; color: #737A86; margin-top: 12px; }
+.saver-weather { font-size: 40px; line-height: 1.3; color: #737A86; margin-top: 12px; text-wrap: balance; }
 .saver-weather b { color: #8B919B; font-weight: 600; }
 /* At night darker still, so it barely lights the room */
 .stage.evening .saver { background: #070B13; }
@@ -565,9 +565,15 @@ body { color: var(--ink); font-family: var(--font-ui); }
     $('saverTime').textContent = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     $('saverDate').textContent = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
     $('saverWeather').innerHTML = nowSegments(w, true).map(function (x) { return x.html; }).join(' · ');
-    // the time's inked digits exactly as wide as the date under them, sharing its left and right edges (measured on
-    // the ink, not the box, as a serif 1 sits in from its edge). The line after it can run longer, when it has news.
-    var t = $('saverTime'), wide = $('saverDate').offsetWidth, c = document.createElement('canvas').getContext('2d');
+    // one block, one width: the weather line wraps onto two balanced lines when it's long, and the time's inked digits
+    // are sized to the block's width (the date, or the longer wrapped line), so all of it shares its left and right
+    // edges. Measured on the ink, not the box, as a serif 1 sits in from its edge.
+    var t = $('saverTime'), wl = $('saverWeather'), dw = $('saverDate').offsetWidth;
+    wl.style.maxWidth = ''; wl.style.whiteSpace = 'nowrap'; var fw = wl.offsetWidth; wl.style.whiteSpace = '';
+    if (fw > dw * 1.15) wl.style.maxWidth = Math.max(dw, Math.ceil(fw / 2) + 24) + 'px';
+    var r = document.createRange(), lines = 0; r.selectNodeContents(wl);
+    [].forEach.call(r.getClientRects(), function (q) { lines = Math.max(lines, q.right - wl.getBoundingClientRect().left); });
+    var wide = Math.max(dw, Math.round(lines || fw)), c = document.createElement('canvas').getContext('2d');
     c.font = '400 100px ' + getComputedStyle(t).fontFamily; if ('letterSpacing' in c) c.letterSpacing = '-3px';
     var m = c.measureText(t.textContent), ink = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
     if (wide && ink > 0) { var k = wide / ink; t.style.fontSize = (100 * k).toFixed(1) + 'px'; t.style.marginLeft = (m.actualBoundingBoxLeft * k).toFixed(1) + 'px'; }
