@@ -166,10 +166,10 @@ body { color: var(--ink); font-family: var(--font-ui); }
 /* Energy: a full screen of its own, opened from the Energy tile. Everything lines up on one
    column grid: header, the five figures (which are also the chart key), the chart, three cards. */
 .energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
-.energy .e-title { font-size: 30px; font-weight: 500; }
+.energy .e-title { font-size: 28px; font-weight: 400; color: var(--ink-soft); }   /* the bill's dates: a quiet label over the figures */
 .energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
 /* The header is just the bill: spent so far, and where it's heading. Everything else is in Good to know. */
-.energy .e-head { display: flex; align-items: baseline; white-space: nowrap; margin-top: 14px; }
+.energy .e-head { display: flex; align-items: baseline; white-space: nowrap; margin-top: 30px; }
 .energy .e-now { font: 400 112px/0.9 var(--font-display); letter-spacing: -0.02em; }
 .energy .e-to { font: 400 60px/1 var(--font-display); color: var(--focus); margin-left: 40px; }
 .energy .e-dots { position: absolute; right: 26px; top: 28px; display: flex; gap: 8px; }
