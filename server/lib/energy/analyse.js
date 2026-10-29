@@ -453,6 +453,19 @@ export function analyse(input) {
     lastMonth: lastDays.length >= lastLen - 2 ? { month: span(lastFrom, lastTo), from: lastFrom, to: lastTo, total: round(sum(lastDays.map((d) => d.total))) } : null,
     gasFrom: "the last fortnight's pace",
   };
+  // A check on the last bill against the statement: which days the smart meters left gaps in, and the cost by fuel.
+  // Kept out of the interface; it's for comparing with Octopus.
+  const gasSlots = new Map();
+  for (const r of gas.readings) { const d = local(r.t).date; gasSlots.set(d, (gasSlots.get(d) || 0) + 1); }
+  const want = []; for (let d = lastFrom; d <= lastTo; d = addDays(d, 1)) want.push(d);
+  const gaps = (m) => want.filter((d) => (m.get(d) || 0) < 46).map((d) => d.slice(5) + ":" + (m.get(d) || 0));
+  forecast.lastCheck = {
+    from: lastFrom, to: lastTo, days: want.length, daysPriced: lastDays.length, gasUnit: gas.unit,
+    elecGaps: gaps(slotsPerDay), gasGaps: gaps(gasSlots),
+    elec: round(sum(lastDays.map((d) => d.houseElec + d.car))), gas: round(sum(lastDays.map((d) => d.gas + (d.standing - (d.houseElec - d.houseUse))))),
+    elecKwh: round(sum(lastDays.map((d) => d.houseKwh + d.carKwh)), 1), gasKwh: round(sum(lastDays.map((d) => d.gasKwh)), 1),
+    standing: round(sum(lastDays.map((d) => d.standing))),
+  };
 
   // Moving use out of 4 to 7pm: on their own tariff if it has cheap hours, otherwise on Agile.
   const ownShift = shiftSaving(input.elecPricing, now - 28 * DAY, now);
