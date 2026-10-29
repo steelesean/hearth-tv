@@ -120,5 +120,14 @@ export async function heatingEfficiency(meters, gasPence, now = Date.now(), unit
     const dd = Math.max(0, BASE_C - temp);
     return { date, temp: round(temp), kwh: round(dd >= HEATING_DAY ? fa.base + fa.slope * dd : Math.max(0, fa.base)) };
   });
+  // A typical day's gas in each month of the year, for the credit outlook: this house as it is now, in the
+  // weather each month has actually had here over the last two years.
+  const byMonth = Array.from({ length: 12 }, () => [0, 0]);
+  for (const [date, temp] of temps) {
+    if (date >= today) continue;
+    const dd = Math.max(0, BASE_C - temp), m = byMonth[Number(date.slice(5, 7)) - 1];
+    m[0] += dd >= HEATING_DAY ? fa.base + fa.slope * dd : Math.max(0, fa.base); m[1]++;
+  }
+  out.typicalGasKwh = byMonth.map(([k, n]) => (n ? round(k / n) : null));
   return out;
 }

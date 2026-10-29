@@ -7,6 +7,7 @@ import { loadFeedback, mergeDispatches } from "./store.js";
 import { chargingByHour } from "./ohme.js";
 import { mileage, TRIP_METER } from "./polestar.js";
 import { heatingEfficiency } from "./efficiency.js";
+import { creditOutlook, creditWords } from "./credit.js";
 
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 import { heatHistory } from "./tado.js";
@@ -150,6 +151,31 @@ export async function refresh(now = Date.now()) {
         + (ef.perYear?.gbp != null ? ` Over a year like the last one, that's about ${ef.perYear.kwh} kWh, or £${ef.perYear.gbp} at today's gas rate.` : ""),
       how_we_know: `Daily gas from Octopus against daily average temperatures for ${ef.area || "the home"} (Open-Meteo), ${ef.before.days} cold days before and ${ef.after.days} after. Anything else that changed, like thermostat settings or who was home, is mixed in.`,
     });
+  }
+  // The account's credit, and where it's heading over the year: the Direct Debit in, each day's expected cost out.
+  // The Direct Debit isn't in the API key's reach, so it's set here: £180 on the 1st, from the statements.
+  try {
+    const balance = await octopus.accountBalance();
+    facts.account = { balance };
+    const p = facts.forecast?.parts, gasP = ef.gasPence || facts.efficiency?.gasPence;
+    if (p && ef.available && ef.typicalGasKwh && gasP) {
+      const ahead = new Map((ef.ahead || []).map((d) => [d.date, d.kwh]));
+      const typical = (d) => ef.typicalGasKwh[Number(d.slice(5, 7)) - 1] ?? 0;
+      const o = creditOutlook({
+        balance, today: local(now).date, gasPence: gasP,
+        payment: { amount: Number(process.env.OCTOPUS_DD_AMOUNT) || 180, day: Number(process.env.OCTOPUS_DD_DAY) || 1 },
+        perDay: (p.house?.pace || 0) + (p.car?.pace || 0) + (p.standing?.pace || 0),
+        gasKwh: (d) => (ahead.has(d) ? ahead.get(d) : typical(d)),
+      });
+      const w = creditWords(o);
+      facts.account.outlook = o;
+      facts.candidates.push({
+        id: "credit-info", per_year_gbp: 0, facts: w.facts, card: { figure: w.figure, caption: w.caption },
+        how_we_know: `The balance from Octopus today. Each month adds the £${o.payment.amount} Direct Debit; each day takes off electricity, the car and standing charges at the last fortnight's pace, and gas for a typical day that month here, from this house's gas per degree of cold and the last two years' local temperatures (the weather forecast for the next fortnight). Prices, the weather and the household can all change it.`,
+      });
+    }
+  } catch (e) {
+    facts.account = { error: e.message };
   }
   // Leave out anything the household said they already do, or that isn't for them.
   const feedback = await loadFeedback().catch(() => ({}));

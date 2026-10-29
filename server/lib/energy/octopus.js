@@ -115,10 +115,23 @@ async function graphql(query, variables, token) {
   return j.data;
 }
 
-export async function completedDispatches() {
+async function krakenToken() {
   const t = await graphql("mutation($key: String!) { obtainKrakenToken(input: { APIKey: $key }) { token } }", { key: process.env.OCTOPUS_API_KEY });
   const token = t?.obtainKrakenToken?.token;
   if (!token) throw new Error("Octopus didn't give a token for the API key.");
+  return token;
+}
+
+/** The account balance in pounds: above zero is credit, below is owed (Octopus gives pence). */
+export async function accountBalance() {
+  const d = await graphql("query($a: String!) { account(accountNumber: $a) { balance } }", { a: process.env.OCTOPUS_ACCOUNT }, await krakenToken());
+  const p = d?.account?.balance;
+  if (typeof p !== "number") throw new Error("Octopus didn't give a balance.");
+  return p / 100;
+}
+
+export async function completedDispatches() {
+  const token = await krakenToken();
   const q = (fields) => `query($a: String!) { completedDispatches(accountNumber: $a) { ${fields} } }`;
   let d;
   try { d = await graphql(q("start end delta meta { source location }"), { a: process.env.OCTOPUS_ACCOUNT }, token); }

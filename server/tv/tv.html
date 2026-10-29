@@ -175,6 +175,8 @@ body { color: var(--ink); font-family: var(--font-ui); }
 /* Three ideas, three treatments: what's spent (with the bar under it), where it's heading (with the
    caveat that belongs to it), and last month as a quiet comparison set apart on the right. */
 .energy .e-last { margin-left: auto; padding-bottom: 6px; text-align: right; }
+.energy .e-credit { margin-left: 56px; }   /* the account's credit, beside last bill */
+.energy .e-last[hidden] + .e-credit { margin-left: auto; }
 .energy .e-last b { display: block; font: 400 48px/1 var(--font-display); color: var(--ink-2); margin-top: 8px; font-weight: 400; }
 .energy .e-to { margin-left: 52px; padding-bottom: 6px; }
 .energy .e-to b { display: block; font: 400 60px/1 var(--font-display); color: var(--focus); font-weight: 400; }
@@ -341,6 +343,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
       <div class="e-now"><b id="eSoFar"></b></div>
       <div class="e-to"><b id="eTo"></b><span id="eNote"></span></div>
       <div class="e-last" id="eLastBox"><div class="e-label" id="eLastName"></div><b id="eLast"></b></div>
+      <div class="e-last e-credit" id="eCreditBox" hidden><div class="e-label" id="eCreditName">In credit</div><b id="eCredit"></b></div>
     </div>
     <div class="e-prog" id="eProgBar"><i id="eProg"></i></div>
     <div class="e-prog-k" id="eProgKey"><span id="eProgDays"></span></div>
@@ -3684,7 +3687,10 @@ var qrcode = function() {
     $('eSoFar').textContent = month ? '£' + Math.round(f.soFar) : money(total);
     $('eTo').textContent = month ? 'heading for about £' + Math.round(f.projected) : '';
     $('eLastBox').hidden = !(month && f.lastMonth);
-    if (month && f.lastMonth) { $('eLastName').textContent = f.lastMonth.month; $('eLast').textContent = '£' + Math.round(f.lastMonth.total); }
+    if (month && f.lastMonth) { $('eLastName').textContent = 'Last bill'; $('eLast').textContent = '£' + Math.round(f.lastMonth.total); }
+    var bal = d.account && typeof d.account.balance === 'number' ? d.account.balance : null;
+    $('eCreditBox').hidden = bal === null;
+    if (bal !== null) { $('eCreditName').textContent = bal >= 0 ? 'In credit' : 'Owed'; $('eCredit').textContent = '£' + Math.round(Math.abs(bal)); }
     $('eProgBar').hidden = $('eProgKey').hidden = !month;
     $('eNote').textContent = month && /weather/.test(f.gasFrom || '') ? 'Allowing for the weather ahead' : '';
     if (month) {
