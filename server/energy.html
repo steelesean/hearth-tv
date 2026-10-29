@@ -275,11 +275,11 @@ function render(d) {
 function showMonth(f, incomplete) {
   $("monthcard").hidden = !f || !f.parts;
   if (!f || !f.parts) return;
-  $("monthname").textContent = f.month;
+  $("monthname").textContent = f.title || f.month;
   $("monthdays").textContent = f.daysWithData + " of " + f.daysInMonth + " days in" + (f.through ? ", to " + new Date(f.through + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "");
   $("monthsofar").textContent = money(f.soFar);
   $("monthto").textContent = money(f.projected);
-  $("lastname").textContent = f.lastMonth ? f.lastMonth.month : "";
+  $("lastname").textContent = f.lastMonth ? "Last bill, " + f.lastMonth.month : "";
   $("lastval").textContent = f.lastMonth ? money(f.lastMonth.total) : "";
   const parts = [["house", "House", "var(--bar)"], ["heating", "Gas", "var(--gas)"], ["car", "Car", "var(--car)"], ["standing", "Standing charges", "var(--fixed)"]].filter(([k]) => f.parts[k] && f.parts[k].projected > 0);
   // The bar is the whole month heading in; the solid part of each colour is spent, the pale part still to come.
@@ -290,7 +290,7 @@ function showMonth(f, incomplete) {
   $("monthparts").innerHTML = "<tr><td></td><td class='n muted' style='font-weight:400'>So far</td><td class='n muted' style='font-weight:400'>Heading for</td></tr>"
     + parts.map(([k, label, c]) => `<tr><td><span style="color:${c}">■</span> ${label}</td><td class="n">${money(f.parts[k].soFar)}</td><td class="n">${money(f.parts[k].projected)}</td></tr>`).join("");
   $("monthhow").textContent = (incomplete ? "Electricity prices were incomplete, so this is too low. " : "")
-    + "How we know: what's been used so far this month, priced at your tariff, plus the rest of the month at each part's pace over the last " + f.paceDays + " days. Gas from " + f.gasFrom + (f.aheadTemp != null ? " (averaging " + f.aheadTemp + "°C)" : "") + ".";
+    + "How we know: what's been used so far this bill, priced at your tariff, plus the rest of the bill at each part's pace over the last " + f.paceDays + " days. Gas from " + f.gasFrom + (f.aheadTemp != null ? " (averaging " + f.aheadTemp + "°C)" : "") + ".";
 }
 function showEfficiency(ef) {
   $("effcard").hidden = !ef;

@@ -120,6 +120,7 @@ export async function refresh(now = Date.now()) {
 
   const facts = analyse({
     elec, gas, elecPricing, gasPricing, alternatives, now, heat, roomTemps, ohme, carReadings, tripMeter: TRIP_METER,
+    billDay: Number(process.env.OCTOPUS_BILL_DAY) || 24,   // Octopus's statements run from the 24th to the 23rd
     currentName: "Your tariff (" + shortName(await octopus.productName(currentProduct)) + ")",
   });
   // Heating efficiency before and after the roof insulation, from up to two years of daily gas.
@@ -129,11 +130,10 @@ export async function refresh(now = Date.now()) {
     facts.efficiency = { available: false, reason: "Couldn't work it out: " + e.message };
   }
   const ef = facts.efficiency;
-  // Gas for the rest of the month from the weather forecast and this house's own response to cold.
+  // Gas for the rest of the bill from the weather forecast and this house's own response to cold.
   const fc = facts.forecast, gasPence = ef.gasPence;
   if (ef.available && fc?.through && gasPence && ef.ahead?.length) {
-    const monthEnd = fc.through.slice(0, 8) + String(fc.daysInMonth).padStart(2, "0");
-    const rest = ef.ahead.filter((d) => d.date > fc.through && d.date <= monthEnd);
+    const rest = ef.ahead.filter((d) => d.date > fc.through && d.date <= fc.to);
     const uncovered = fc.daysInMonth - fc.daysWithData - rest.length;
     const heat = fc.parts.heating;
     heat.projected = Math.round((heat.soFar + sum(rest.map((d) => d.kwh)) * gasPence / 100 + Math.max(0, uncovered) * heat.pace) * 100) / 100;

@@ -423,12 +423,18 @@ export function analyse(input) {
     agileWorstDay: worstDay,
   };
 
-  // This month so far, and where it's heading on the last fortnight's pace.
-  const month = today.slice(0, 7);
-  const monthDays = [...daily.values()].filter((d) => d.date.startsWith(month));
+  // This bill so far, and where it's heading on the last fortnight's pace. Octopus bills from a fixed day of the
+  // month to the day before it next month (24 September to 23 October), not by calendar month, so the forecast
+  // follows the bill: it can then be checked against the statement.
+  const billDay = Math.min(28, Math.max(1, input.billDay || 24));
+  const ym = (date, back) => { const d = new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1 - back, billDay, 12)); return d.toISOString().slice(0, 10); };
+  const from = Number(today.slice(8, 10)) >= billDay ? ym(today, 0) : ym(today, 1), to = addDays(ym(from, -1), -1);
+  const lastFrom = ym(from, 1), lastTo = addDays(from, -1);
+  const between = (a, b) => [...daily.values()].filter((d) => d.date >= a && d.date <= b);
+  const monthDays = between(from, to);
   // Each part on its own pace, so the parts add up to the total: electricity used in the house,
   // gas, the car, and standing charges. Gas can be re-projected from the weather forecast later.
-  const daysInMonth = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  const daysInMonth = Math.round((Date.parse(to) - Date.parse(from)) / DAY) + 1;
   const recent = [...daily.values()].filter((d) => d.complete).slice(-14);
   const left = daysInMonth - monthDays.length;
   const PARTS = { house: "houseUse", heating: "gas", car: "car", standing: "standing" };
@@ -438,13 +444,13 @@ export function analyse(input) {
     parts[name] = { soFar: round(so), pace: round(pace), projected: round(so + pace * left) };
   }
   const soFar = round(sum(monthDays.map((d) => d.total)));
-  const lastMonthKey = addDays(month + "-01", -1).slice(0, 7);
-  const lastMonthDays = [...daily.values()].filter((d) => d.date.startsWith(lastMonthKey));
-  const monthName = (m) => new Date(m + "-15T12:00:00Z").toLocaleDateString("en-GB", { month: "long", timeZone: "UTC" });
+  const lastDays = between(lastFrom, lastTo), lastLen = Math.round((Date.parse(lastTo) - Date.parse(lastFrom)) / DAY) + 1;
+  const short = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const span = (a, b) => short(a) + " to " + short(b);
   const forecast = {
-    month: monthName(month), soFar, projected: round(sum(Object.values(parts).map((p) => p.projected))), parts,
+    month: span(from, to), title: "This bill, " + span(from, to), from, to, soFar, projected: round(sum(Object.values(parts).map((p) => p.projected))), parts,
     daysWithData: monthDays.length, daysInMonth, through: monthDays.at(-1)?.date || null, paceDays: recent.length,
-    lastMonth: lastMonthDays.length >= 28 ? { month: monthName(lastMonthKey), total: round(sum(lastMonthDays.map((d) => d.total))) } : null,
+    lastMonth: lastDays.length >= lastLen - 2 ? { month: span(lastFrom, lastTo), from: lastFrom, to: lastTo, total: round(sum(lastDays.map((d) => d.total))) } : null,
     gasFrom: "the last fortnight's pace",
   };
 

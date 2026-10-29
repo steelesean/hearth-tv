@@ -3680,7 +3680,7 @@ var qrcode = function() {
     // The headline is the month: spent so far and where it's heading, last month for context.
     // Without a forecast (or with incomplete prices) it falls back to the 7 days.
     var f = d.forecast, incomplete = d.tariff && d.tariff.incomplete, month = f && f.projected && f.daysInMonth && !incomplete;
-    $('eTitle').textContent = month ? f.month + '’s energy' : 'Energy, last 7 days';
+    $('eTitle').textContent = month ? (f.title || f.month + '’s energy') : 'Energy, last 7 days';
     $('eSoFar').textContent = month ? '£' + Math.round(f.soFar) : money(total);
     $('eTo').textContent = month ? 'heading for about £' + Math.round(f.projected) : '';
     $('eLastBox').hidden = !(month && f.lastMonth);
