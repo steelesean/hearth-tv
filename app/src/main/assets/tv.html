@@ -166,26 +166,16 @@ body { color: var(--ink); font-family: var(--font-ui); }
 /* Energy: a full screen of its own, opened from the Energy tile. Everything lines up on one
    column grid: header, the five figures (which are also the chart key), the chart, three cards. */
 .energy { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 8; background: var(--ground); padding: 44px 96px 34px; box-sizing: border-box; display: flex; flex-direction: column; }
-.energy .e-top { display: flex; justify-content: space-between; align-items: baseline; }
 .energy .e-title { font-size: 30px; font-weight: 500; }
 .energy .e-label { font-size: 18px; font-weight: 600; letter-spacing: 0.12em; color: var(--ink-soft); text-transform: uppercase; }
-/* The header reads in one order: this bill (spent, heading for, against the Direct Debit, how far in), then, set apart
-   on the right, the money: credit, where it's heading, and last bill as a quiet line. */
-.energy .e-head { display: flex; align-items: stretch; }
-.energy .e-bill { flex: 1; min-width: 0; }
-.energy .e-line { display: flex; align-items: baseline; margin-top: 22px; white-space: nowrap; }
+/* The header is just the bill: spent so far, and where it's heading. Everything else is in Good to know. */
+.energy .e-head { display: flex; align-items: baseline; white-space: nowrap; }
 .energy .e-now { font: 400 112px/0.9 var(--font-display); letter-spacing: -0.02em; }
-.energy .e-so { font-size: 30px; color: var(--ink-soft); margin: 0 22px 0 16px; }
-.energy .e-to { font: 400 60px/1 var(--font-display); color: var(--focus); }
-.energy .e-vs-dd { font-size: 24px; color: var(--ink-2); margin-top: 14px; }
-.energy .e-prog { margin-top: 18px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.energy .e-prog i { display: block; height: 100%; background: var(--ink-soft); border-radius: 3px; }
-.energy .e-prog-k { font-size: 19px; color: var(--ink-soft); margin-top: 8px; }
-.energy .e-money { flex: none; width: 400px; margin-left: 56px; padding-left: 44px; border-left: 2px solid var(--line); display: flex; flex-direction: column; justify-content: flex-end; }
-.energy .e-money > b { font: 400 76px/1 var(--font-display); margin-top: 22px; }
-.energy .e-credit-cap { font-size: 22px; color: var(--ink-2); margin-top: 10px; }
-.energy .e-last { font-size: 21px; color: var(--ink-soft); margin-top: auto; padding-top: 16px; }
-.energy .e-last b { font-weight: 600; color: var(--ink-2); }
+.energy .e-to { font: 400 60px/1 var(--font-display); color: var(--focus); margin-left: 40px; }
+.energy .e-dots { position: absolute; right: 26px; top: 28px; display: flex; gap: 8px; }
+.energy .e-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.energy .e-dots i.on { background: var(--ink-soft); }
+.energy .e-fact { position: relative; }
 /* The last 7 days: a ring by part, with its list beside it. */
 .energy .e-week { display: flex; align-items: flex-start; margin-top: 14px; }
 .energy .e-ring { flex: none; width: 176px; text-align: center; }
@@ -340,21 +330,7 @@ body { color: var(--ink); font-family: var(--font-ui); }
   </div>
 
   <div class="energy" id="energyPanel" hidden>
-    <div class="e-head">
-      <div class="e-bill">
-        <div class="e-label" id="eTitle">Energy</div>
-        <div class="e-line"><b class="e-now" id="eSoFar"></b><span class="e-so" id="eSo">so far,</span><b class="e-to" id="eTo"></b></div>
-        <div class="e-vs-dd" id="eNote"></div>
-        <div class="e-prog" id="eProgBar"><i id="eProg"></i></div>
-        <div class="e-prog-k" id="eProgKey"><span id="eProgDays"></span></div>
-      </div>
-      <div class="e-money" id="eCreditBox" hidden>
-        <div class="e-label" id="eCreditName">In credit</div>
-        <b id="eCredit"></b>
-        <div class="e-credit-cap" id="eCreditCap"></div>
-        <div class="e-last" id="eLastBox"><span id="eLastName">Last bill</span> <b id="eLast"></b></div>
-      </div>
-    </div>
+    <div class="e-head"><b class="e-now" id="eSoFar"></b><b class="e-to" id="eTo"></b></div>
     <div class="e-warn" id="eWarn" hidden></div>
     <div class="e-cards" id="eCards"></div>
     <div class="e-chart">
@@ -1323,29 +1299,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
     // The headline is the month: spent so far and where it's heading, last month for context.
     // Without a forecast (or with incomplete prices) it falls back to the 7 days.
     var f = d.forecast, incomplete = d.tariff && d.tariff.incomplete, month = f && f.projected && f.daysInMonth && !incomplete;
-    $('eTitle').textContent = month ? 'This bill \u00b7 ' + f.month : 'Energy, last 7 days';
     $('eSoFar').textContent = month ? '£' + Math.round(f.soFar) : money(total);
-    $('eSo').hidden = !month;
-    $('eTo').textContent = month ? 'heading for about £' + Math.round(f.projected) : '';
-    // what decides the credit: the bill against what's paid in each month
+    $('eTo').textContent = month ? 'heading for £' + Math.round(f.projected) : 'over the last 7 days';
+    // the money, for Good to know: credit and where it's heading, then this bill against the Direct Debit
     var acct = d.account || {}, bal = typeof acct.balance === 'number' ? acct.balance : null, o = acct.outlook, dd = o && o.payment ? o.payment.amount : null;
-    var vs = month && dd ? (Math.abs(f.projected - dd) < 5 ? 'about the same as your £' + dd + ' Direct Debit'
-      : '£' + Math.round(Math.abs(f.projected - dd)) + (f.projected > dd ? ' more' : ' less') + ' than your £' + dd + ' Direct Debit') : '';
-    var weather = month && /weather/.test(f.gasFrom || '') ? 'allowing for the weather ahead' : '';
-    $('eNote').textContent = vs && weather ? vs + ', ' + weather : (vs || (weather ? 'Allowing for the weather ahead' : ''));
-    $('eCreditBox').hidden = bal === null;
-    if (bal !== null) {
-      $('eCreditName').textContent = bal >= 0 ? 'In credit' : 'Owed';
-      $('eCredit').textContent = '£' + Math.round(Math.abs(bal));
-      $('eCreditCap').textContent = !o ? '' : o.owedFrom ? 'runs out around ' + o.owedFrom.month
-        : o.low.balance < o.balance - 20 ? 'about £' + Math.round(o.low.balance) + ' by ' + o.low.month + ', then building' : 'about £' + Math.round(o.high.balance) + ' by ' + o.high.month;
-    }
-    $('eLastBox').hidden = !(month && f.lastMonth);
-    if (month && f.lastMonth) $('eLast').textContent = '£' + Math.round(f.lastMonth.total);
-    $('eProgBar').hidden = $('eProgKey').hidden = !month;
-    if (month) {
-      $('eProg').style.width = Math.round(f.daysWithData / f.daysInMonth * 100) + '%';
-      $('eProgDays').textContent = f.daysWithData + ' of ' + f.daysInMonth + ' days';
+    var moneyCards = [];
+    if (bal !== null) moneyCards.push({ figure: '£' + Math.round(Math.abs(bal)) + (bal >= 0 ? ' in credit' : ' owed'),
+      caption: !o ? 'on your Octopus account' : o.owedFrom ? 'Winter should use it up around ' + o.owedFrom.month + '. About £' + o.owedFrom.extraPerMonth + ' more a month would cover it.'
+        : o.low.balance < o.balance - 20 ? 'About £' + Math.round(o.low.balance) + ' by ' + o.low.month + ', then building again' : 'About £' + Math.round(o.high.balance) + ' by ' + o.high.month + ' at this rate' });
+    if (month && dd) {
+      var gap = Math.round(f.projected - dd), even = Math.abs(gap) < 5;
+      moneyCards.push({ figure: even ? 'On track' : '£' + Math.abs(gap) + (gap > 0 ? ' over' : ' under'),
+        caption: (even ? 'This bill is heading for about your £' : gap > 0 ? 'This bill is heading past your £' : 'This bill is heading under your £') + dd + ' Direct Debit. '
+          + f.daysWithData + ' of ' + f.daysInMonth + ' days in' + (f.lastMonth ? '; last bill £' + Math.round(f.lastMonth.total) : '') + '.' });
     }
     var rooms = d.heating && d.heating.week;
     var sources = ['your Octopus meter'];
@@ -1427,13 +1393,19 @@ body { color: var(--ink); font-family: var(--font-ui); }
         c2.querySelector('.e-verdicts').appendChild(b);
       });
     } else {
-      // Information that has a card form, a different one each day so it doesn't go stale.
-      var skip = { 'rooms-info': 1, 'insulation-info': 1, 'credit-info': 1 };   // credit is in the header
-      var facts = (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.card && !skip[c.id] && c.id.indexOf('odd-') !== 0; });
-      var pick = facts.length ? facts[Math.floor(Date.parse(d.generatedAt || 0) / 864e5) % facts.length] : null;
-      c2.innerHTML = '<div class="e-label">Good to know</div><b class="e-fig-big"></b><div class="e-cap"></div>';
-      c2.querySelector('b').textContent = pick ? pick.card.figure : 'All good';
-      c2.querySelector('.e-cap').textContent = pick ? pick.card.caption : 'Nothing worth changing at the moment';
+      // The money first (credit, then this bill against the Direct Debit), then the other facts, turning every
+      // eight seconds, with a dot for each so it's clear there's more.
+      var skip = { 'rooms-info': 1, 'insulation-info': 1, 'credit-info': 1 };
+      var facts = moneyCards.concat((d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.card && !skip[c.id] && c.id.indexOf('odd-') !== 0; }).map(function (c) { return c.card; }));
+      if (!facts.length) facts = [{ figure: 'All good', caption: 'Nothing worth changing at the moment' }];
+      c2.innerHTML = '<div class="e-label">Good to know</div><div class="e-dots">' + (facts.length > 1 ? facts.map(function () { return '<i></i>'; }).join('') : '') + '</div><b class="e-fig-big"></b><div class="e-cap"></div>';
+      var show = function (k) {
+        c2.querySelector('b').textContent = facts[k].figure; c2.querySelector('.e-cap').textContent = facts[k].caption;
+        [].forEach.call(c2.querySelectorAll('.e-dots i'), function (dot, n) { dot.className = n === k ? 'on' : ''; });
+      };
+      var at = 0; show(0);
+      clearInterval(renderEnergy.turn);
+      if (facts.length > 1) renderEnergy.turn = setInterval(function () { if ($('energyPanel').hidden) return clearInterval(renderEnergy.turn); at = (at + 1) % facts.length; show(at); }, 8000);
     }
     cards.appendChild(c2);
 
