@@ -81,7 +81,9 @@ export async function refresh(now = Date.now()) {
   // Intelligent Octopus: smart-charge slots are billed at the cheap rate, house included.
   // Confirmed ones come from Octopus (it only lists recent ones, so they're kept). Older ones are
   // inferred where Ohme priced an hour at the cheap rate, which it does for Octopus-scheduled
-  // charging but not for a manual boost; those are labelled as assumed.
+  // charging but not for a manual boost; those are labelled as assumed. Only before Octopus's record
+  // starts: the September to October statement showed Ohme's cheap hours weren't all billed cheap, and
+  // once the record exists, an hour Octopus didn't list was billed at the normal rate.
   let dispatchInfo = { available: false };
   let kept = [];
   try {
@@ -91,7 +93,8 @@ export async function refresh(now = Date.now()) {
     kept = await mergeDispatches([]).catch(() => []);
     dispatchInfo = { available: false, error: e.message, stored: kept.length };
   }
-  const inferred = ohme ? inferFromOhme(ohme, elecPricing, kept) : [];
+  const recordFrom = kept.length ? Math.min(...kept.map((d) => d.from)) : Infinity;
+  const inferred = ohme ? inferFromOhme(ohme.filter((h) => h.t < recordFrom), elecPricing, kept) : [];
   // For the bill check: what the guessed slots would have cost at the normal rate, worked out before re-pricing.
   const HH = 30 * 60 * 1000, elecAt = new Map(elec.map((r) => [r.t, r.v])), guessed = [];
   for (const g of inferred) for (let t = g.from; t < g.to; t += HH) {
