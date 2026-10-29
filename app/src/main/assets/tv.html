@@ -1376,37 +1376,41 @@ body { color: var(--ink); font-family: var(--font-ui); }
 
     var action = (note.actions || [])[0];
     var c2 = el('div', 'e-card e-fact');
-    // One figure and a few words: the sums are in the figure, the explanation lives on the web dashboard.
-    if (action) {
-      var fig = action.card ? action.card.figure : (action.per_year_gbp ? '£' + action.per_year_gbp + ' a year' : '');
-      c2.innerHTML = '<div class="e-label">Worth doing</div><b class="e-fig-big save"></b><div class="e-cap"></div><div class="e-verdicts"></div>';
-      c2.querySelector('b').textContent = fig;
-      c2.querySelector('.e-cap').textContent = action.title;
-      [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
+    // One figure and a few words a card: the money first (credit, then this bill against the Direct Debit), then
+    // anything worth doing, then the other facts. They take turns every eight seconds, a dot for each, and hold
+    // still while the remote is on one of the card's buttons.
+    var skip = { 'rooms-info': 1, 'insulation-info': 1, 'credit-info': 1 };
+    var pages = moneyCards.map(function (m) { return { label: 'Good to know', figure: m.figure, caption: m.caption }; });
+    if (action) pages.push({ label: 'Worth doing', save: true, action: action,
+      figure: action.card ? action.card.figure : (action.per_year_gbp ? '£' + action.per_year_gbp + ' a year' : ''), caption: action.title });
+    (d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.card && !skip[c.id] && c.id.indexOf('odd-') !== 0; })
+      .forEach(function (c) { pages.push({ label: 'Good to know', figure: c.card.figure, caption: c.card.caption }); });
+    if (!pages.length) pages = [{ label: 'Good to know', figure: 'All good', caption: 'Nothing worth changing at the moment' }];
+    var show = function (k) {
+      var pg = pages[k];
+      c2.innerHTML = '<div class="e-label"></div><div class="e-dots">' + (pages.length > 1 ? pages.map(function (x, n) { return '<i' + (n === k ? ' class="on"' : '') + '></i>'; }).join('') : '')
+        + '</div><b class="e-fig-big' + (pg.save ? ' save' : '') + '"></b><div class="e-cap"></div>' + (pg.action ? '<div class="e-verdicts"></div>' : '');
+      c2.querySelector('.e-label').textContent = pg.label;
+      c2.querySelector('b').textContent = pg.figure;
+      c2.querySelector('.e-cap').textContent = pg.caption;
+      if (pg.action) [['doing', 'Already doing this'], ['not-for-us', 'Not for us']].forEach(function (v) {
         var b = el('button', 'verdict focusable'); b.type = 'button'; b.textContent = v[1];
         b.addEventListener('click', function () {
-          N.energyFeedback(action.id, v[0]);
-          note.actions = note.actions.filter(function (x) { return x.id !== action.id; });
+          N.energyFeedback(pg.action.id, v[0]);
+          note.actions = note.actions.filter(function (x) { return x.id !== pg.action.id; });
           say('Thanks', 'We’ll leave that out for the next 90 days.');
           renderEnergy(); setFocus($('eBars').children[0]);
         });
         c2.querySelector('.e-verdicts').appendChild(b);
       });
-    } else {
-      // The money first (credit, then this bill against the Direct Debit), then the other facts, turning every
-      // eight seconds, with a dot for each so it's clear there's more.
-      var skip = { 'rooms-info': 1, 'insulation-info': 1, 'credit-info': 1 };
-      var facts = moneyCards.concat((d.candidates || []).filter(function (c) { return c.per_year_gbp === 0 && c.card && !skip[c.id] && c.id.indexOf('odd-') !== 0; }).map(function (c) { return c.card; }));
-      if (!facts.length) facts = [{ figure: 'All good', caption: 'Nothing worth changing at the moment' }];
-      c2.innerHTML = '<div class="e-label">Good to know</div><div class="e-dots">' + (facts.length > 1 ? facts.map(function () { return '<i></i>'; }).join('') : '') + '</div><b class="e-fig-big"></b><div class="e-cap"></div>';
-      var show = function (k) {
-        c2.querySelector('b').textContent = facts[k].figure; c2.querySelector('.e-cap').textContent = facts[k].caption;
-        [].forEach.call(c2.querySelectorAll('.e-dots i'), function (dot, n) { dot.className = n === k ? 'on' : ''; });
-      };
-      var at = 0; show(0);
-      clearInterval(renderEnergy.turn);
-      if (facts.length > 1) renderEnergy.turn = setInterval(function () { if ($('energyPanel').hidden) return clearInterval(renderEnergy.turn); at = (at + 1) % facts.length; show(at); }, 8000);
-    }
+    };
+    var at = 0; show(0);
+    clearInterval(renderEnergy.turn);
+    if (pages.length > 1) renderEnergy.turn = setInterval(function () {
+      if ($('energyPanel').hidden) return clearInterval(renderEnergy.turn);
+      if (cur && c2.contains(cur)) return;                 // the remote is on a button here: hold still
+      at = (at + 1) % pages.length; show(at);
+    }, 8000);
     cards.appendChild(c2);
 
     if (rooms && rooms.rooms.length) {
