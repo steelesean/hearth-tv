@@ -465,6 +465,7 @@ export function analyse(input) {
     elec: round(sum(lastDays.map((d) => d.houseElec + d.car))), gas: round(sum(lastDays.map((d) => d.gas + (d.standing - (d.houseElec - d.houseUse))))),
     elecKwh: round(sum(lastDays.map((d) => d.houseKwh + d.carKwh)), 1), gasKwh: round(sum(lastDays.map((d) => d.gasKwh)), 1),
     standing: round(sum(lastDays.map((d) => d.standing))),
+    elecDaily: lastDays.map((d) => [d.date.slice(5), round(d.houseElec + d.car), round(d.houseKwh + d.carKwh, 1)]),
   };
 
   // Moving use out of 4 to 7pm: on their own tariff if it has cheap hours, otherwise on Agile.

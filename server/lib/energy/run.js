@@ -92,6 +92,14 @@ export async function refresh(now = Date.now()) {
     dispatchInfo = { available: false, error: e.message, stored: kept.length };
   }
   const inferred = ohme ? inferFromOhme(ohme, elecPricing, kept) : [];
+  // For the bill check: what the guessed slots would have cost at the normal rate, worked out before re-pricing.
+  const HH = 30 * 60 * 1000, elecAt = new Map(elec.map((r) => [r.t, r.v])), guessed = [];
+  for (const g of inferred) for (let t = g.from; t < g.to; t += HH) {
+    const a = elecPricing.find((p) => t >= p.from && t < p.to), kwh = elecAt.get(t) || 0;
+    const r = a && a.rates.unit.filter((x) => x.from <= t && x.to > t).sort((x, y) => (x.to - x.from) - (y.to - y.from))[0];
+    const near = a ? a.rates.unit.filter((x) => x.from < t + 12 * 3600e3 && x.to > t - 12 * 3600e3).map((x) => x.p) : [];
+    if (r && near.length) guessed.push({ date: local(t).date, kwh, normal: r.p, cheap: Math.min(...near) });
+  }
   dispatchInfo.halfHoursRepriced = applyDispatches(elecPricing, [...kept, ...inferred]);
   dispatchInfo.inferredHours = inferred.length;
 
@@ -176,6 +184,12 @@ export async function refresh(now = Date.now()) {
     }
   } catch (e) {
     facts.account = { error: e.message };
+  }
+  if (facts.forecast?.lastCheck) {
+    const lc = facts.forecast.lastCheck, g = guessed.filter((x) => x.date >= lc.from && x.date <= lc.to);
+    lc.guessedSlots = { halfHours: g.length, kwh: Math.round(g.reduce((s2, x) => s2 + x.kwh, 0) * 10) / 10,
+      extraPounds: Math.round(g.reduce((s2, x) => s2 + x.kwh * (x.normal - x.cheap), 0)) / 100,
+      rates: [...new Set(g.map((x) => x.normal + "/" + x.cheap))].slice(0, 6) };
   }
   // Leave out anything the household said they already do, or that isn't for them.
   const feedback = await loadFeedback().catch(() => ({}));
